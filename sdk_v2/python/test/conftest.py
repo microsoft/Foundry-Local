@@ -237,6 +237,19 @@ def whisper_audio_model(manager):
     )
 
 
+@pytest.fixture(scope="session")
+def streaming_audio_model(manager):
+    """Smallest cached nemotron-family ASR model, loaded. Skips if none cached.
+
+    The live-streaming PCM path (``AudioItem`` format-descriptor + ``ItemQueue``) requires a streaming-capable
+    decoder. Whisper-style models load but fail when fed unbounded streamed PCM, so constrain selection to
+    models whose id/alias contains ``nemotron``.
+    """
+    return _model_fixture_or_skip(
+        manager, "automatic-speech-recognition", "streaming-audio", load=True, name_substr="nemotron"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Native-layer availability — used to skip integration tests if the .pyd
 # was not built or is incompatible with the current Python.

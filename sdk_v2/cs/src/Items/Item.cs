@@ -48,6 +48,8 @@ public class Item : IDisposable
             ItemType.Message => new MessageItem(ptr, ownsHandle),
             ItemType.Image => new ImageItem(ptr, ownsHandle),
             ItemType.Audio => new AudioItem(ptr, ownsHandle),
+            ItemType.SpeechSegment => new SpeechSegmentItem(ptr, ownsHandle),
+            ItemType.SpeechResult => new SpeechResultItem(ptr, ownsHandle),
             ItemType.ToolCall => new ToolCallItem(ptr, ownsHandle),
             ItemType.ToolResult => new ToolResultItem(ptr, ownsHandle),
             ItemType.Tensor => new TensorItem(ptr, ownsHandle),
