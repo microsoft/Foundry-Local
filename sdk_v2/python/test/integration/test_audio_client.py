@@ -31,26 +31,26 @@ def audio_client(whisper_audio_model):
     return whisper_audio_model.get_audio_client()
 
 
-def test_transcribe_returns_response(audio_client):
+async def test_transcribe_returns_response(audio_client):
     if not _RECORDING_PATH.is_file():
         pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
 
-    result = audio_client.transcribe(str(_RECORDING_PATH))
+    result = await audio_client.transcribe(str(_RECORDING_PATH))
     assert isinstance(result, AudioTranscriptionResponse)
     assert isinstance(result.text, str)
     assert result.text.strip() != ""
 
 
-def test_transcribe_empty_path_raises(audio_client):
+async def test_transcribe_empty_path_raises(audio_client):
     with pytest.raises(ValueError):
-        audio_client.transcribe("")
+        await audio_client.transcribe("")
 
 
-def test_transcribe_nonexistent_path_raises(audio_client):
+async def test_transcribe_nonexistent_path_raises(audio_client):
     # The client may validate at the Python layer (ValueError) or surface the native missing-file error
     # (FoundryLocalException) — accept either.
     with pytest.raises((ValueError, FoundryLocalException)):
-        audio_client.transcribe("/no/such/file.wav")
+        await audio_client.transcribe("/no/such/file.wav")
 
 
 # Streaming-transcription coverage — mirrors the v1 ``test_should_transcribe_audio_streaming``
@@ -59,12 +59,12 @@ def test_transcribe_nonexistent_path_raises(audio_client):
 # equivalent to the non-streaming ``transcribe`` result for the same fixture.
 
 
-def test_transcribe_streaming_yields_chunks(audio_client):
+async def test_transcribe_streaming_yields_chunks(audio_client):
     if not _RECORDING_PATH.is_file():
         pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
 
     chunks: list[AudioTranscriptionResponse] = []
-    for chunk in audio_client.transcribe_streaming(str(_RECORDING_PATH)):
+    async for chunk in audio_client.transcribe_streaming(str(_RECORDING_PATH)):
         assert isinstance(chunk, AudioTranscriptionResponse)
         assert isinstance(chunk.text, str)
         chunks.append(chunk)
@@ -75,13 +75,14 @@ def test_transcribe_streaming_yields_chunks(audio_client):
     assert full_text != "", "concatenated streamed text must be non-empty"
 
 
-def test_transcribe_streaming_matches_non_streaming(audio_client):
+async def test_transcribe_streaming_matches_non_streaming(audio_client):
     """Streaming concatenation should match (or be a close superset of) the one-shot result."""
     if not _RECORDING_PATH.is_file():
         pytest.skip(f"testdata/Recording.wav not found at {_RECORDING_PATH}")
 
-    one_shot = audio_client.transcribe(str(_RECORDING_PATH)).text.strip()
-    streamed = "".join(c.text for c in audio_client.transcribe_streaming(str(_RECORDING_PATH))).strip()
+    one_shot = (await audio_client.transcribe(str(_RECORDING_PATH))).text.strip()
+    streamed_chunks = [c async for c in audio_client.transcribe_streaming(str(_RECORDING_PATH))]
+    streamed = "".join(c.text for c in streamed_chunks).strip()
 
     assert one_shot, "one-shot transcription must be non-empty for comparison"
     assert streamed, "streamed transcription must be non-empty"
@@ -99,13 +100,15 @@ def test_transcribe_streaming_matches_non_streaming(audio_client):
     )
 
 
-def test_transcribe_streaming_empty_path_raises(audio_client):
-    # Validation runs in the outer non-generator function, so the error surfaces
-    # at call time without needing to iterate the returned generator.
+async def test_transcribe_streaming_empty_path_raises(audio_client):
+    # Validation runs when the async generator is first iterated.
     with pytest.raises(ValueError):
-        audio_client.transcribe_streaming("")
+        async for _ in audio_client.transcribe_streaming(""):
+            pass
 
 
-def test_transcribe_streaming_nonexistent_path_raises(audio_client):
+async def test_transcribe_streaming_nonexistent_path_raises(audio_client):
     with pytest.raises((ValueError, FoundryLocalException)):
-        list(audio_client.transcribe_streaming("/no/such/file.wav"))
+        async_gen = audio_client.transcribe_streaming("/no/such/file.wav")
+        async for _ in async_gen:
+            pass

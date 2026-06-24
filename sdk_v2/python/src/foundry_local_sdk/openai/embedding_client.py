@@ -5,6 +5,7 @@
 """OpenAI-compatible embedding client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -39,37 +40,25 @@ class EmbeddingClient:
         """Build the JSON payload for an embeddings request."""
         return json.dumps({"model": self.model_id, "input": input_value})
 
-    def _run_native_request(self, request_json: str) -> str:
+    async def _run_native_request(self, request_json: str) -> str:
         """Create a fresh EmbeddingsSession, process the request, return the response JSON string."""
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import EmbeddingsSession
 
-        with (
-            EmbeddingsSession(self._model) as session,
-            Request() as request,
-        ):
-            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
-            with session.process_request(request) as response:
-                # Copy the text out of the (response-owned) item before the response is released.
-                return response.get_item(0).text
+        def _blocking():
+            with EmbeddingsSession(self._model) as session:
+                with Request() as request:
+                    request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+                    response = session.process_request(request)
+                    try:
+                        return response.get_item(0).text
+                    finally:
+                        response._close()
+        
+        return await asyncio.to_thread(_blocking)
 
-    def _parse_response(self, response_json: str) -> CreateEmbeddingResponse:
-        """Parse the response JSON and apply fields required by the OpenAI type."""
-        data = json.loads(response_json)
-
-        # The server may omit "object" on embedding items and "usage" on the response;
-        # add defaults so CreateEmbeddingResponse.model_validate doesn't reject them.
-        for item in data.get("data", []):
-            if "object" not in item:
-                item["object"] = "embedding"
-
-        if "usage" not in data:
-            data["usage"] = {"prompt_tokens": 0, "total_tokens": 0}
-
-        return CreateEmbeddingResponse.model_validate(data)
-
-    def generate_embedding(self, input_text: str) -> CreateEmbeddingResponse:
+    async def generate_embedding(self, input_text: str) -> CreateEmbeddingResponse:
         """Generate embeddings for a single input text.
 
         Args:
@@ -85,10 +74,10 @@ class EmbeddingClient:
         self._validate_input(input_text)
 
         request_json = self._build_request_json(input_text)
-        response_json = self._run_native_request(request_json)
+        response_json = await self._run_native_request(request_json)
         return self._parse_response(response_json)
 
-    def generate_embeddings(self, inputs: list[str]) -> CreateEmbeddingResponse:
+    async def generate_embeddings(self, inputs: list[str]) -> CreateEmbeddingResponse:
         """Generate embeddings for multiple input texts in a single request.
 
         Args:
@@ -107,5 +96,20 @@ class EmbeddingClient:
             self._validate_input(text)
 
         request_json = self._build_request_json(inputs)
-        response_json = self._run_native_request(request_json)
+        response_json = await self._run_native_request(request_json)
         return self._parse_response(response_json)
+
+    def _parse_response(self, response_json: str) -> CreateEmbeddingResponse:
+        """Parse the response JSON and apply fields required by the OpenAI type."""
+        data = json.loads(response_json)
+
+        # The server may omit "object" on embedding items and "usage" on the response;
+        # add defaults so CreateEmbeddingResponse.model_validate doesn't reject them.
+        for item in data.get("data", []):
+            if "object" not in item:
+                item["object"] = "embedding"
+
+        if "usage" not in data:
+            data["usage"] = {"prompt_tokens": 0, "total_tokens": 0}
+
+        return CreateEmbeddingResponse.model_validate(data)

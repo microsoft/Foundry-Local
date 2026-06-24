@@ -19,23 +19,23 @@ import pytest
 # ---------------------------------------------------------------------------
 
 class TestLoadUnload:
-    def test_load_idempotent(self, chat_model):
+    async def test_load_idempotent(self, chat_model):
         # The fixture already loaded this model; load() again must be a no-op.
-        chat_model.load()
+        await chat_model.load()
         assert chat_model.is_loaded is True
 
-    def test_unload_then_load(self, chat_model):
+    async def test_unload_then_load(self, chat_model):
         try:
-            chat_model.unload()
+            await chat_model.unload()
             assert chat_model.is_loaded is False
 
-            chat_model.load()
+            await chat_model.load()
             assert chat_model.is_loaded is True
         finally:
             # Leave the model loaded so other session-scoped consumers of ``chat_model`` see the same state
             # they expect.
             if not chat_model.is_loaded:
-                chat_model.load()
+                await chat_model.load()
 
     def test_is_cached_true_for_fixture_model(self, chat_model):
         # The fixture selection requires is_cached — sanity check the invariant.
@@ -47,7 +47,7 @@ class TestLoadUnload:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.manual
-def test_download_progress_callback_fires(chat_model):
+async def test_download_progress_callback_fires(chat_model):
     """Verify the download progress callback fires at least once.
 
     Removes the model from cache via the public ``remove_from_cache`` API (the SDK's supported way to force a
@@ -60,7 +60,7 @@ def test_download_progress_callback_fires(chat_model):
     """
     # Unload first — removing a loaded model from cache is not supported.
     if chat_model.is_loaded:
-        chat_model.unload()
+        await chat_model.unload()
 
     chat_model.remove_from_cache()
     assert chat_model.is_cached is False
@@ -71,7 +71,7 @@ def test_download_progress_callback_fires(chat_model):
         received.append(pct)
 
     try:
-        chat_model.download(progress_callback=on_progress)
+        await chat_model.download(progress_callback=on_progress)
         assert chat_model.is_cached is True
         assert len(received) >= 1
         for pct in received:
@@ -79,4 +79,4 @@ def test_download_progress_callback_fires(chat_model):
     finally:
         # Restore the loaded state so session-scoped fixture consumers are not disturbed.
         if chat_model.is_cached and not chat_model.is_loaded:
-            chat_model.load()
+            await chat_model.load()

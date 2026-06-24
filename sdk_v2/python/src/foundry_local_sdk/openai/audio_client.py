@@ -5,9 +5,10 @@
 """OpenAI-compatible audio transcription client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, AsyncGenerator
 
 if TYPE_CHECKING:
     from foundry_local_sdk.imodel import IModel
@@ -106,22 +107,25 @@ class AudioClient:
 
         return json.dumps(request)
 
-    def _run_native_request(self, request_json: str) -> str:
+    async def _run_native_request(self, request_json: str) -> str:
         """Create a fresh AudioSession, process the request, return the response JSON string."""
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import AudioSession
 
-        with (
-            AudioSession(self._model) as session,
-            Request() as request,
-        ):
-            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
-            with session.process_request(request) as response:
-                # Copy the text out of the (response-owned) item before the response is released.
-                return response.get_item(0).text
+        def _blocking():
+            with AudioSession(self._model) as session:
+                with Request() as request:
+                    request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+                    response = session.process_request(request)
+                    try:
+                        return response.get_item(0).text
+                    finally:
+                        response._close()
+        
+        return await asyncio.to_thread(_blocking)
 
-    def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
+    async def transcribe(self, audio_file_path: str) -> AudioTranscriptionResponse:
         """Transcribe an audio file (non-streaming).
 
         Args:
@@ -137,23 +141,23 @@ class AudioClient:
         self._validate_audio_file_path(audio_file_path)
 
         request_json = self._build_request_json(audio_file_path)
-        response_json = self._run_native_request(request_json)
+        response_json = await self._run_native_request(request_json)
         data = json.loads(response_json)
         return AudioTranscriptionResponse(text=data.get("text", ""))
 
-    def transcribe_streaming(self, audio_file_path: str) -> Generator[AudioTranscriptionResponse, None, None]:
+    async def transcribe_streaming(self, audio_file_path: str) -> AsyncGenerator[AudioTranscriptionResponse, None]:
         """Transcribe an audio file with streaming chunks.
 
-        Consume with a standard ``for`` loop::
+        Consume with an async ``for`` loop::
 
-            for chunk in audio_client.transcribe_streaming("recording.mp3"):
+            async for chunk in audio_client.transcribe_streaming("recording.mp3"):
                 print(chunk.text, end="", flush=True)
 
         Args:
             audio_file_path: Path to the audio file to transcribe.
 
-        Returns:
-            A generator of ``AudioTranscriptionResponse`` objects.
+        Yields:
+            ``AudioTranscriptionResponse`` objects as they arrive.
 
         Raises:
             ValueError: If *audio_file_path* is not a non-empty string.
@@ -161,19 +165,28 @@ class AudioClient:
         """
         self._validate_audio_file_path(audio_file_path)
         request_json = self._build_request_json(audio_file_path)
-        return self._transcribe_streaming_impl(request_json)
+        async for item in self._transcribe_streaming_impl(request_json):
+            yield item
 
-    def _transcribe_streaming_impl(self, request_json: str) -> Generator[AudioTranscriptionResponse, None, None]:
+    async def _transcribe_streaming_impl(self, request_json: str) -> AsyncGenerator[AudioTranscriptionResponse, None]:
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import AudioSession
 
-        with (
-            AudioSession(self._model) as session,
-            Request() as request,
-        ):
-            session.set_streaming(True)
-            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
-            for item in session.process_streaming_request(request):
-                data = json.loads(item.text)
-                yield AudioTranscriptionResponse(text=data.get("text", ""))
+        def _blocking_stream():
+            """Run blocking streaming in a separate thread."""
+            items = []
+            with AudioSession(self._model) as session:
+                session.set_streaming(True)
+                with Request() as request:
+                    request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+                    with session.process_streaming_request(request) as stream:
+                        for item in stream:
+                            items.append(item)
+            return items
+
+        # Run blocking operation in thread and yield each result
+        items = await asyncio.to_thread(_blocking_stream)
+        for item in items:
+            data = json.loads(item.text)
+            yield AudioTranscriptionResponse(text=data.get("text", ""))

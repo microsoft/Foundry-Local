@@ -5,8 +5,9 @@
 """OpenAI-compatible chat completion client backed by the Foundry Local native layer."""
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from openai.types.chat.chat_completion_message_param import ChatCompletionMessageParam
 from openai.types.chat import ChatCompletion
@@ -183,22 +184,25 @@ class ChatClient:
         }
         return json.dumps(request_dict)
 
-    def _run_native_request(self, request_json: str) -> str:
+    async def _run_native_request(self, request_json: str) -> str:
         """Create a fresh ChatSession, process the request, return the response JSON string."""
         from foundry_local_sdk.items import TextItem, TextItemType
         from foundry_local_sdk.request import Request
         from foundry_local_sdk.session import ChatSession
 
-        with (
-            ChatSession(self._model) as session,
-            Request() as request,
-        ):
-            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
-            with session.process_request(request) as response:
-                # Copy the text out of the (response-owned) item before the response is released.
-                return response.get_item(0).text
+        def _blocking():
+            with ChatSession(self._model) as session:
+                with Request() as request:
+                    request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+                    response = session.process_request(request)
+                    try:
+                        return response.get_item(0).text
+                    finally:
+                        response._close()
+        
+        return await asyncio.to_thread(_blocking)
 
-    def complete_chat(
+    async def complete(
         self,
         messages: list[ChatCompletionMessageParam],
         tools: list[dict[str, Any]] | None = None,
@@ -220,19 +224,19 @@ class ChatClient:
         self._validate_tools(tools)
 
         request_json = self._build_request_json(messages, streaming=False, tools=tools)
-        response_json = self._run_native_request(request_json)
+        response_json = await self._run_native_request(request_json)
         return ChatCompletion.model_validate_json(response_json)
 
-    def complete_streaming_chat(
+    async def stream(
         self,
         messages: list[ChatCompletionMessageParam],
         tools: list[dict[str, Any]] | None = None,
-    ) -> Generator[ChatCompletionChunk, None, None]:
+    ) -> AsyncGenerator[ChatCompletionChunk, None]:
         """Perform a streaming chat completion, yielding chunks as they arrive.
 
-        Consume with a standard ``for`` loop::
+        Consume with an async ``for`` loop::
 
-            for chunk in client.complete_streaming_chat(messages):
+            async for chunk in client.stream(messages):
                 delta = chunk.choices[0].delta.content
                 if delta:
                     print(delta, end="", flush=True)
@@ -241,40 +245,42 @@ class ChatClient:
             messages: Conversation history as a list of OpenAI message dicts.
             tools: Optional list of tool definitions for function calling.
 
-        Returns:
-            A generator of ``ChatCompletionChunk`` objects.
+        Yields:
+            ``ChatCompletionChunk`` objects as they arrive.
 
         Raises:
             ValueError: If messages or tools are malformed.
             FoundryLocalException: If the native layer returns an error.
         """
+        from foundry_local_sdk.items import TextItem, TextItemType
+        from foundry_local_sdk.request import Request
+        from foundry_local_sdk.session import ChatSession
+
         self._validate_messages(messages)
         self._validate_tools(tools)
 
         request_json = self._build_request_json(messages, streaming=True, tools=tools)
 
-        from foundry_local_sdk.items import TextItem, TextItemType
-        from foundry_local_sdk.request import Request
-        from foundry_local_sdk.session import ChatSession
+        def _blocking_stream():
+            """Run blocking streaming in a separate thread."""
+            items = []
+            with ChatSession(self._model) as session:
+                session.set_streaming(True)
+                with Request() as request:
+                    request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
+                    with session.process_streaming_request(request) as stream:
+                        for item in stream:
+                            items.append(item)
+            return items
 
-        with (
-            ChatSession(self._model) as session,
-            Request() as request,
-        ):
-            session.set_streaming(True)
-            request.add_item(TextItem(request_json, TextItemType.OPENAI_JSON))
-            for item in session.process_streaming_request(request):
-                # Each item is a TextItem(OPENAI_JSON) — parse and normalize.
-                raw = json.loads(item.text)
-
-                # Foundry Local streams tool calls under "message" instead of the
-                # standard "delta".  Normalize to "delta" so ChatCompletionChunk parses.
-                for choice in raw.get("choices", []):
-                    if "message" in choice and "delta" not in choice:
-                        msg_obj = choice.pop("message")
-                        # ChoiceDeltaToolCall requires "index"; add if absent.
-                        for i, tc in enumerate(msg_obj.get("tool_calls", [])):
-                            tc.setdefault("index", i)
-                        choice["delta"] = msg_obj
-
-                yield ChatCompletionChunk.model_validate(raw)
+        # Run blocking operation in thread and yield each result
+        items = await asyncio.to_thread(_blocking_stream)
+        for item in items:
+            raw = json.loads(item.text)
+            for choice in raw.get("choices", []):
+                if "message" in choice and "delta" not in choice:
+                    msg_obj = choice.pop("message")
+                    for i, tc in enumerate(msg_obj.get("tool_calls", [])):
+                        tc.setdefault("index", i)
+                    choice["delta"] = msg_obj
+            yield ChatCompletionChunk.model_validate(raw)

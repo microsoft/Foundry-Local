@@ -54,23 +54,23 @@ PROMPT = [{"role": "user", "content": "Reply with the single word: hello /no_thi
 
 
 class TestNonStreaming:
-    def test_returns_typed_completion(self, chat_client):
-        resp = chat_client.complete_chat(PROMPT)
+    async def test_returns_typed_completion(self, chat_client):
+        resp = await chat_client.complete(PROMPT)
         assert isinstance(resp, ChatCompletion)
 
-    def test_response_has_content(self, chat_client):
-        resp = chat_client.complete_chat(PROMPT)
+    async def test_response_has_content(self, chat_client):
+        resp = await chat_client.complete(PROMPT)
         assert resp.choices, "Response must contain at least one choice"
         msg = resp.choices[0].message
         assert msg.content is not None
         assert msg.content.strip(), "Assistant content must not be empty"
 
-    def test_response_has_finish_reason(self, chat_client):
-        resp = chat_client.complete_chat(PROMPT)
+    async def test_response_has_finish_reason(self, chat_client):
+        resp = await chat_client.complete(PROMPT)
         assert resp.choices[0].finish_reason in {"stop", "length"}
 
-    def test_response_has_usage_with_positive_counts(self, chat_client):
-        resp = chat_client.complete_chat(PROMPT)
+    async def test_response_has_usage_with_positive_counts(self, chat_client):
+        resp = await chat_client.complete(PROMPT)
         assert resp.usage is not None
         assert resp.usage.prompt_tokens > 0
         assert resp.usage.completion_tokens > 0
@@ -78,25 +78,29 @@ class TestNonStreaming:
             resp.usage.prompt_tokens + resp.usage.completion_tokens
         )
 
-    def test_response_model_field_matches_loaded_model(self, chat_client):
-        resp = chat_client.complete_chat(PROMPT)
+    async def test_response_model_field_matches_loaded_model(self, chat_client):
+        resp = await chat_client.complete(PROMPT)
         # Some models echo a normalized id; just confirm it is present.
         assert resp.model
 
-    def test_invalid_messages_rejected_before_native_call(self, chat_client):
+    async def test_invalid_messages_rejected_before_native_call(self, chat_client):
         with pytest.raises(ValueError):
-            chat_client.complete_chat([])
+            await chat_client.complete([])
 
 
 class TestStreaming:
-    def test_yields_chunks(self, chat_client):
-        chunks = list(chat_client.complete_streaming_chat(PROMPT))
+    async def test_yields_chunks(self, chat_client):
+        chunks = []
+        async for chunk in chat_client.stream(PROMPT):
+            chunks.append(chunk)
         assert chunks, "Streaming should yield at least one chunk"
         for c in chunks:
             assert isinstance(c, ChatCompletionChunk)
 
-    def test_concatenated_content_is_non_empty(self, chat_client):
-        chunks = list(chat_client.complete_streaming_chat(PROMPT))
+    async def test_concatenated_content_is_non_empty(self, chat_client):
+        chunks = []
+        async for chunk in chat_client.stream(PROMPT):
+            chunks.append(chunk)
         # Concatenate visible content. Foundry Local may emit assistant text
         # under either delta.content (per-token) or as a single message-level
         # payload that the client normalises into a delta.
@@ -115,22 +119,27 @@ class TestStreaming:
             + "]"
         )
 
-    def test_final_chunk_has_finish_reason(self, chat_client):
-        chunks = list(chat_client.complete_streaming_chat(PROMPT))
+    async def test_final_chunk_has_finish_reason(self, chat_client):
+        chunks = []
+        async for chunk in chat_client.stream(PROMPT):
+            chunks.append(chunk)
         finish = None
         for c in chunks:
             if c.choices and c.choices[0].finish_reason:
                 finish = c.choices[0].finish_reason
         assert finish in {"stop", "length"}
 
-    def test_break_mid_stream_does_not_crash(self, chat_client):
-        gen = chat_client.complete_streaming_chat(PROMPT)
+    async def test_break_mid_stream_does_not_crash(self, chat_client):
+        gen = chat_client.stream(PROMPT)
         # Pull one chunk, then abandon — the finally-block in the session
         # must cancel the request and join the background thread cleanly.
-        first = next(gen)
+        first = None
+        async for chunk in gen:
+            first = chunk
+            break
         assert isinstance(first, ChatCompletionChunk)
-        gen.close()
+        # Async generator cleanup happens automatically
 
         # Subsequent calls must still work.
-        resp = chat_client.complete_chat(PROMPT)
+        resp = await chat_client.complete(PROMPT)
         assert isinstance(resp, ChatCompletion)

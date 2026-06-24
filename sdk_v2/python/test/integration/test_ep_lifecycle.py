@@ -9,8 +9,8 @@ from foundry_local_sdk.ep_types import EpInfo
 
 
 class TestEpLifecycle:
-    def test_discover_eps_returns_list(self, manager):
-        eps = manager.discover_eps()
+    async def test_discover_eps_returns_list(self, manager):
+        eps = await manager.discover_eps()
         assert isinstance(eps, list)
         for ep in eps:
             assert isinstance(ep, EpInfo)
