@@ -80,11 +80,49 @@ steps:
         $cacheDir = "$(Build.BinariesDirectory)/nuget_packages"
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-        # All four packages are public on nuget.org. Foundry Local Core's
-        # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-        # (see .pipelines/templates/build-core-steps.yml), so we follow the
-        # same source of truth here.
-        $feed = "https://www.nuget.org/api/v2/package"
+        $nugetCmd = Get-Command nuget -ErrorAction SilentlyContinue
+        if (-not $nugetCmd) {
+          throw "nuget CLI not found on PATH. This step uses nuget install to fetch package artifacts."
+        }
+
+        function Install-NuGetPackage {
+          param(
+            [string]$Id,
+            [string]$Version,
+            [string]$OutDir
+          )
+
+          $pkgDir = Join-Path $OutDir $Id
+          if (Test-Path $pkgDir) {
+            Remove-Item -Recurse -Force $pkgDir
+          }
+
+          $nugetArgs = @(
+            'install', $Id,
+            '-Version', $Version,
+            '-Source', 'https://api.nuget.org/v3/index.json',
+            '-OutputDirectory', $OutDir,
+            '-ExcludeVersion',
+            '-NonInteractive',
+            '-DirectDownload',
+            '-PackageSaveMode', 'nupkg'
+          )
+
+          Write-Host "Running: nuget $($nugetArgs -join ' ')"
+          & nuget $nugetArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "nuget install failed for $Id $Version"
+          }
+
+          $nupkg = Get-ChildItem -Path $pkgDir -Filter '*.nupkg' -File -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $nupkg) {
+            throw "nuget install did not produce a .nupkg under $pkgDir"
+          }
+
+          return $nupkg.FullName
+        }
 
         $packages = @(
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
@@ -96,10 +134,8 @@ steps:
 
         $defines = @()
         foreach ($pkg in $packages) {
-          $url = "$feed/$($pkg.id)/$($pkg.version)"
-          $out = "$cacheDir/$($pkg.key).nupkg"
-          Write-Host "Downloading $($pkg.id) $($pkg.version)"
-          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
+          Write-Host "Downloading $($pkg.id) $($pkg.version) via nuget install"
+          $out = Install-NuGetPackage -Id $pkg.id -Version $pkg.version -OutDir $cacheDir
           if (-not (Test-Path $out)) { throw "$($pkg.key) download failed" }
           Write-Host "  -> $out ($((Get-Item $out).Length) bytes)"
 
@@ -113,10 +149,8 @@ steps:
         if ($${{ parameters.includeWinml }}) {
           # WinML 2.x (Microsoft.Windows.AI.MachineLearning) is reg-free — a single self-contained
           # native package with no transitive Windows App SDK Foundation dependency to resolve.
-          $winmlUrl = "$feed/Microsoft.Windows.AI.MachineLearning/${{ parameters.winmlVersion }}"
-          $winmlOut = "$cacheDir/winml.nupkg"
-          Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }}"
-          Invoke-WebRequest -Uri $winmlUrl -OutFile $winmlOut
+          Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }} via nuget install"
+          $winmlOut = Install-NuGetPackage -Id 'Microsoft.Windows.AI.MachineLearning' -Version '${{ parameters.winmlVersion }}' -OutDir $cacheDir
           if (-not (Test-Path $winmlOut)) { throw "WinML download failed" }
           Write-Host "  -> $winmlOut ($((Get-Item $winmlOut).Length) bytes)"
           $defines += "WINML_EP_CATALOG_FETCH_URL=$winmlOut"
