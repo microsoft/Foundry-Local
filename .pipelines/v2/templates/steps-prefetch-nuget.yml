@@ -124,7 +124,12 @@ steps:
             throw "nuget install did not produce a .nupkg under $pkgDir"
           }
 
-          return $nupkg.FullName
+          $resolvedPath = $nupkg | Select-Object -ExpandProperty FullName -First 1
+          if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+            throw "nuget install produced an invalid path under $pkgDir"
+          }
+
+          return $resolvedPath
         }
 
         $packages = @(
@@ -139,13 +144,14 @@ steps:
         foreach ($pkg in $packages) {
           Write-Host "Downloading $($pkg.id) $($pkg.version) via nuget install"
           $out = Install-NuGetPackage -Id $pkg.id -Version $pkg.version -OutDir $cacheDir
-          if (-not (Test-Path $out)) { throw "$($pkg.key) download failed" }
-          Write-Host "  -> $out ($((Get-Item $out).Length) bytes)"
+          if ([string]::IsNullOrWhiteSpace($out)) { throw "$($pkg.key) download failed" }
+          $downloaded = Get-Item -LiteralPath $out -ErrorAction Stop
+          Write-Host "  -> $($downloaded.FullName) ($($downloaded.Length) bytes)"
 
           switch ($pkg.key) {
-            'genai'         { $defines += "GENAI_FETCH_URL=$out" }
-            'ort'           { $defines += "ORT_FETCH_URL=$out" }
-            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
+            'genai'         { $defines += "GENAI_FETCH_URL=$($downloaded.FullName)" }
+            'ort'           { $defines += "ORT_FETCH_URL=$($downloaded.FullName)" }
+            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$($downloaded.FullName)" }
           }
         }
 
@@ -154,9 +160,10 @@ steps:
           # native package with no transitive Windows App SDK Foundation dependency to resolve.
           Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }} via nuget install"
           $winmlOut = Install-NuGetPackage -Id 'Microsoft.Windows.AI.MachineLearning' -Version '${{ parameters.winmlVersion }}' -OutDir $cacheDir
-          if (-not (Test-Path $winmlOut)) { throw "WinML download failed" }
-          Write-Host "  -> $winmlOut ($((Get-Item $winmlOut).Length) bytes)"
-          $defines += "WINML_EP_CATALOG_FETCH_URL=$winmlOut"
+          if ([string]::IsNullOrWhiteSpace($winmlOut)) { throw "WinML download failed" }
+          $winmlDownloaded = Get-Item -LiteralPath $winmlOut -ErrorAction Stop
+          Write-Host "  -> $($winmlDownloaded.FullName) ($($winmlDownloaded.Length) bytes)"
+          $defines += "WINML_EP_CATALOG_FETCH_URL=$($winmlDownloaded.FullName)"
         }
 
         $joined = ($defines | ForEach-Object { "`"$_`"" }) -join ' '
