@@ -51,6 +51,19 @@ steps:
         (Join-Path "$(Pipeline.Workspace)/s" "$repoNameLeaf/sdk_v2/deps_versions.json")
       )
 
+      $searchRoots = @("$(Build.Repository.LocalPath)", "$(Build.SourcesDirectory)", "$(Pipeline.Workspace)/s") |
+        Where-Object { $_ -and (Test-Path $_) } |
+        Select-Object -Unique
+
+      foreach ($root in $searchRoots) {
+        $found = Get-ChildItem -Path $root -Filter deps_versions.json -File -Recurse -ErrorAction SilentlyContinue |
+          Where-Object { $_.FullName -match '[\\/]sdk_v2[\\/]deps_versions\.json$' } |
+          Select-Object -ExpandProperty FullName
+        if ($found) { $candidatePaths += $found }
+      }
+
+      $candidatePaths = $candidatePaths | Where-Object { $_ } | Select-Object -Unique
+
       $depsFile = $candidatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
       if (-not $depsFile) {
         Write-Host "Checked paths for deps_versions.json:"
