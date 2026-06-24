@@ -41,7 +41,7 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"
+      $depsFile = Join-Path "$(Build.Repository.LocalPath)" "sdk_v2/deps_versions.json"
       if (-not (Test-Path $depsFile)) { throw "deps_versions.json not found at $depsFile" }
       $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
       $expected = @{
@@ -61,7 +61,7 @@ steps:
       if ($errors.Count -gt 0) {
         Write-Host "Version drift detected between pipeline literals and sdk_v2/deps_versions.json:"
         $errors | ForEach-Object { Write-Host $_ }
-        throw "Bump the matching cpp*Version variable in .pipelines/foundry-local-packaging.yml"
+        throw "Bump the matching cpp*Version variable in .pipelines/v2/foundry-local-packaging.yml"
       }
       Write-Host "Pinned versions agree with sdk_v2/deps_versions.json."
 
@@ -167,4 +167,5 @@ steps:
       echo "##vso[task.setvariable variable=cmakeFetchDefines]$joined"
       echo "cmakeFetchDefines = $joined"
     displayName: 'Pre-download NuGet packages'
+
 

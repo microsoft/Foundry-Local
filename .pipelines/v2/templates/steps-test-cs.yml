@@ -110,7 +110,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
+      $proj = "$(Build.Repository.LocalPath)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
       $rid = dotnet msbuild $proj -getProperty:NETCoreSdkRuntimeIdentifier
       if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
       Write-Host "Restoring for RuntimeIdentifier: $rid"
@@ -142,7 +142,7 @@ steps:
       # The redirect file foundry_local.native.cfg is a local-dev override that, if
       # present, takes priority in DllLoader and would silently point the loader at
       # an arbitrary path on the agent. Sweep it out of every bin folder before tests.
-      $root = "$(Build.SourcesDirectory)/sdk_v2/cs"
+      $root = "$(Build.Repository.LocalPath)/sdk_v2/cs"
       $stale = Get-ChildItem -Path $root -Recurse -Force -Filter 'foundry_local.native.cfg' -ErrorAction SilentlyContinue
       if ($stale) {
         Write-Host "Removing stale redirect files:"
@@ -157,7 +157,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
+      $proj = "$(Build.Repository.LocalPath)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
 
       # Test TFMs:
       #   * net9.0 covers the .NET (Core) runtime test surface.
@@ -185,4 +185,5 @@ steps:
   env:
     TF_BUILD: 'true'
     FOUNDRY_TEST_DATA_DIR: ${{ parameters.testDataSharedDir }}
+
 

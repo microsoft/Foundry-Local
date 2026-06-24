@@ -62,7 +62,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $pyproject = "$(Build.SourcesDirectory)/sdk_v2/python/pyproject.toml"
+        $pyproject = "$(Build.Repository.LocalPath)/sdk_v2/python/pyproject.toml"
         $content = Get-Content $pyproject -Raw
         # Replace the first occurrence of `version = "..."` inside the
         # [project] table. The backend shim handles the package-name
@@ -93,7 +93,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $dest = "$(Build.SourcesDirectory)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
+        $dest = "$(Build.Repository.LocalPath)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
         if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
@@ -132,7 +132,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $py = "$(Build.SourcesDirectory)/sdk_v2/python"
+        $py = "$(Build.Repository.LocalPath)/sdk_v2/python"
         # Remove stale, untagged cffi extension from prior dev compiles.
         # The wheel build below produces a properly ABI-tagged variant; the
         # untagged copy is bonus baggage we don't want shipped.
@@ -285,7 +285,7 @@ steps:
             $extraArgs += '--config-setting=--build-option=--plat-name=win_arm64'
             Write-Host "Cross-compile: forcing wheel plat tag win_arm64"
         }
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(Build.Repository.LocalPath)/sdk_v2/python"
         try {
             if ($targetArch -eq 'arm64') {
                 # Run vcvarsall and the build in a single child cmd.exe process so the cross
@@ -340,4 +340,5 @@ steps:
     script: |
         Get-ChildItem "${{ parameters.outputDir }}" -Filter '*.whl' |
             ForEach-Object { Write-Host ("{0,12}  {1}" -f $_.Length, $_.Name) }
+
 

@@ -80,7 +80,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(Build.Repository.LocalPath)/sdk_v2/python"
         try {
             # Override pythonpath = ["src"] from pyproject.toml so pytest
             # imports the installed wheel (which contains the compiled cffi
@@ -95,4 +95,5 @@ steps:
   env:
     TF_BUILD: 'true'
     FOUNDRY_TEST_DATA_DIR: ${{ parameters.testDataSharedDir }}
+
 

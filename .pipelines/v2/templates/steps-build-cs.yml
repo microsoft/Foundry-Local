@@ -88,7 +88,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj"
+      $proj = "$(Build.Repository.LocalPath)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj"
       if (-not (Test-Path $proj)) { throw "Project not found: $proj" }
       dotnet restore $proj `
         --configfile "$(customNugetConfig)" `
@@ -103,7 +103,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      dotnet build "$(Build.SourcesDirectory)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" `
+      dotnet build "$(Build.Repository.LocalPath)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-restore --configuration Release `
         /p:UseWinML=${{ parameters.isWinML }} `
         /p:FoundryLocalRuntimeVersion=$(packageVersion) `
@@ -122,7 +122,7 @@ steps:
     EsrpClientId: '$(esrpClientId)'
     AuthAKVName: '$(esrpAkvName)'
     AuthSignCertName: '$(esrpSignCertName)'
-    FolderPath: '$(Build.SourcesDirectory)/sdk_v2/cs/src/bin/Release'
+    FolderPath: '$(Build.Repository.LocalPath)/sdk_v2/cs/src/bin/Release'
     # Pattern is passed to .NET Directory.EnumerateFiles with SearchOption.AllDirectories,
     # so it must be a plain filename (no '/' or '**'). Recursion across TFM subfolders is
     # provided by the task itself when UseMinimatch=false.
@@ -141,7 +141,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      dotnet pack "$(Build.SourcesDirectory)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" `
+      dotnet pack "$(Build.Repository.LocalPath)/sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" `
         --no-build --no-restore --configuration Release `
         --output "${{ parameters.outputDir }}" `
         /p:PackageVersion=$(packageVersion) `
@@ -171,4 +171,5 @@ steps:
     signConfigType: inlineSignParams
     inlineOperation: |
       [{"keyCode":"CP-401405","operationSetCode":"NuGetSign","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"},{"keyCode":"CP-401405","operationSetCode":"NuGetVerify","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"}]
+
 

@@ -28,7 +28,7 @@ steps:
     versionSpec: '20.x'
 
 - pwsh: |
-      $dst = "$(Build.SourcesDirectory)/sdk_v2/js/prebuilds"
+      $dst = "$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds"
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
@@ -53,19 +53,19 @@ steps:
   displayName: 'npm ci'
   inputs:
     command: custom
-    workingDir: '$(Build.SourcesDirectory)/sdk_v2/js'
+    workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
     customCommand: 'ci --no-audit --no-fund --ignore-scripts'
 
 - pwsh: |
       $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
       Write-Host "Stamping JS package version: $version"
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm version $version --no-git-tag-version --allow-same-version
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   displayName: 'Stamp package version'
 
 - pwsh: |
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm run build:ts
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   displayName: 'Build TypeScript'
@@ -73,9 +73,10 @@ steps:
 - pwsh: |
       $dst = '${{ parameters.outputDir }}'
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm pack --pack-destination $dst
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       Get-ChildItem $dst | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length) bytes" }
   displayName: 'npm pack'
+
 

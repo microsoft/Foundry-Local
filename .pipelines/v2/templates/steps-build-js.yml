@@ -85,7 +85,7 @@ steps:
   displayName: 'npm ci'
   inputs:
     command: custom
-    workingDir: '$(Build.SourcesDirectory)/sdk_v2/js'
+    workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
     customCommand: 'ci --no-audit --no-fund --ignore-scripts'
 
 # binding.gyp resolves the foundry_local lib + gsl/public include dirs
@@ -98,7 +98,7 @@ steps:
       $arch = '${{ parameters.targetArch }}'
       $args = if ($arch -eq 'native') { 'rebuild' } else { "rebuild --arch=$arch" }
       Write-Host "node-gyp $args"
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npx --no-install node-gyp $args.Split(' ')
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build Node-API addon'
@@ -109,18 +109,18 @@ steps:
       # Without this, print-prebuild-dir.mjs uses the host Node.js process.arch
       # (x64) and the addon lands in prebuilds/win32-x64/ even when we are
       # cross-compiling to arm64.
-      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)'
+      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds/$(prebuildDir)'
 
 - ${{ if or(eq(parameters.rid, 'linux-x64'), eq(parameters.rid, 'osx-arm64')) }}:
   - bash: |
       set -euo pipefail
-      cd "$(Build.SourcesDirectory)/sdk_v2/js"
+      cd "$(Build.Repository.LocalPath)/sdk_v2/js"
       npx --no-install node-gyp rebuild
     displayName: 'Build Node-API addon'
     env:
       FOUNDRY_LOCAL_LIB_DIR: '${{ parameters.nativeArtifactDir }}'
       FOUNDRY_LOCAL_INCLUDE_DIR: '${{ parameters.includeArtifactDir }}'
-      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)'
+      FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds/$(prebuildDir)'
 
 # Stage prebuilds/<plat>-<arch>/ with the two .node addons + foundry_local
 # shared library. binding.gyp's copy_addon_to_prebuilds target already
@@ -132,7 +132,7 @@ steps:
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
-      $srcAddon = "$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)"
+      $srcAddon = "$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds/$(prebuildDir)"
       foreach ($file in @('foundry_local_node.node', 'foundry_local_preload.node')) {
         $path = Join-Path $srcAddon $file
         if (-not (Test-Path $path)) { throw "Addon not found: $path" }
@@ -155,7 +155,7 @@ steps:
       rm -rf "$dst"
       mkdir -p "$dst"
 
-      srcAddon="$(Build.SourcesDirectory)/sdk_v2/js/prebuilds/$(prebuildDir)"
+      srcAddon="$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds/$(prebuildDir)"
       for file in foundry_local_node.node foundry_local_preload.node; do
         path="$srcAddon/$file"
         if [ ! -f "$path" ]; then echo "Addon not found: $path" >&2; exit 1; fi
@@ -220,4 +220,5 @@ steps:
       signConfigType: inlineSignParams
       inlineOperation: |
         [{"keyCode":"CP-401337","operationSetCode":"MacAppDeveloperSign","parameters":[{"parameterName":"hardening","parameterValue":"--options=runtime"}],"toolName":"sign","toolVersion":"1.0"}]
+
 

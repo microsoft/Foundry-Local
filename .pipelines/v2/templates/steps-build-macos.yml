@@ -61,7 +61,7 @@ steps:
       --config ${{ parameters.buildConfig }} \
       --cmake_extra_defines $(cmakeFetchDefines)
   displayName: 'Configure and build'
-  workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+  workingDirectory: $(Build.Repository.LocalPath)/sdk_v2/cpp
   env:
     VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
 
@@ -70,7 +70,7 @@ steps:
       set -euo pipefail
       python3 build.py --test --config ${{ parameters.buildConfig }}
     displayName: 'Run tests'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Build.Repository.LocalPath)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
       FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)/test-data-shared
@@ -89,7 +89,7 @@ steps:
 # are not part of the redistributable surface.
 - bash: |
     set -euo pipefail
-    src='$(Build.SourcesDirectory)/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/bin'
+    src='$(Build.Repository.LocalPath)/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/bin'
     dst='$(Build.ArtifactStagingDirectory)/native'
     mkdir -p "$dst"
 
@@ -101,4 +101,5 @@ steps:
     cp -P "$primary" "$dst/"
     echo "  staged libfoundry_local.dylib"
   displayName: 'Stage native artifacts'
+
 

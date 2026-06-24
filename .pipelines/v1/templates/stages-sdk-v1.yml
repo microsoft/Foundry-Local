@@ -3,16 +3,9 @@
 # Produces NuGet/wheel/JS artifacts for Foundry Local Core (FLC) plus the
 # v1 C# / JS / Python / Rust SDKs in both base and WinML flavors.
 #
-# Assumes the caller has already emitted:
-#   * a `compute_version` stage publishing the `version-info` pipeline
-#     artifact (containing sdkVersion.v1.txt, pyVersion.v1.txt, flcVersion.v1.txt)
-#   * any stage referenced by `gateDependsOn` (typically `detect_changes`)
-#
-# The entire subgraph is gated by a single artificial root stage (`v1_gate`)
-# whose runtime condition is supplied via `gateCondition`. When v1_gate is
-# skipped, every downstream v1 stage skips via ADO's default `succeeded()`
-# cascade on dependsOn. See stages-sdk-v2.yml for the rationale behind this
-# pattern.
+# Assumes the caller has already emitted a `compute_version` stage
+# publishing the `version-info` pipeline artifact
+# (sdkVersion.v1.txt, pyVersion.v1.txt, flcVersion.v1.txt).
 
 parameters:
 - name: version
@@ -25,35 +18,12 @@ parameters:
   default: false
 - name: neutronServerBranch
   type: string
-- name: gateCondition
-  type: string
-  default: 'succeeded()'
-- name: gateDependsOn
-  type: object
-  default: []
 
 stages:
-
-# -- Artificial root: gates the entire v1 subgraph --
-- stage: v1_gate
-  displayName: 'sdk_v1 build gate'
-  condition: ${{ parameters.gateCondition }}
-  dependsOn: ${{ parameters.gateDependsOn }}
-  jobs:
-  - job: noop
-    displayName: 'sdk_v1 build enabled'
-    pool:
-      name: onnxruntime-Win-CPU-2022
-      os: windows
-    steps:
-    - checkout: none
-    - script: echo "sdk_v1 build enabled"
-      displayName: 'sdk_v1 build enabled'
 
 - stage: build_core
   displayName: 'Build Core'
   dependsOn:
-  - v1_gate
   - compute_version
   jobs:
   - job: flc_win_x64
@@ -266,7 +236,6 @@ stages:
 - stage: build_cs
   displayName: 'Build C# SDK'
   dependsOn:
-  - v1_gate
   - build_core
   jobs:
   - job: cs_sdk
@@ -306,7 +275,7 @@ stages:
 # ── Build JS Node-API Addon (all platforms) ──
 - stage: build_js_addon
   displayName: 'Build JS Addon'
-  dependsOn: [v1_gate]
+  dependsOn: []
   jobs:
   - job: js_addon_win_x64
     displayName: 'Addon win32-x64'
@@ -436,7 +405,6 @@ stages:
 - stage: build_js
   displayName: 'Build JS SDK'
   dependsOn:
-  - v1_gate
   - build_core
   - build_js_addon
   jobs:
@@ -527,7 +495,6 @@ stages:
 - stage: build_python
   displayName: 'Build Python SDK'
   dependsOn:
-  - v1_gate
   - build_core
   jobs:
   - job: python_sdk
@@ -568,7 +535,6 @@ stages:
 - stage: build_rust
   displayName: 'Build Rust SDK'
   dependsOn:
-  - v1_gate
   - build_core
   - build_core_winml
   jobs:
@@ -658,7 +624,6 @@ stages:
 - stage: test_cs
   displayName: 'Test C#'
   dependsOn:
-  - v1_gate
   - build_cs
   jobs:
   - job: test_cs_win_x64
@@ -775,7 +740,6 @@ stages:
 - stage: test_js
   displayName: 'Test JS'
   dependsOn:
-  - v1_gate
   - build_js
   jobs:
   - job: test_js_win_x64
@@ -890,7 +854,6 @@ stages:
 - stage: test_python
   displayName: 'Test Python'
   dependsOn:
-  - v1_gate
   - build_python
   jobs:
   - job: test_python_win_x64
@@ -1021,7 +984,6 @@ stages:
 - stage: test_rust
   displayName: 'Test Rust'
   dependsOn:
-  - v1_gate
   - build_rust
   jobs:
   - job: test_rust_win_x64
@@ -1134,7 +1096,6 @@ stages:
 - stage: build_core_winml
   displayName: 'Build Core (WinML)'
   dependsOn:
-  - v1_gate
   - compute_version
   jobs:
   - job: flc_winml_win_x64
@@ -1250,7 +1211,6 @@ stages:
 - stage: build_cs_winml
   displayName: 'Build C# SDK (WinML)'
   dependsOn:
-  - v1_gate
   - build_core_winml
   jobs:
   - job: cs_sdk_winml
@@ -1292,7 +1252,6 @@ stages:
 - stage: build_js_winml
   displayName: 'Build JS SDK (WinML)'
   dependsOn:
-  - v1_gate
   - build_core_winml
   - build_js_addon
   jobs:
@@ -1383,7 +1342,6 @@ stages:
 - stage: build_python_winml
   displayName: 'Build Python SDK (WinML)'
   dependsOn:
-  - v1_gate
   - build_core_winml
   jobs:
   - job: python_sdk_winml
@@ -1425,7 +1383,6 @@ stages:
 - stage: test_cs_winml
   displayName: 'Test C# (WinML)'
   dependsOn:
-  - v1_gate
   - build_cs_winml
   jobs:
   - job: test_cs_winml_win_x64
@@ -1458,7 +1415,6 @@ stages:
 - stage: test_js_winml
   displayName: 'Test JS (WinML)'
   dependsOn:
-  - v1_gate
   - build_js_winml
   jobs:
   - job: test_js_winml_win_x64
@@ -1490,7 +1446,6 @@ stages:
 - stage: test_python_winml
   displayName: 'Test Python (WinML)'
   dependsOn:
-  - v1_gate
   - build_python_winml
   jobs:
   - job: test_python_winml_win_x64
@@ -1521,3 +1476,4 @@ stages:
         flcWheelsDir: '$(Pipeline.Workspace)/flc-wheels-winml'
         sdkWheelsDir: '$(Pipeline.Workspace)/python-sdk-winml'
         depsVersionsDir: '$(Pipeline.Workspace)/deps-versions-winml'
+
