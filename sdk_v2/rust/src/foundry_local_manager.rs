@@ -5,7 +5,7 @@
 //! the local web service.
 
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use crate::catalog::Catalog;
 use crate::configuration::{FoundryLocalConfig, Logger};
@@ -15,10 +15,6 @@ use crate::detail::task::spawn_blocking;
 use crate::error::{FoundryLocalError, Result};
 use crate::types::{EpDownloadResult, EpInfo};
 
-/// Global singleton holder — only stores a successfully initialised manager.
-static INSTANCE: OnceLock<FoundryLocalManager> = OnceLock::new();
-/// Guard to ensure only one thread attempts initialisation at a time.
-static INIT_GUARD: Mutex<()> = Mutex::new(());
 
 /// Primary entry point for interacting with Foundry Local.
 ///
@@ -92,22 +88,7 @@ impl FoundryLocalManager {
     /// the initialisation, and builds the model catalog.  Subsequent calls
     /// return a reference to the same instance (the provided config is
     /// ignored after the first call).
-    pub fn create(config: FoundryLocalConfig) -> Result<&'static Self> {
-        // Fast path: singleton already initialised.
-        if let Some(manager) = INSTANCE.get() {
-            return Ok(manager);
-        }
-
-        // Slow path: acquire init guard so only one thread attempts initialisation.
-        let _guard = INIT_GUARD.lock().map_err(|_| FoundryLocalError::Internal {
-            reason: "initialisation guard poisoned".into(),
-        })?;
-
-        // Double-check after acquiring the lock.
-        if let Some(manager) = INSTANCE.get() {
-            return Ok(manager);
-        }
-
+    pub fn create(config: FoundryLocalConfig) -> Result<Self> {
         let mut config = config;
         let api = Arc::new(Api::load(config.library_path_ref())?);
         let logger = config.take_logger();
@@ -117,33 +98,21 @@ impl FoundryLocalManager {
             Arc::clone(&api),
             native_config.as_ptr(),
         )?);
-        // `native_config` is dropped here; Manager_Create has copied what it needs.
 
         let catalog_ptr = native.catalog_ptr()?;
         let catalog = Catalog::new(Arc::clone(&api), catalog_ptr)?;
 
-        let manager = FoundryLocalManager {
+        // Owned manager: teardown runs via RAII when this value is dropped
+        // (mid-program), not via a process-exit atexit hook. This releases the
+        // native manager (and unregisters EPs) while the engine/Metal runtime is
+        // still alive — matching the C++ SDK's local-`Manager` semantics, and
+        // avoiding the WebGPU `ReleaseEpFactory` teardown throw (ORT #29206).
+        Ok(FoundryLocalManager {
             native,
             catalog,
             urls: Mutex::new(Vec::new()),
             _logger: logger,
-        };
-
-        // Only cache on success — failures allow the next caller to retry.
-        match INSTANCE.set(manager) {
-            Ok(()) => {
-                // Register a process-exit hook to release the native manager
-                // before the library's C++ static destructors run. Without
-                // this, the native dtor chain (Manager -> logger -> spdlog
-                // flush) can fire after spdlog's global thread pool is gone,
-                // raising `mutex lock failed` and aborting the process. The
-                // hook mirrors the Python SDK's `atexit` teardown.
-                register_exit_teardown();
-                Ok(INSTANCE.get().unwrap())
-            }
-            // Another thread beat us — return their instance.
-            Err(_) => Ok(INSTANCE.get().unwrap()),
-        }
+        })
     }
 
     /// Access the model catalog.
@@ -320,32 +289,3 @@ impl FoundryLocalManager {
     }
 }
 
-/// Register the process-exit teardown hook exactly once.
-///
-/// Uses the C runtime's `atexit`, which runs registered handlers in LIFO order.
-/// Because the `foundry_local` library is `dlopen`ed during `create()` (before
-/// this registration), its static destructors are registered earlier and
-/// therefore run *after* our hook — giving us the window to release the native
-/// manager while the engine's globals (e.g. the spdlog thread pool) are still
-/// alive.
-fn register_exit_teardown() {
-    extern "C" {
-        fn atexit(cb: extern "C" fn()) -> std::os::raw::c_int;
-    }
-    // SAFETY: `exit_teardown` is a valid `extern "C"` function with no captured
-    // state; registering it with the C runtime is sound.
-    unsafe {
-        atexit(exit_teardown);
-    }
-}
-
-/// `atexit` callback: release the singleton's native manager before the
-/// library's C++ static destructors run. Panic-safe (a panic must never unwind
-/// across the C runtime boundary).
-extern "C" fn exit_teardown() {
-    let _ = std::panic::catch_unwind(|| {
-        if let Some(manager) = INSTANCE.get() {
-            manager.native.teardown();
-        }
-    });
-}
