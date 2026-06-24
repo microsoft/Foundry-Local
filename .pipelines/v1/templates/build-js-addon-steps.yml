@@ -43,3 +43,4 @@ steps:
       Copy-Item "build/Release/foundry_local_napi.node" "$destDir/foundry_local_napi.node" -Force
       Write-Host "Built addon for $platformKey -> $destDir/foundry_local_napi.node"
       Get-Item "$destDir/foundry_local_napi.node" | ForEach-Object { Write-Host "  Size: $($_.Length) bytes" }
+

@@ -51,10 +51,9 @@ steps:
   displayName: 'Append version define'
 
 - ${{ if eq(parameters.runTests, true) }}:
-  - template: ../../templates/checkout-steps.yml@self
-    parameters:
-      repoName: test-data-shared
-      basePath: '$(Agent.BuildDirectory)'
+  - checkout: test-data-shared
+    lfs: true
+    path: test-data-shared
 
 - bash: |
     set -euo pipefail
@@ -102,3 +101,4 @@ steps:
     cp -P "$primary" "$dst/"
     echo "  staged libfoundry_local.dylib"
   displayName: 'Stage native artifacts'
+

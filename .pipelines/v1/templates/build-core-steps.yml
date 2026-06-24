@@ -175,3 +175,4 @@ steps:
         Copy-Item -Destination $destDir -Force
       Write-Host "Staged binaries:"
       Get-ChildItem $destDir | ForEach-Object { Write-Host "  $($_.Name)" }
+

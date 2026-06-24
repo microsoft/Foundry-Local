@@ -1,0 +1,130 @@
+# Foundry Local Packaging Pipeline (v1)
+#
+# Builds Foundry Local Core from neutron-server (windows.ai.toolkit project),
+# then packages the C# and JS SDKs from this repo using the built Core.
+#
+# Produces artifacts: flc-nuget, flc-nuget-winml, flc-wheels, flc-wheels-winml,
+#   cs-sdk, cs-sdk-winml, js-sdk, js-sdk-winml, python-sdk, python-sdk-winml,
+#   rust-sdk, rust-sdk-winml
+
+# CI: only auto-run on pushes to main / release branches. Without an explicit
+# trigger block, ADO defaults to "every commit on every branch", which fires
+# this expensive pipeline on every dev branch push.
+#
+# TODO: This prevents auto-run on all pushes but doesn't trigger commits to `main` and `release`
+#       branches. Re-enable when triggering is fixed. 
+# trigger:
+#   branches:
+#     include:
+#       - main
+#       - releases/*
+
+pr:
+- main
+- releases/*
+
+name: $(Date:yyyyMMdd).$(Rev:r)
+
+parameters:
+- name: versionV1
+  displayName: 'Package version (sdk/...)'
+  type: string
+  default: '1.3.0'
+- name: prereleaseId
+  displayName: 'Pre-release identifier (e.g. rc1, beta).'
+  type: string
+  default: 'none'
+- name: isRelease
+  displayName: 'Release build'
+  type: boolean
+  default: false
+- name: neutronServerBranch
+  displayName: 'Foundry Local Core branch (windows.ai.toolkit/neutron-server)'
+  type: string
+  default: 'dev/FoundryLocalCore/main'
+
+variables:
+- group: FoundryLocal-ESRP-Signing
+
+resources:
+  repositories:
+  - repository: 1ESPipelineTemplates
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    settings:
+      networkIsolationPolicy: Permissive
+    pool:
+      # default all windows jobs, individual jobs override
+      name: onnxruntime-Win-CPU-2022
+      os: windows
+    sdl:
+      binskim:
+        break: false
+        scanOutputDirectoryOnly: true
+    stages:
+    # ── Compute Version ──
+    # Computes the legacy sdk/ version files consumed by stages-sdk-v1.yml.
+    - stage: compute_version
+      displayName: 'Compute Version'
+      dependsOn: []
+      jobs:
+      - job: version
+        displayName: 'Compute Version'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
+        steps:
+        - checkout: none
+        - task: PowerShell@2
+          displayName: 'Compute and write version files'
+          inputs:
+            targetType: inline
+            script: |
+              $preId = "${{ parameters.prereleaseId }}"
+              $ts = Get-Date -Format "yyyyMMddHHmm"
+              $commitId = "$(Build.SourceVersion)".Substring(0, 8)
+
+              if ($preId -ne '' -and $preId -ne 'none') {
+                $sdkVersion = "${{ parameters.versionV1 }}-$preId"
+                $pyVersion = "${{ parameters.versionV1 }}$preId"
+                $flcVersion = "${{ parameters.versionV1 }}-$preId"
+              } elseif ("${{ parameters.isRelease }}" -ne "True") {
+                $sdkVersion = "${{ parameters.versionV1 }}-dev.$ts"
+                $pyVersion = "${{ parameters.versionV1 }}.dev$ts"
+                $flcVersion = "${{ parameters.versionV1 }}-dev-$ts-$commitId"
+              } else {
+                $sdkVersion = "${{ parameters.versionV1 }}"
+                $pyVersion = "${{ parameters.versionV1 }}"
+                $flcVersion = "${{ parameters.versionV1 }}"
+              }
+
+              $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
+              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+
+              Set-Content -Path "$outDir/sdkVersion.v1.txt" -Value $sdkVersion -NoNewline
+              Set-Content -Path "$outDir/pyVersion.v1.txt"  -Value $pyVersion -NoNewline
+              Set-Content -Path "$outDir/flcVersion.v1.txt" -Value $flcVersion -NoNewline
+
+              Write-Host "v1 SDK version:    $sdkVersion"
+              Write-Host "v1 Python version: $pyVersion"
+              Write-Host "v1 FLC version:    $flcVersion"
+
+    # -- sdk_v1 (sdk/) C++ Core (FLC) + C# / JS / Python / Rust SDKs --
+    # Entire subgraph is rooted at the artificial `v1_gate` stage defined
+    # inside stages-sdk-v1.yml.
+    - template: templates/stages-sdk-v1.yml
+      parameters:
+        version: ${{ parameters.versionV1 }}
+        prereleaseId: ${{ parameters.prereleaseId }}
+        isRelease: ${{ parameters.isRelease }}
+        neutronServerBranch: ${{ parameters.neutronServerBranch }}

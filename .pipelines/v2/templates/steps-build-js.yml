@@ -220,3 +220,4 @@ steps:
       signConfigType: inlineSignParams
       inlineOperation: |
         [{"keyCode":"CP-401337","operationSetCode":"MacAppDeveloperSign","parameters":[{"parameterName":"hardening","parameterValue":"--options=runtime"}],"toolName":"sign","toolVersion":"1.0"}]
+

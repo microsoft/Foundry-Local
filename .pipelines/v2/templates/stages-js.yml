@@ -198,9 +198,8 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'win-x64'
@@ -224,9 +223,8 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'linux-x64'
@@ -259,9 +257,8 @@ stages:
           fi
           git lfs install
       displayName: 'Install git-lfs (macOS)'
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'osx-arm64'
@@ -311,3 +308,4 @@ stages:
     - template: steps-pack-js.yml
       parameters:
         outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
+

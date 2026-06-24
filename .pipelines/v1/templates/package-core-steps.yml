@@ -343,3 +343,4 @@ steps:
       New-Item -ItemType Directory -Path $outDir -Force | Out-Null
       [System.IO.File]::WriteAllText("$outDir/$fileName", $json, [System.Text.UTF8Encoding]::new($false))
       Write-Host "Wrote $fileName to $outDir"
+

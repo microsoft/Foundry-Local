@@ -340,3 +340,4 @@ steps:
     script: |
         Get-ChildItem "${{ parameters.outputDir }}" -Filter '*.whl' |
             ForEach-Object { Write-Host ("{0,12}  {1}" -f $_.Length, $_.Name) }
+

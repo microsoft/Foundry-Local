@@ -78,3 +78,4 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       Get-ChildItem $dst | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length) bytes" }
   displayName: 'npm pack'
+

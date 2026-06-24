@@ -67,11 +67,11 @@ stages:
         artifactName: 'flc-win-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -90,11 +90,11 @@ stages:
         artifactName: 'flc-win-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -113,11 +113,11 @@ stages:
         artifactName: 'flc-linux-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -137,11 +137,11 @@ stages:
         artifactName: 'flc-linux-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -162,11 +162,11 @@ stages:
         artifactName: 'flc-osx-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     # AcesShared macOS agents don't have git-lfs pre-installed
@@ -204,7 +204,7 @@ stages:
         artifactName: 'deps-versions-standard'
         targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
@@ -291,7 +291,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-cs-steps.yml
@@ -462,7 +462,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
 
@@ -552,7 +552,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-python-steps.yml
@@ -597,7 +597,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/rust-sdk'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-rust-steps.yml
@@ -677,7 +677,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -703,7 +703,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -730,7 +730,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -761,7 +761,7 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -794,7 +794,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-js-steps.yml
@@ -819,7 +819,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -846,7 +846,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -877,7 +877,7 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-js-steps.yml
@@ -912,7 +912,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-python-steps.yml
@@ -941,7 +941,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -972,7 +972,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -1007,7 +1007,7 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-python-steps.yml
@@ -1040,7 +1040,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-rust-steps.yml
@@ -1065,7 +1065,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-rust-steps.yml
@@ -1091,7 +1091,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-rust-steps.yml
@@ -1121,7 +1121,7 @@ stages:
       displayName: 'Install Git LFS'
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-rust-steps.yml
@@ -1148,11 +1148,11 @@ stages:
         artifactName: 'flc-winml-win-x64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -1172,11 +1172,11 @@ stages:
         artifactName: 'flc-winml-win-arm64'
         targetPath: '$(Build.ArtifactStagingDirectory)/native'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-core-steps.yml
@@ -1209,7 +1209,7 @@ stages:
         artifactName: 'deps-versions-winml'
         targetPath: '$(Build.ArtifactStagingDirectory)/deps-versions'
     steps:
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: neutron-server
         ref: refs/heads/${{ parameters.neutronServerBranch }}
@@ -1275,7 +1275,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk-winml'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-cs-steps.yml
@@ -1318,7 +1318,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
 
@@ -1408,7 +1408,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk-winml'
     steps:
     - checkout: self
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: build-python-steps.yml
@@ -1444,7 +1444,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
         basePath: '$(Agent.BuildDirectory)'
@@ -1477,7 +1477,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-js-steps.yml
@@ -1512,7 +1512,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
+    - template: checkout-steps.yml
       parameters:
         repoName: test-data-shared
     - template: test-python-steps.yml

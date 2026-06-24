@@ -100,3 +100,4 @@ steps:
 
         Write-Host "Generated packages:"
         Get-ChildItem $outDir -Filter '*.nupkg' | ForEach-Object { Write-Host "  $($_.Name)" }
+

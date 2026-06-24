@@ -171,3 +171,4 @@ steps:
     signConfigType: inlineSignParams
     inlineOperation: |
       [{"keyCode":"CP-401405","operationSetCode":"NuGetSign","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"},{"keyCode":"CP-401405","operationSetCode":"NuGetVerify","parameters":[],"toolName":"sign","toolVersion":"6.2.9304.0"}]
+

@@ -78,10 +78,9 @@ steps:
 
 # Tests need shared model files.
 - ${{ if eq(parameters.runTests, true) }}:
-  - template: ../../templates/checkout-steps.yml@self
-    parameters:
-      repoName: test-data-shared
-      basePath: '$(Agent.BuildDirectory)'
+  - checkout: test-data-shared
+    lfs: true
+    path: test-data-shared
 
 - ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, false)) }}:
   - script: >-
@@ -205,3 +204,4 @@ steps:
       SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/vcpkg_installed/x64-windows/include/gsl'
       Contents: '**'
       TargetFolder: '$(Build.ArtifactStagingDirectory)/include/gsl'
+

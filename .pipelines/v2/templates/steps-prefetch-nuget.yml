@@ -167,3 +167,4 @@ steps:
       echo "##vso[task.setvariable variable=cmakeFetchDefines]$joined"
       echo "cmakeFetchDefines = $joined"
     displayName: 'Pre-download NuGet packages'
+
