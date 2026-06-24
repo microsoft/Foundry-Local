@@ -1,7 +1,10 @@
-//! Non-owning wrapper around a native `flModel` handle.
+//! Wrappers around native `flModel` / `flCatalog` handles.
 //!
-//! `flModel*` handles are owned by the catalog (which lives for the process
-//! lifetime via the manager singleton) and are never released individually. A
+//! `flModel*` and `flCatalog*` handles are owned by the native manager and are
+//! never released individually; they stay valid only while that manager is
+//! alive. Each wrapper therefore holds a strong [`Arc<NativeManager>`] so a
+//! handle can safely outlive the
+//! [`FoundryLocalManager`](crate::FoundryLocalManager) that created it. A
 //! `flModelList*`, by contrast, is owned by the caller: [`collect_models`]
 //! eagerly extracts the contained handles and then releases the list.
 
@@ -11,23 +14,34 @@ use std::sync::Arc;
 
 use super::api::{cstr_to_string, Api};
 use super::ffi::*;
+use super::manager::NativeManager;
 use crate::error::{FoundryLocalError, Result};
 
-/// A borrowed handle to a catalog-owned `flModel`.
+/// A handle to a manager-owned `flModel`, plus a strong reference to the owning
+/// native manager so the catalog (and therefore this handle) stays alive for as
+/// long as the model is held.
 #[derive(Clone)]
 pub(crate) struct NativeModel {
     pub(crate) api: Arc<Api>,
     pub(crate) ptr: *mut flModel,
+    /// Keeps the native manager — which owns the catalog and this `flModel` —
+    /// alive. Propagated to derived models/sessions; never dereferenced here.
+    manager: Arc<NativeManager>,
 }
 
-// SAFETY: model handles are owned by the catalog (process-lifetime) and the
-// native implementation is thread-safe for independent operations.
+// SAFETY: the `flModel` is owned by the native manager kept alive via `manager`,
+// and the native implementation is thread-safe for independent operations.
 unsafe impl Send for NativeModel {}
 unsafe impl Sync for NativeModel {}
 
 impl NativeModel {
-    pub(crate) fn new(api: Arc<Api>, ptr: *mut flModel) -> Self {
-        Self { api, ptr }
+    pub(crate) fn new(api: Arc<Api>, ptr: *mut flModel, manager: Arc<NativeManager>) -> Self {
+        Self { api, ptr, manager }
+    }
+
+    /// Clone the keep-alive handle to the owning native manager.
+    pub(crate) fn manager(&self) -> Arc<NativeManager> {
+        Arc::clone(&self.manager)
     }
 
     pub(crate) fn info_ptr(&self) -> Result<*const flModelInfo> {
@@ -79,7 +93,7 @@ impl NativeModel {
         let mut list: *mut flModelList = std::ptr::null_mut();
         let status = unsafe { (self.api.model_api().GetVariants)(self.ptr, &mut list) };
         self.api.check(status)?;
-        Ok(collect_models(&self.api, list))
+        Ok(collect_models(&self.api, &self.manager, list))
     }
 
     /// Download the model, optionally reporting progress (0.0–100.0) and
@@ -142,8 +156,13 @@ unsafe extern "C" fn download_trampoline(
 
 /// Eagerly extract all model handles from a `flModelList`, then release the list.
 ///
-/// The returned handles remain valid for the catalog's lifetime.
-pub(crate) fn collect_models(api: &Arc<Api>, list: *mut flModelList) -> Vec<NativeModel> {
+/// Each extracted handle is tagged with `manager` so it keeps the owning native
+/// manager alive for as long as the handle is held.
+pub(crate) fn collect_models(
+    api: &Arc<Api>,
+    manager: &Arc<NativeManager>,
+    list: *mut flModelList,
+) -> Vec<NativeModel> {
     if list.is_null() {
         return Vec::new();
     }
@@ -154,28 +173,33 @@ pub(crate) fn collect_models(api: &Arc<Api>, list: *mut flModelList) -> Vec<Nati
     for i in 0..size {
         let m = unsafe { (root.ModelList_GetAt)(list, i) };
         if !m.is_null() {
-            out.push(NativeModel::new(Arc::clone(api), m));
+            out.push(NativeModel::new(Arc::clone(api), m, Arc::clone(manager)));
         }
     }
     unsafe { (root.ModelList_Release)(list) };
     out
 }
 
-/// A borrowed handle to a manager-owned `flCatalog`.
+/// A handle to a manager-owned `flCatalog`, plus a strong reference to the
+/// owning native manager so the handle (and the models it produces) outlive the
+/// [`FoundryLocalManager`](crate::FoundryLocalManager).
 #[derive(Clone)]
 pub(crate) struct NativeCatalog {
     pub(crate) api: Arc<Api>,
     pub(crate) ptr: *mut flCatalog,
+    /// Keeps the native manager that owns this `flCatalog` alive; also tagged
+    /// onto every model produced from this catalog.
+    manager: Arc<NativeManager>,
 }
 
-// SAFETY: the catalog handle is owned by the manager (process-lifetime) and the
-// native implementation is thread-safe.
+// SAFETY: the `flCatalog` is owned by the native manager kept alive via
+// `manager`, and the native implementation is thread-safe.
 unsafe impl Send for NativeCatalog {}
 unsafe impl Sync for NativeCatalog {}
 
 impl NativeCatalog {
-    pub(crate) fn new(api: Arc<Api>, ptr: *mut flCatalog) -> Self {
-        Self { api, ptr }
+    pub(crate) fn new(api: Arc<Api>, ptr: *mut flCatalog, manager: Arc<NativeManager>) -> Self {
+        Self { api, ptr, manager }
     }
 
     pub(crate) fn name(&self) -> Result<String> {
@@ -192,7 +216,7 @@ impl NativeCatalog {
         let mut list: *mut flModelList = std::ptr::null_mut();
         let status = unsafe { f(self.ptr, &mut list) };
         self.api.check(status)?;
-        Ok(collect_models(&self.api, list))
+        Ok(collect_models(&self.api, &self.manager, list))
     }
 
     pub(crate) fn get_models(&self) -> Result<Vec<NativeModel>> {
@@ -223,7 +247,11 @@ impl NativeCatalog {
         if model.is_null() {
             Ok(None)
         } else {
-            Ok(Some(NativeModel::new(Arc::clone(&self.api), model)))
+            Ok(Some(NativeModel::new(
+                Arc::clone(&self.api),
+                model,
+                Arc::clone(&self.manager),
+            )))
         }
     }
 
@@ -245,6 +273,10 @@ impl NativeCatalog {
                 reason: "Catalog returned no latest version for the model.".into(),
             });
         }
-        Ok(NativeModel::new(Arc::clone(&self.api), latest))
+        Ok(NativeModel::new(
+            Arc::clone(&self.api),
+            latest,
+            Arc::clone(&self.manager),
+        ))
     }
 }

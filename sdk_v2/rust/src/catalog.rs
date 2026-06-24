@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use crate::detail::api::Api;
+use crate::detail::manager::NativeManager;
 use crate::detail::model::Model;
 use crate::detail::native::NativeCatalog;
 use crate::detail::task::spawn_blocking;
@@ -19,8 +20,12 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    pub(crate) fn new(api: Arc<Api>, ptr: *mut crate::detail::ffi::flCatalog) -> Result<Self> {
-        let native = NativeCatalog::new(api, ptr);
+    pub(crate) fn new(
+        api: Arc<Api>,
+        ptr: *mut crate::detail::ffi::flCatalog,
+        manager: Arc<NativeManager>,
+    ) -> Result<Self> {
+        let native = NativeCatalog::new(api, ptr, manager);
         let name = native.name().unwrap_or_else(|_| "default".into());
         Ok(Self { native, name })
     }

@@ -11,6 +11,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::api::Api;
 use super::ffi::*;
 use super::items::{make_bytes_item, make_openai_json_item, read_text_item};
+use super::manager::NativeManager;
 use super::native::NativeModel;
 use crate::error::{FoundryLocalError, Result};
 
@@ -150,10 +151,14 @@ impl Drop for NativeItemQueue {
 pub(crate) struct NativeSession {
     pub(crate) api: Arc<Api>,
     ptr: *mut flSession,
+    /// Keeps the native manager (which owns the model this session was created
+    /// from) alive for the session's lifetime; never dereferenced here.
+    _manager: Arc<NativeManager>,
 }
 
 // SAFETY: a session is used from a single worker at a time; the native layer is
-// thread-safe for the create/process/release lifecycle used here.
+// thread-safe for the create/process/release lifecycle used here. The owning
+// native manager is kept alive via `_manager`.
 unsafe impl Send for NativeSession {}
 unsafe impl Sync for NativeSession {}
 
@@ -163,7 +168,11 @@ impl NativeSession {
         let api = Arc::clone(&model.api);
         let mut ptr: *mut flSession = ptr::null_mut();
         api.check(unsafe { (api.inference_api().Session_Create)(model.ptr, &mut ptr) })?;
-        Ok(Self { api, ptr })
+        Ok(Self {
+            api,
+            ptr,
+            _manager: model.manager(),
+        })
     }
 
     pub(crate) fn set_streaming_callback(

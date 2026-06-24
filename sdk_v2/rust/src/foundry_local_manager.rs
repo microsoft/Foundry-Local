@@ -102,9 +102,11 @@ impl FoundryLocalManager {
     ///
     /// While at least one returned [`Arc`] is alive, every call returns the
     /// **same** instance (a process-wide singleton) and the `config` passed to
-    /// later calls is ignored. Once the last handle is dropped the native
-    /// manager is torn down; a subsequent call then builds a fresh instance
-    /// from the new `config`.
+    /// later calls is ignored. The native manager is torn down once every handle
+    /// derived from it is gone — this `Arc`, plus any [`Model`](crate::Model),
+    /// client, or session it produced, each of which keeps the native manager
+    /// alive so handles can safely outlive this `Arc`. A subsequent call then
+    /// builds a fresh instance from the new `config`.
     ///
     /// Teardown runs via [`Drop`] when the final handle is released — not via a
     /// process-exit hook — so the native manager (and its EP unregistration)
@@ -135,7 +137,7 @@ impl FoundryLocalManager {
         )?);
 
         let catalog_ptr = native.catalog_ptr()?;
-        let catalog = Catalog::new(Arc::clone(&api), catalog_ptr)?;
+        let catalog = Catalog::new(Arc::clone(&api), catalog_ptr, Arc::clone(&native))?;
 
         let manager = Arc::new(FoundryLocalManager {
             native,

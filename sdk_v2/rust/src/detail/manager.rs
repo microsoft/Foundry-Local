@@ -4,12 +4,30 @@
 use std::os::raw::c_char;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::api::{cstr_to_string, Api};
 use super::ffi::*;
 use crate::error::{FoundryLocalError, Result};
 use crate::types::EpInfo;
+
+/// Serializes native manager creation against release.
+///
+/// The native core enforces a single live `flManager` (`Manager_Create` fails
+/// with `INVALID_USAGE` while one exists). Because an [`Arc<NativeManager>`]'s
+/// strong count reaches zero slightly before [`Drop`] finishes `Manager_Release`,
+/// a concurrent `create` could otherwise observe "no instance" yet race the
+/// in-flight release and be rejected. Holding this lock across both
+/// `Manager_Create` and `Manager_Release` closes that window.
+static NATIVE_LIFECYCLE: Mutex<()> = Mutex::new(());
+
+/// Lock [`NATIVE_LIFECYCLE`], recovering from poisoning (the guarded `()` has no
+/// invariants a panic could break).
+fn lock_lifecycle() -> std::sync::MutexGuard<'static, ()> {
+    NATIVE_LIFECYCLE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// Owns a native `flManager`.
 ///
@@ -32,6 +50,8 @@ unsafe impl Sync for NativeManager {}
 impl NativeManager {
     /// Create a manager from a fully-built native configuration.
     pub(crate) fn create(api: Arc<Api>, config: *const flConfiguration) -> Result<Self> {
+        // Serialize against any in-flight native release (see `NATIVE_LIFECYCLE`).
+        let _lifecycle = lock_lifecycle();
         let mut ptr: *mut flManager = std::ptr::null_mut();
         let status = unsafe { (api.root().Manager_Create)(config, &mut ptr) };
         api.check(status)?;
@@ -177,6 +197,9 @@ impl NativeManager {
         if self.released.swap(true, Ordering::AcqRel) {
             return;
         }
+        // Serialize against a concurrent `create` so the native core never sees
+        // an overlapping create/release (see `NATIVE_LIFECYCLE`).
+        let _lifecycle = lock_lifecycle();
         // SAFETY: `ptr` was created by Manager_Create and is released exactly
         // once (guarded by the `released` swap above).
         unsafe {
