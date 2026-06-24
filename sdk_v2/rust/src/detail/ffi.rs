@@ -81,6 +81,8 @@ pub const FOUNDRY_LOCAL_ITEM_TEXT: flItemType = 20;
 pub const FOUNDRY_LOCAL_ITEM_MESSAGE: flItemType = 21;
 pub const FOUNDRY_LOCAL_ITEM_IMAGE: flItemType = 25;
 pub const FOUNDRY_LOCAL_ITEM_AUDIO: flItemType = 30;
+pub const FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT: flItemType = 31;
+pub const FOUNDRY_LOCAL_ITEM_SPEECH_RESULT: flItemType = 32;
 pub const FOUNDRY_LOCAL_ITEM_TOOL_CALL: flItemType = 100;
 pub const FOUNDRY_LOCAL_ITEM_TOOL_RESULT: flItemType = 101;
 pub const FOUNDRY_LOCAL_ITEM_QUEUE: flItemType = 200;
@@ -246,6 +248,51 @@ pub struct flToolResultData {
     pub result: *const c_char,
 }
 
+// ── Speech recognition output types (output-only; see foundry_local_c.h) ──────
+
+/// Sentinel for absent time fields in the speech structs (`INT64_MIN`).
+pub const FOUNDRY_LOCAL_DURATION_UNSET: i64 = i64::MIN;
+/// Sentinel for absent confidence in `flSpeechWord` (`-FLT_MAX`).
+pub const FOUNDRY_LOCAL_CONFIDENCE_UNSET: f32 = f32::MIN;
+
+pub type flSpeechSegmentKind = c_int;
+pub const FOUNDRY_LOCAL_SPEECH_SEGMENT_NONE: flSpeechSegmentKind = 0;
+pub const FOUNDRY_LOCAL_SPEECH_SEGMENT_PARTIAL: flSpeechSegmentKind = 1;
+pub const FOUNDRY_LOCAL_SPEECH_SEGMENT_FINAL: flSpeechSegmentKind = 2;
+
+#[repr(C)]
+pub struct flSpeechWord {
+    pub version: u32,
+    pub text: *const c_char,
+    pub start_time_ms: i64,
+    pub end_time_ms: i64,
+    pub confidence: f32,
+    pub speaker_id: *const c_char,
+}
+
+#[repr(C)]
+pub struct flSpeechSegmentData {
+    pub version: u32,
+    pub kind: flSpeechSegmentKind,
+    pub text: *const c_char,
+    pub start_time_ms: i64,
+    pub end_time_ms: i64,
+    pub utterance_start: bool,
+    pub words: *const flSpeechWord,
+    pub words_count: usize,
+    pub language: *const c_char,
+}
+
+#[repr(C)]
+pub struct flSpeechResultData {
+    pub version: u32,
+    pub text: *const c_char,
+    pub language: *const c_char,
+    pub duration_ms: i64,
+    pub segments: *const *const flItem,
+    pub segments_count: usize,
+}
+
 #[repr(C)]
 pub struct flStreamingCallbackData {
     pub version: u32,
@@ -285,8 +332,10 @@ pub const FOUNDRY_LOCAL_GET_VERSION_STRING_SYMBOL: &[u8] = b"FoundryLocalGetVers
 
 // ── Function tables ──────────────────────────────────────────────────────────
 //
-// Field order and signatures MUST match foundry_local_c.h exactly. New entries
-// are only ever appended at the end of each table.
+// Field order and signatures MUST match foundry_local_c.h exactly — the tables
+// are consumed positionally, so a new entry inserted mid-table upstream must be
+// mirrored at the same position here (e.g. GetSpeechSegment/GetSpeechResult sit
+// between GetToolResult and GetMetadata in flItemApi).
 
 /// Root API table (`flApi`).
 #[repr(C)]
@@ -425,6 +474,15 @@ pub struct flItemApiVtable {
     pub GetToolResult: unsafe extern "system" fn(
         item: *const flItem,
         out_tool_result: *mut flToolResultData,
+    ) -> flStatusPtr,
+
+    pub GetSpeechSegment: unsafe extern "system" fn(
+        item: *const flItem,
+        out_segment: *mut flSpeechSegmentData,
+    ) -> flStatusPtr,
+    pub GetSpeechResult: unsafe extern "system" fn(
+        item: *const flItem,
+        out_result: *mut flSpeechResultData,
     ) -> flStatusPtr,
 
     pub GetMetadata: unsafe extern "system" fn(
