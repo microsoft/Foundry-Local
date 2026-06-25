@@ -187,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
     // <init>
     // Initialize the Foundry Local SDK
     let manager = FoundryLocalManager::create(
-        FoundryLocalConfig::new("tool-calling-app"),
+        FoundryLocalConfig::new("foundry_local_samples"),
     )?;
 
     // Download and register all execution providers.

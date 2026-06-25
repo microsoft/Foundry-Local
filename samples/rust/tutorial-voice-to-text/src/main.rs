@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     // <init>
     // Initialize the Foundry Local SDK
     let manager = FoundryLocalManager::create(
-        FoundryLocalConfig::new("note-taker"),
+        FoundryLocalConfig::new("foundry_local_samples"),
     )?;
     // </init>
 

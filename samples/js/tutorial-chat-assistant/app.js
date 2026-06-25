@@ -54,7 +54,20 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-const askQuestion = (prompt) => new Promise((resolve) => rl.question(prompt, resolve));
+const askQuestion = (prompt) => new Promise((resolve) => {
+    if (rl.closed) return resolve('quit');
+    const onClose = () => resolve('quit');
+    rl.once('close', onClose);
+    try {
+        rl.question(prompt, (answer) => {
+            rl.off('close', onClose);
+            resolve(answer);
+        });
+    } catch {
+        rl.off('close', onClose);
+        resolve('quit');
+    }
+});
 
 console.log('\nChat assistant ready! Type \'quit\' to exit.\n');
 
