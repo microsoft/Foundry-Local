@@ -173,3 +173,7 @@ class Model(IModel):
     def get_embedding_client(self) -> EmbeddingClient:
         """Get an embedding client for the currently selected variant."""
         return self._selected_variant.get_embedding_client()
+
+    def get_versions(self) -> List[IModel]:
+        """Get all published versions of the currently selected variant."""
+        return self._selected_variant.get_versions()
