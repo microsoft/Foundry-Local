@@ -7,8 +7,14 @@
 #   - JS SDK
 
 pr:
-- main
-- releases/*
+  branches:
+    include:
+      - main
+      - releases/*
+  paths:
+    include:
+      - .pipelines/v2/**
+      - sdk_v2/**
 
 name: $(Date:yyyyMMdd).$(Rev:r)
 

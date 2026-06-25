@@ -77,6 +77,14 @@ steps:
     NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 - pwsh: |
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
+      npm install --no-save --ignore-scripts --include=dev --no-audit --no-fund typescript
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  displayName: 'Ensure TypeScript tooling is installed'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
+
+- pwsh: |
       $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
       Write-Host "Stamping JS package version: $version"
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
