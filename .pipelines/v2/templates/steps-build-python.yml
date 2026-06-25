@@ -191,9 +191,13 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        # Use the Azure Artifacts feed as the sole package index for build tooling.
-        # Pass --index-url directly to avoid host-level pip config writes.
-        $indexUrl = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/'
+        # Require the authenticated pip URL injected by PipAuthenticate@1.
+        $indexUrl = $env:PIP_INDEX_URL
+        if (-not $indexUrl -and $env:PIP_EXTRA_INDEX_URL) {
+        $indexUrl = ($env:PIP_EXTRA_INDEX_URL -split '\s+')[0]
+        }
+        if (-not $indexUrl) { throw 'PipAuthenticate did not provide an authenticated pip index URL (PIP_INDEX_URL/PIP_EXTRA_INDEX_URL missing).' }
+        Write-Host "Using pip index: $indexUrl"
         python -m pip install --upgrade pip --index-url $indexUrl
         python -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

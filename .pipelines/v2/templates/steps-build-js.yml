@@ -108,6 +108,18 @@ steps:
   env:
     NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
+- task: PowerShell@2
+  displayName: 'Ensure node-gyp tooling is installed'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
+      npm install --no-save --ignore-scripts --include=dev --no-audit --no-fund node-gyp node-api-headers
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
+
 # binding.gyp resolves the foundry_local lib + gsl/public include dirs
 # via FOUNDRY_LOCAL_LIB_DIR and FOUNDRY_LOCAL_INCLUDE_DIR when set. The
 # include artifact ships both `foundry_local/` and `gsl/` subdirectories;
@@ -119,9 +131,9 @@ steps:
       $args = if ($arch -eq 'native') { 'rebuild' } else { "rebuild --arch=$arch" }
       Write-Host "node-gyp $args"
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
-      $nodeGyp = Join-Path (Get-Location) 'node_modules/.bin/node-gyp.cmd'
+  $nodeGyp = Join-Path (Get-Location) 'node_modules/node-gyp/bin/node-gyp.js'
       if (-not (Test-Path $nodeGyp)) { throw "node-gyp not found at $nodeGyp" }
-      & $nodeGyp $args.Split(' ')
+  & node $nodeGyp $args.Split(' ')
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build Node-API addon'
     env:
@@ -138,11 +150,11 @@ steps:
   - bash: |
       set -euo pipefail
       cd "$(Build.Repository.LocalPath)/sdk_v2/js"
-      if [ ! -x ./node_modules/.bin/node-gyp ]; then
-        echo "node-gyp not found at ./node_modules/.bin/node-gyp" >&2
+      if [ ! -f ./node_modules/node-gyp/bin/node-gyp.js ]; then
+        echo "node-gyp not found at ./node_modules/node-gyp/bin/node-gyp.js" >&2
         exit 1
       fi
-      ./node_modules/.bin/node-gyp rebuild
+      node ./node_modules/node-gyp/bin/node-gyp.js rebuild
     displayName: 'Build Node-API addon'
     env:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
