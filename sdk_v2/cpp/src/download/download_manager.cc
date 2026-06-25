@@ -289,6 +289,17 @@ std::string DownloadManager::DownloadModel(const ModelInfo& info,
     // and freezing every unrelated in-process model download for that long is far
     // worse than the bandwidth contention this mutex exists to prevent. Release it
     // for the wait and re-acquire before the cache re-check + download below.
+    //
+    // Re-acquiring after the wait can briefly hold this model's file lock while a
+    // different model's download owns the mutex: this model's lock is then held but
+    // idle, so another process waiting on it is blocked until the in-process download
+    // ahead finishes. That window is bounded — the mutex holder is always making
+    // progress and releases it — not a deadlock. Deadlock-freedom relies on the
+    // blocking file-lock wait staying outside the mutex: the fast path above locks
+    // mutex-then-file-lock while this path locks file-lock-then-mutex, and the
+    // opposite order is only safe because the *blocking* file-lock acquire
+    // (WaitForDirectoryLock) never runs while the mutex is held — the in-line acquire
+    // at the top is the non-blocking TryAcquireForDirectory. Keep it that way.
     download_guard.unlock();
     lock = CrossProcessFileLock::WaitForDirectoryLock(model_path, cancel_pred, logger_);
     download_guard.lock();
