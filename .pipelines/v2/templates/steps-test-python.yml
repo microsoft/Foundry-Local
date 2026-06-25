@@ -89,7 +89,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        Push-Location "$(Build.Repository.LocalPath)/sdk_v2/python"
+        Push-Location "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/python"
         try {
             # Override pythonpath = ["src"] from pyproject.toml so pytest
             # imports the installed wheel (which contains the compiled cffi

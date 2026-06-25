@@ -27,6 +27,24 @@ steps:
   inputs:
     versionSpec: '20.x'
 
+- task: PowerShell@2
+  displayName: 'Configure npm registry (AIFoundryLocal_PublicPackages)'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $npmrc = "$(Agent.TempDirectory)/foundrylocal-$(System.JobId).npmrc"
+      $registry = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
+      Set-Content -Path $npmrc -Value "registry=$registry`nalways-auth=true" -Encoding UTF8
+      Write-Host "##vso[task.setvariable variable=npmUserConfig]$npmrc"
+      Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$npmrc"
+      Write-Host "npm userconfig: $npmrc"
+
+- task: npmAuthenticate@0
+  displayName: 'Authenticate npm with Azure Artifacts'
+  inputs:
+    workingFile: '$(npmUserConfig)'
+
 - pwsh: |
       $dst = "$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds"
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
@@ -55,6 +73,8 @@ steps:
     command: custom
     workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
     customCommand: 'ci --no-audit --no-fund --ignore-scripts'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 - pwsh: |
       $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
@@ -63,12 +83,16 @@ steps:
       npm version $version --no-git-tag-version --allow-same-version
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   displayName: 'Stamp package version'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 - pwsh: |
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm run build:ts
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   displayName: 'Build TypeScript'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 - pwsh: |
       $dst = '${{ parameters.outputDir }}'
@@ -78,5 +102,7 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       Get-ChildItem $dst | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length) bytes" }
   displayName: 'npm pack'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 

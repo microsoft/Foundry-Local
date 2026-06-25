@@ -110,8 +110,10 @@ steps:
     pwsh: true
     script: |
       $proj = "$(Build.Repository.LocalPath)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
-      $rid = dotnet msbuild $proj -getProperty:NETCoreSdkRuntimeIdentifier
-      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
+      $dotnetInfo = (dotnet --info | Out-String)
+      $m = [regex]::Match($dotnetInfo, '(?m)^\s*RID:\s*(\S+)\s*$')
+      if (-not $m.Success) { throw "Failed to determine RuntimeIdentifier from dotnet --info" }
+      $rid = $m.Groups[1].Value.Trim()
       Write-Host "Restoring for RuntimeIdentifier: $rid"
 
       dotnet restore $proj `

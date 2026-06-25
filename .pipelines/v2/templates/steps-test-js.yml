@@ -23,6 +23,24 @@ steps:
   inputs:
     versionSpec: '20.x'
 
+- task: PowerShell@2
+  displayName: 'Configure npm registry (AIFoundryLocal_PublicPackages)'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $npmrc = "$(Agent.TempDirectory)/foundrylocal-$(System.JobId).npmrc"
+      $registry = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
+      Set-Content -Path $npmrc -Value "registry=$registry`nalways-auth=true" -Encoding UTF8
+      Write-Host "##vso[task.setvariable variable=npmUserConfig]$npmrc"
+      Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$npmrc"
+      Write-Host "npm userconfig: $npmrc"
+
+- task: npmAuthenticate@0
+  displayName: 'Authenticate npm with Azure Artifacts'
+  inputs:
+    workingFile: '$(npmUserConfig)'
+
 - ${{ if eq(parameters.rid, 'win-x64') }}:
   - pwsh: |
       $src = "${{ parameters.prebuildArtifactDir }}/prebuilds"
@@ -53,12 +71,16 @@ steps:
       command: custom
       workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
       customCommand: 'ci --no-audit --no-fund'
+    env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - pwsh: |
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm run build:ts
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build TypeScript'
+    env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - pwsh: |
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
@@ -66,6 +88,7 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Run vitest'
     env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
       FOUNDRY_TEST_DATA_DIR: '${{ parameters.testDataSharedDir }}'
 
 - ${{ if or(eq(parameters.rid, 'linux-x64'), eq(parameters.rid, 'osx-arm64')) }}:
@@ -74,12 +97,16 @@ steps:
       cd "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm ci --no-audit --no-fund
     displayName: 'npm ci (runs install-native postinstall)'
+    env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - bash: |
       set -euo pipefail
       cd "$(Build.Repository.LocalPath)/sdk_v2/js"
       npm run build:ts
     displayName: 'Build TypeScript'
+    env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - bash: |
       set -euo pipefail
@@ -87,6 +114,7 @@ steps:
       npx --no-install vitest run --reporter=verbose
     displayName: 'Run vitest'
     env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
       FOUNDRY_TEST_DATA_DIR: '${{ parameters.testDataSharedDir }}'
 
 

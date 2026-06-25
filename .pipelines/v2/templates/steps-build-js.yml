@@ -51,6 +51,24 @@ steps:
   inputs:
     versionSpec: '20.x'
 
+- task: PowerShell@2
+  displayName: 'Configure npm registry (AIFoundryLocal_PublicPackages)'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $npmrc = "$(Agent.TempDirectory)/foundrylocal-$(System.JobId).npmrc"
+      $registry = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
+      Set-Content -Path $npmrc -Value "registry=$registry`nalways-auth=true" -Encoding UTF8
+      Write-Host "##vso[task.setvariable variable=npmUserConfig]$npmrc"
+      Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$npmrc"
+      Write-Host "npm userconfig: $npmrc"
+
+- task: npmAuthenticate@0
+  displayName: 'Authenticate npm with Azure Artifacts'
+  inputs:
+    workingFile: '$(npmUserConfig)'
+
 # Map ADO RID -> Node-style platform-arch key used inside the npm tarball
 # (prebuilds/<plat>-<arch>/) so downstream consumers find the addon under
 # the directory matching `${process.platform}-${process.arch}` at runtime.
@@ -87,6 +105,8 @@ steps:
     command: custom
     workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
     customCommand: 'ci --no-audit --no-fund --ignore-scripts'
+  env:
+    NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
 # binding.gyp resolves the foundry_local lib + gsl/public include dirs
 # via FOUNDRY_LOCAL_LIB_DIR and FOUNDRY_LOCAL_INCLUDE_DIR when set. The
@@ -103,6 +123,7 @@ steps:
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build Node-API addon'
     env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
       FOUNDRY_LOCAL_LIB_DIR: '${{ parameters.nativeArtifactDir }}'
       FOUNDRY_LOCAL_INCLUDE_DIR: '${{ parameters.includeArtifactDir }}'
       # Force the copy_addon_to_prebuilds destination to the target-arch dir.
@@ -118,6 +139,7 @@ steps:
       npx --no-install node-gyp rebuild
     displayName: 'Build Node-API addon'
     env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
       FOUNDRY_LOCAL_LIB_DIR: '${{ parameters.nativeArtifactDir }}'
       FOUNDRY_LOCAL_INCLUDE_DIR: '${{ parameters.includeArtifactDir }}'
       FOUNDRY_LOCAL_PREBUILD_DIR: '$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds/$(prebuildDir)'
