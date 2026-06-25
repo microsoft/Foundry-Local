@@ -15,7 +15,7 @@ import type { FoundryModel, GroupedFoundryModel } from './types';
 
 // Azure Function endpoint for CORS proxy
 const FOUNDRY_API_ENDPOINT =
-	'https://foundry-cors-proxy.azurewebsites.net/api/foundryproxy';
+	'https://foundry-local-cors-proxy.azurewebsites.net/api/foundryproxy';
 
 export interface ApiFilters {
 	device?: string;
