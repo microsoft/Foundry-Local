@@ -74,6 +74,18 @@ steps:
     env:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
+  - task: PowerShell@2
+    displayName: 'Ensure TypeScript tooling is installed'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+        Set-Location "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
+        npm install --no-save --ignore-scripts --include=dev --no-audit --no-fund typescript
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    env:
+      NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
+
   - pwsh: |
       Set-Location "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
       npm run build:ts

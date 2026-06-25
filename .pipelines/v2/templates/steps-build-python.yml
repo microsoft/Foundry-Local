@@ -72,6 +72,31 @@ steps:
           Write-Host "##vso[task.prependpath]$userBin"
           Write-Host "##vso[task.setvariable variable=PIP_USER]1"
 
+  - task: PowerShell@2
+    displayName: 'Create Linux build venv'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          $pythonCmd = if (Get-Command python3.12 -ErrorAction SilentlyContinue) { 'python3.12' } else { 'python3' }
+          $venvDir = "$(Agent.TempDirectory)/fl-python-build-venv-$(System.JobId)"
+          if (Test-Path $venvDir) { Remove-Item -Recurse -Force $venvDir }
+          & $pythonCmd -m venv $venvDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $venvPy = Join-Path $venvDir 'bin/python'
+          if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+          Write-Host "Linux build venv: $venvDir"
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]$venvPy"
+
+- ${{ if ne(parameters.rid, 'linux-x64') }}:
+  - task: PowerShell@2
+    displayName: 'Set build Python executable'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]python"
+
 - task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
   inputs:
@@ -194,12 +219,13 @@ steps:
         # Require the authenticated pip URL injected by PipAuthenticate@1.
         $indexUrl = $env:PIP_INDEX_URL
         if (-not $indexUrl -and $env:PIP_EXTRA_INDEX_URL) {
-        $indexUrl = ($env:PIP_EXTRA_INDEX_URL -split '\s+')[0]
+            $indexUrl = ($env:PIP_EXTRA_INDEX_URL -split '\s+')[0]
         }
         if (-not $indexUrl) { throw 'PipAuthenticate did not provide an authenticated pip index URL (PIP_INDEX_URL/PIP_EXTRA_INDEX_URL missing).' }
         Write-Host "Using pip index: $indexUrl"
-        python -m pip install --upgrade pip --index-url $indexUrl
-        python -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
+        & "$(buildPythonExe)" -m pip install --upgrade pip --index-url $indexUrl
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & "$(buildPythonExe)" -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:
@@ -368,7 +394,7 @@ steps:
                 cmd /v:on /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
-                python -m build --wheel --outdir $outDir @extraArgs
+              & "$(buildPythonExe)" -m build --wheel --outdir $outDir @extraArgs
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
         } finally {
