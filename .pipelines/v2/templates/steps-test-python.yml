@@ -50,6 +50,11 @@ steps:
         Write-Host "##vso[task.setvariable variable=venvPy]$venvPy"
         Write-Host "venv python: $venvPy"
 
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
   displayName: 'Install built wheel + test deps'
   inputs:
@@ -68,6 +73,10 @@ steps:
         $wheel = $wheels[0].FullName
         Write-Host "Installing wheel: $wheel"
 
+        # Use the Azure Artifacts feed as the sole package index for test installs.
+        & "$(venvPy)" -m pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
+        & "$(venvPy)" -m pip config unset global.extra-index-url
+        if ($LASTEXITCODE -ne 0) { Write-Host 'No existing extra-index-url configured; continuing.' }
         & "$(venvPy)" -m pip install --upgrade pip
         & "$(venvPy)" -m pip install $wheel
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

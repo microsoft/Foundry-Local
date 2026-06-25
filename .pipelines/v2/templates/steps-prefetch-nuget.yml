@@ -194,10 +194,10 @@ steps:
         exit 1
       fi
 
-      # Download package content via the Azure DevOps packaging REST API using
-      # the build OAuth token. This avoids both direct nuget.org access and the
-      # nuget.exe + mono dependency on hosted Linux agents.
-      feedBase="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_apis/packaging/feeds/AIFoundryLocal_PublicPackages/nuget/packages"
+      # Download package content from the feed's V3 flat-container endpoint.
+      # This avoids direct nuget.org access and avoids nuget.exe + mono on
+      # hosted Linux agents.
+      flatBase="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/flat2"
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
@@ -216,12 +216,8 @@ steps:
       for entry in "${entries[@]}"; do
         IFS=: read -r key id version <<< "$entry"
         out="$cacheDir/${key}.nupkg"
-        if [ "$key" = "ort_gpu_linux" ]; then
-          lowerId=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
-          url="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/flat2/${lowerId}/${version}/${lowerId}.${version}.nupkg"
-        else
-          url="$feedBase/${id}/versions/${version}/content?api-version=7.1"
-        fi
+        lowerId=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
+        url="$flatBase/${lowerId}/${version}/${lowerId}.${version}.nupkg"
         echo "Downloading $id $version"
         curl -fSL \
           -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \

@@ -57,10 +57,16 @@ steps:
         $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
         Write-Host "Packing version: $version"
 
+        $packScript = "$(Build.SourcesDirectory)/sdk_v2/cpp/nuget/pack.py"
+        if (-not (Test-Path $packScript)) {
+          throw "pack.py not found at expected path: $packScript"
+        }
+        Write-Host "Using pack script: $packScript"
+
         $outDir = "$(Build.ArtifactStagingDirectory)/nuget"
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-        python "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/nuget/pack.py" `
+        python "$packScript" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime" `
           --ort_version   "${{ parameters.ortVersion }}" `
@@ -86,10 +92,16 @@ steps:
         $version = (Get-Content "$(Pipeline.Workspace)/version-info/sdkVersion.txt" -Raw).Trim()
         Write-Host "Packing version: $version"
 
+        $packScript = "$(Build.SourcesDirectory)/sdk_v2/cpp/nuget/pack.py"
+        if (-not (Test-Path $packScript)) {
+          throw "pack.py not found at expected path: $packScript"
+        }
+        Write-Host "Using pack script: $packScript"
+
         $outDir = "$(Build.ArtifactStagingDirectory)/nuget"
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-        python "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/nuget/pack.py" `
+        python "$packScript" `
           --version       "$version" `
           --package_id    "Microsoft.AI.Foundry.Local.Runtime.WinML" `
           --ort_version   "${{ parameters.ortVersion }}" `

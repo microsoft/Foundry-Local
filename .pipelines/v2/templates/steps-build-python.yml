@@ -152,12 +152,22 @@ steps:
             }
         }
 
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
   displayName: 'Install build tooling'
   inputs:
     targetType: inline
     pwsh: true
     script: |
+        # Use the Azure Artifacts feed as the sole package index for build tooling.
+        # This avoids implicit fetches from public PyPI on hosted agents.
+        python -m pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
+        python -m pip config unset global.extra-index-url
+        if ($LASTEXITCODE -ne 0) { Write-Host 'No existing extra-index-url configured; continuing.' }
         python -m pip install --upgrade pip
         python -m pip install --upgrade build setuptools wheel "cffi>=1.16"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
