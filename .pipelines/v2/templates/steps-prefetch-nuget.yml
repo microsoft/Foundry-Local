@@ -10,7 +10,7 @@
 #   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (Windows only)
 #   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
 #   includeOrtGpuLinux – Also download Microsoft.ML.OnnxRuntime.Gpu.Linux (Linux only)
-#   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux)
+#   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux only)
 
 parameters:
 - name: ortVersion
@@ -184,9 +184,20 @@ steps:
       cacheDir="$(Build.BinariesDirectory)/nuget_packages"
       mkdir -p "$cacheDir"
 
-      # Use the AIFoundryLocal feed (with upstream to nuget.org) so restricted
-      # build agents do not need direct connectivity to www.nuget.org.
-      feed="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v2/package"
+      if [ "${{ parameters.includeOrtGpuLinux }}" != "True" ]; then
+        echo "ERROR: the bash prefetch branch is reserved for Linux native builds; use shell=pwsh for non-Linux platforms." >&2
+        exit 1
+      fi
+
+      if [ -z "${SYSTEM_ACCESSTOKEN:-}" ]; then
+        echo "ERROR: SYSTEM_ACCESSTOKEN is not available for authenticated package download." >&2
+        exit 1
+      fi
+
+      # Download package content via the Azure DevOps packaging REST API using
+      # the build OAuth token. This avoids both direct nuget.org access and the
+      # nuget.exe + mono dependency on hosted Linux agents.
+      feedBase="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_apis/packaging/feeds/AIFoundryLocal_PublicPackages/nuget/packages"
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
@@ -205,9 +216,17 @@ steps:
       for entry in "${entries[@]}"; do
         IFS=: read -r key id version <<< "$entry"
         out="$cacheDir/${key}.nupkg"
-        url="$feed/${id}/${version}"
+        if [ "$key" = "ort_gpu_linux" ]; then
+          lowerId=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
+          url="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/flat2/${lowerId}/${version}/${lowerId}.${version}.nupkg"
+        else
+          url="$feedBase/${id}/versions/${version}/content?api-version=7.1"
+        fi
         echo "Downloading $id $version"
-        curl -fSL -o "$out" "$url"
+        curl -fSL \
+          -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+          -o "$out" \
+          "$url"
         echo "  -> $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
 
         case "$key" in
@@ -221,5 +240,7 @@ steps:
       echo "##vso[task.setvariable variable=cmakeFetchDefines]$joined"
       echo "cmakeFetchDefines = $joined"
     displayName: 'Pre-download NuGet packages'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
 

@@ -33,7 +33,7 @@ steps:
     winmlVersion: ''
     includeWinml: false
     includeOrtGpuLinux: true
-    shell: pwsh
+    shell: bash
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
 # matches the .nupkg version instead of the cmake default.
