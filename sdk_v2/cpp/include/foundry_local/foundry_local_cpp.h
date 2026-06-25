@@ -746,15 +746,9 @@ class ModelList {
   auto begin() const noexcept { return models_.begin(); }
   auto end() const noexcept { return models_.end(); }
 
-  /// Continuation token for paginated queries.
-  /// Empty when no further pages are available, or when this list did not come
-  /// from a paginated query.
-  std::string_view NextContinuationToken() const noexcept { return next_continuation_token_; }
-
  private:
   detail::Base<flModelList> handle_;
   std::vector<std::unique_ptr<IModel>> models_;
-  std::string next_continuation_token_;
 };
 
 // ===========================================================================

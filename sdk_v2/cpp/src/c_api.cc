@@ -61,7 +61,6 @@ struct flStatus {
 // --- ModelList ---
 struct flModelList {
   std::vector<flModel*> items;  // non-owning pointers into catalog
-  std::string next_continuation_token;  // empty unless populated by GetModelVersions
 };
 
 // --- Catalog ---
@@ -470,13 +469,6 @@ static flModel* FL_API_CALL ModelList_GetAtImpl(const flModelList* models, size_
   return models->items[idx];
 }
 
-static const char* FL_API_CALL ModelList_GetContinuationTokenImpl(const flModelList* models) FL_NO_EXCEPTION {
-  if (!models || models->next_continuation_token.empty()) {
-    return nullptr;
-  }
-  return models->next_continuation_token.c_str();
-}
-
 // ========================================================================
 // EP Detection API
 // ========================================================================
@@ -710,11 +702,11 @@ FL_API_STATUS_IMPL(Catalog_GetModelVersionsImpl, const flCatalog* catalog,
   std::string alias = model_alias;
   std::string model_name_filter = model_name ? model_name : std::string{};
 
-  auto page = catalog->impl.GetModelVersions(alias, model_name_filter, max_versions);
+  auto models = catalog->impl.GetModelVersions(alias, model_name_filter, max_versions);
   auto list = std::make_unique<flModelList>();
-  list->items.reserve(page.models.size());
+  list->items.reserve(models.size());
 
-  for (auto* m : page.models) {
+  for (auto* m : models) {
     list->items.push_back(AsHandle<flModel>(m));
   }
 
@@ -1889,7 +1881,6 @@ static const flApi g_api_v1 = {
     ModelList_ReleaseImpl,
     ModelList_SizeImpl,
     ModelList_GetAtImpl,
-    ModelList_GetContinuationTokenImpl,
 
     /* EP detection */
     Manager_GetDiscoverableEpsImpl,

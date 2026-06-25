@@ -9,11 +9,6 @@
 
 namespace fl {
 
-/// Model variants returned by `ICatalog::GetModelVersions`.
-struct ModelVersionsPage {
-  std::vector<Model*> models;
-};
-
 /// Abstract catalog interface for querying available models.
 /// Mirrors the C API's flCatalogApi surface.
 class ICatalog {
@@ -50,9 +45,9 @@ class ICatalog {
   /// alias. 0 or negative means no per-variant cap.
   ///
   /// Maps to C# `IModelCatalog.GetModelVersionsAsync`.
-  virtual ModelVersionsPage GetModelVersions(const std::string& model_alias,
-                                             const std::string& variant_name,
-                                             int max_versions = 0) = 0;
+  virtual std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                                const std::string& variant_name,
+                                                int max_versions = 0) = 0;
 
   /// Lists only models that are cached locally.
   virtual std::vector<Model*> GetCachedModels() const = 0;

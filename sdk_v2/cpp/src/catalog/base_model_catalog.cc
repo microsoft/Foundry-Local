@@ -473,9 +473,9 @@ std::vector<Model*> BaseModelCatalog::GetLoadedModels() const {
   return result;
 }
 
-ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_alias,
-                                                    const std::string& variant_name,
-                                                    int max_versions) {
+std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_alias,
+                                                       const std::string& variant_name,
+                                                       int max_versions) {
   if (model_alias.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "GetModelVersions requires a non-empty model_alias.");
   }
@@ -512,7 +512,7 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
     IntegrateVariantsLocked(std::move(fetched.models));
   }
 
-  ModelVersionsPage result;
+  std::vector<Model*> result;
 
   auto idx = GetIndex();
   for (const auto& id : fetched_ids) {
@@ -524,7 +524,7 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
     if (!variant_name.empty() && variant->Info().name != variant_name) {
       continue;
     }
-    result.models.push_back(variant);
+    result.push_back(variant);
   }
 
   if (fetched_ids.empty()) {
@@ -536,14 +536,14 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
     }
   }
 
-  if (max_versions > 0 && !result.models.empty()) {
+  if (max_versions > 0 && !result.empty()) {
     // Enforce latest X per variant name by scanning the sorted list from the
     // back (highest version first within each variant group).
     std::unordered_map<std::string, int> selected_per_variant;
     std::vector<Model*> limited;
-    limited.reserve(result.models.size());
+    limited.reserve(result.size());
 
-    for (auto it = result.models.rbegin(); it != result.models.rend(); ++it) {
+    for (auto it = result.rbegin(); it != result.rend(); ++it) {
       Model* model = *it;
       const std::string& variant = model->Info().name;
       int& count = selected_per_variant[variant];
@@ -555,10 +555,10 @@ ModelVersionsPage BaseModelCatalog::GetModelVersions(const std::string& model_al
       limited.push_back(model);
     }
 
-    result.models.assign(limited.rbegin(), limited.rend());
+    result.assign(limited.rbegin(), limited.rend());
   }
 
-  std::stable_sort(result.models.begin(), result.models.end(), CompareModelPointersForVersionList);
+  std::stable_sort(result.begin(), result.end(), CompareModelPointersForVersionList);
 
   return result;
 }

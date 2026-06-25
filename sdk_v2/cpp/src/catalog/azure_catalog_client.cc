@@ -161,12 +161,11 @@ std::string BuildRequestUrl(const std::string& base_url,
 
 std::string BuildRequestBody(const std::vector<CatalogFilter>& filters,
                              const std::optional<int>& skip,
-                             const std::optional<std::string>& continuation_token,
-                             int page_size) {
+                             const std::optional<std::string>& continuation_token) {
   AzureCatalogRequest request;
   request.resource_ids.push_back({"azureml", "Registry"});
   request.index_entities_request.filters = filters;
-  request.index_entities_request.page_size = page_size;
+  request.index_entities_request.page_size = kPageSize;
   request.index_entities_request.skip = skip;
   request.index_entities_request.continuation_token = continuation_token;
 
@@ -275,40 +274,24 @@ AzureCatalogClient::AzureCatalogClient(const std::string& base_url,
   }
 }
 
-AzureCatalogClient::FilterSetWalk AzureCatalogClient::FetchFilterSetWithState(
-    const std::vector<CatalogFilter>& filters,
-    std::optional<int> skip,
-    std::optional<std::string> inner_token,
-    std::string region_in,
-    int max_count) {
+std::optional<AzureCatalogClient::FetchedFilterSet> AzureCatalogClient::FetchFilterSet(
+    const std::vector<CatalogFilter>& filters) {
   const bool regional = UsesRegionalRouting(regional_template_, region_);
 
-  FilterSetWalk result;
-  result.region = region_in;
-  std::optional<std::string> pinned_region;
-  if (!region_in.empty()) {
-    pinned_region = region_in;  // resuming a previously-pinned filter set
-  }
+  FetchedFilterSet result;
+  result.region = region_;
+
+  std::optional<int> skip;
+  std::optional<std::string> continuation_token;
+  std::optional<std::string> pinned_region;  // region that served page 1 (regional mode)
 
   while (true) {
-    int requested_page_size = kPageSize;
-    if (max_count > 0) {
-      const int still_needed = max_count - static_cast<int>(result.models.size());
-      if (still_needed <= 0) {
-        // Cap reached at a page boundary on a previous iteration: should not
-        // happen because we check after each page below, but be defensive.
-        result.next_skip = skip;
-        result.next_inner_token = inner_token;
-        return result;
-      }
-      requested_page_size = std::min(still_needed, kPageSize);
-    }
-
-    const std::string body = BuildRequestBody(filters, skip, inner_token, requested_page_size);
+    const std::string body = BuildRequestBody(filters, skip, continuation_token);
 
     http::HttpResponse response;
     if (regional && !pinned_region) {
-      // Page 1 fresh start: run region fallback starting from the sticky/active region.
+      // Page 1: run through region fallback starting from the sticky region (last known-good) or the active region.
+      // Exhaustion means every candidate had a retryable region-health failure, so fail just this filter set.
       const std::string start = region_fallback_.StickyRegion().value_or(region_);
       try {
         auto fallback_result = region_fallback_.Execute(start, [&](const std::string& r) {
@@ -317,28 +300,30 @@ AzureCatalogClient::FilterSetWalk AzureCatalogClient::FetchFilterSetWithState(
         response = std::move(fallback_result.response);
         pinned_region = fallback_result.region;
         result.region = fallback_result.region;
-        region_ = fallback_result.region;  // bias later filter sets
+        region_ = fallback_result.region;  // active region biases later filter sets
       } catch (const std::exception& ex) {
         logger_.Log(LogLevel::Warning,
                     std::string("catalog: filter set failed across all regions: ") + ex.what());
-        result.aborted = true;
-        return result;
+        return std::nullopt;
       }
     } else if (regional) {
       // Subsequent pages are pinned to the region that served page 1 — a filter set
       // never mixes regions (continuation tokens are region-specific).
       response = http_post_response_(BuildRegionalUrl(url_prefix_, url_suffix_, *pinned_region), body);
     } else {
+      // Non-regional / custom URL: single verbatim attempt, no fallback.
       response = http_post_response_(BuildRequestUrl(base_url_, regional, region_, url_prefix_, url_suffix_), body);
     }
 
     if (response.status == 0 || response.status < 200 || response.status >= 300) {
       if (regional && IsRegionRetryableStatus(response.status)) {
+        // Region-health failure (including mid-pagination on the pinned region): fail this filter set only. Because
+        // models are committed atomically below, a later page failure cannot leak a partial filter-set result.
         logger_.Log(LogLevel::Warning,
                     "catalog: filter set failed (" + http::DescribeFailure(response) + "); skipping this filter set.");
-        result.aborted = true;
-        return result;
+        return std::nullopt;
       }
+
       const std::string url = regional && pinned_region
                                   ? BuildRegionalUrl(url_prefix_, url_suffix_, *pinned_region)
                                   : BuildRequestUrl(base_url_, regional, region_, url_prefix_, url_suffix_);
@@ -348,45 +333,35 @@ AzureCatalogClient::FilterSetWalk AzureCatalogClient::FetchFilterSetWithState(
 
     const auto parsed = nlohmann::json::parse(response.body).get<AzureCatalogResponse>();
     if (!parsed.index_entities_response) {
-      result.done = true;
-      return result;
+      break;
     }
 
     const auto& page = *parsed.index_entities_response;
     if (page.models.empty()) {
-      result.done = true;
-      return result;
+      break;
     }
 
     result.models.insert(result.models.end(), page.models.begin(), page.models.end());
 
     // Advance pagination. A non-positive nextSkip and an empty token mean "done".
     skip = (page.next_skip && *page.next_skip > 0) ? page.next_skip : std::nullopt;
-    inner_token = (page.continuation_token && !page.continuation_token->empty())
-                      ? page.continuation_token
-                      : std::nullopt;
+    continuation_token = (page.continuation_token && !page.continuation_token->empty())
+                             ? page.continuation_token
+                             : std::nullopt;
 
-    const bool stream_done = !skip && !inner_token;
-    if (stream_done) {
-      result.done = true;
-      return result;
-    }
-
-    if (max_count > 0 && static_cast<int>(result.models.size()) >= max_count) {
-      // Cap hit and more data is available — emit cursor.
-      result.next_skip = skip;
-      result.next_inner_token = inner_token;
-      return result;
+    if (!skip && !continuation_token) {
+      break;
     }
   }
+
+  return result;
 }
 
-std::vector<AzureCatalogClient::FilterSetWalk> AzureCatalogClient::FetchAllFilterSets() {
-  std::vector<FilterSetWalk> results;
+std::vector<AzureCatalogClient::FetchedFilterSet> AzureCatalogClient::FetchAllFilterSets() {
+  std::vector<FetchedFilterSet> results;
   for (const auto& filters : BuildSearchFilters(ep_detector_, model_filter_)) {
-    auto result = FetchFilterSetWithState(filters, std::nullopt, std::nullopt, std::string{}, /*max_count=*/0);
-    if (!result.aborted) {
-      results.push_back(std::move(result));
+    if (auto result = FetchFilterSet(filters)) {
+      results.push_back(std::move(*result));
     }
   }
 
@@ -419,13 +394,12 @@ std::vector<ModelInfo> AzureCatalogClient::FetchModelsByIds(
     return {};
   }
 
-  auto result = FetchFilterSetWithState(BuildModelIdFilters(model_filter_, model_ids),
-                                        std::nullopt, std::nullopt, std::string{}, /*max_count=*/0);
-  if (result.aborted) {
+  auto result = FetchFilterSet(BuildModelIdFilters(model_filter_, model_ids));
+  if (!result) {
     return {};
   }
 
-  return ToModelInfos(result.models, result.region);
+  return ToModelInfos(result->models, result->region);
 }
 
 std::vector<ModelInfo> AzureCatalogClient::FetchAllVersionsByAlias(
@@ -441,13 +415,12 @@ std::vector<ModelInfo> AzureCatalogClient::FetchAllVersionsByAlias(
   std::vector<ModelInfo> result;
 
   for (const auto& filters : filter_sets) {
-    auto walk = FetchFilterSetWithState(filters, std::nullopt, std::nullopt, std::string{}, /*max_count=*/0);
-
-    if (walk.aborted) {
+    auto walk = FetchFilterSet(filters);
+    if (!walk) {
       continue;
     }
 
-    auto batch = ToModelInfos(walk.models, walk.region);
+    auto batch = ToModelInfos(walk->models, walk->region);
     result.insert(result.end(),
                   std::make_move_iterator(batch.begin()),
                   std::make_move_iterator(batch.end()));

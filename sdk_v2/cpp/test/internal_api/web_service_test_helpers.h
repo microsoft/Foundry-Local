@@ -80,20 +80,20 @@ class MockCatalog : public ICatalog {
     return result;
   }
 
-  ModelVersionsPage GetModelVersions(const std::string& model_alias,
-                                     const std::string& variant_name,
-                                     int max_versions = 0) override {
-    ModelVersionsPage result;
+  std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                       const std::string& variant_name,
+                                       int max_versions = 0) override {
+    std::vector<Model*> result;
     for (auto& m : models_) {
       if (!model_alias.empty() && m.Alias() != model_alias) {
         continue;
       }
       for (auto* v : m.Variants()) {
-        if (max_versions > 0 && result.models.size() >= static_cast<size_t>(max_versions)) {
+        if (max_versions > 0 && result.size() >= static_cast<size_t>(max_versions)) {
           return result;
         }
         if (variant_name.empty() || v->Info().name == variant_name) {
-          result.models.push_back(v);
+          result.push_back(v);
         }
       }
     }

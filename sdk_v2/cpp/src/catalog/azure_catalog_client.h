@@ -62,32 +62,18 @@ class AzureCatalogClient : public ICatalogClient {
                                                  int max_versions = 0) override;
 
  private:
-  /// Per-page result of walking one filter set with explicit pagination state.
-  struct FilterSetWalk {
+  struct FetchedFilterSet {
     std::vector<CatalogLocalModel> models;
-    std::string region;                          // pinned region that served the page(s)
-    std::optional<int> next_skip;                // server's next skip (when not done)
-    std::optional<std::string> next_inner_token; // server's next continuation token
-    bool done = false;     // true when the underlying stream is exhausted
-    bool aborted = false;  // true when a retryable region failure happened
+    std::string region;
   };
 
-  /// Walks pages of one filter set with explicit pagination state.
-  /// - `skip` / `inner_token`: starting cursor (nullopt for a fresh start).
-  /// - `region_in`: pinned region for resuming (empty triggers page-1 region fallback).
-  /// - `max_count`: soft cap; 0 means walk to exhaustion.
-  /// On success, returns `done=true` if the stream was exhausted, or `done=false`
-  /// with `next_skip`/`next_inner_token` populated when stopped by the cap.
-  /// On a retryable region failure, returns `aborted=true` (partial results discarded).
-  FilterSetWalk FetchFilterSetWithState(const std::vector<CatalogFilter>& filters,
-                                        std::optional<int> skip,
-                                        std::optional<std::string> inner_token,
-                                        std::string region_in,
-                                        int max_count);
+  /// Run all pages of one filter set. In regional mode the first page goes through region fallback and later pages are
+  /// pinned to the serving region; a retryable region-health failure fails just this filter set (others continue).
+  std::optional<FetchedFilterSet> FetchFilterSet(const std::vector<CatalogFilter>& filters);
 
   /// Fetch every device filter set, dropping the ones that failed their region-health checks.
   /// Used for unbounded "latest only" / by-id queries.
-  std::vector<FilterSetWalk> FetchAllFilterSets();
+  std::vector<FetchedFilterSet> FetchAllFilterSets();
 
   std::string base_url_;
   std::vector<std::string> model_filter_;  // foundryLocal tag values

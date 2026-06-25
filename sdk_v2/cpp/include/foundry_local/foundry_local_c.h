@@ -669,12 +669,6 @@ typedef struct flApi {
   size_t FL_API_T(ModelList_Size, _In_ const flModelList* models);
   flModel* FL_API_T(ModelList_GetAt, _In_ const flModelList* models, size_t idx);
 
-  /// Returns the continuation token associated with this model list. The pointer
-  /// is owned by the list and remains valid until the list is released. NULL
-  /// when no continuation token was set (e.g. the list came from GetModels(),
-  /// or GetModelVersions has walked the underlying source to exhaustion).
-  const char* FL_API_T(ModelList_GetContinuationToken, _In_ const flModelList* models);
-
   /* EP detection */
 
   /// Get discoverable execution providers. Returns a pointer to an internal

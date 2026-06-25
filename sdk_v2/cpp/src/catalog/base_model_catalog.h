@@ -38,9 +38,9 @@ class BaseModelCatalog : public ICatalog {
   Model* GetLatestVersion(const Model* model) const override;
   std::vector<Model*> GetCachedModels() const override;
   std::vector<Model*> GetLoadedModels() const override;
-  ModelVersionsPage GetModelVersions(const std::string& model_alias,
-                                     const std::string& variant_name,
-                                     int max_versions = 0) override;
+  std::vector<Model*> GetModelVersions(const std::string& model_alias,
+                                       const std::string& variant_name,
+                                       int max_versions = 0) override;
   void InvalidateCache() override;
 
  protected:
