@@ -226,6 +226,28 @@ TEST_F(CacheOnlyTest, StartServiceThrowsInCacheOnlyMode) {
   }
 }
 
+// Creating a local inference session is invalid in external-service mode: inference runs against
+// the remote HTTP endpoints, not an in-process session. Session_CreateImpl must fail fast with
+// INVALID_USAGE rather than failing indirectly when no local instance exists. The guard fires
+// before any network call, so the dead external URL in MakeCacheOnlyConfig() is fine here.
+TEST_F(CacheOnlyTest, CreateSessionThrowsInvalidUsageInExternalMode) {
+  WriteTwoModelCacheFile();
+
+  {
+    foundry_local::Manager manager(MakeCacheOnlyConfig());
+    auto& catalog = manager.GetCatalog();
+    auto model = catalog.GetModel("phi-4-mini-instruct");
+    ASSERT_NE(model, nullptr);
+
+    try {
+      foundry_local::ChatSession session(*model);
+      FAIL() << "Expected ChatSession construction to throw in external-service mode";
+    } catch (const foundry_local::Error& e) {
+      EXPECT_EQ(e.Code(), FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
+    }
+  }
+}
+
 TEST_F(CacheOnlyTest, EmptyCacheFileReturnsEmptyModelList) {
   WriteEmptyCacheFile();
 

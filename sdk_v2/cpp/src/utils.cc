@@ -38,6 +38,25 @@ std::string FormatLocationMessage(const CodeLocation& location, const std::strin
 
 }  // namespace
 
+std::string UrlEncode(std::string_view value) {
+  std::string result;
+  result.reserve(value.size() * 2);
+
+  for (unsigned char c : value) {
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+        c == '-' || c == '_' || c == '.' || c == '~') {
+      result += static_cast<char>(c);
+    } else {
+      static const char hex[] = "0123456789ABCDEF";
+      result += '%';
+      result += hex[c >> 4];
+      result += hex[c & 0x0F];
+    }
+  }
+
+  return result;
+}
+
 #ifdef _WIN32
 // Safe getenv wrapper for MSVC (avoids C4996).
 static std::optional<std::string> SafeGetEnv(const char* name) {

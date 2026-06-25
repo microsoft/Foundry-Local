@@ -29,6 +29,7 @@ class DownloadManager;
 class ITelemetry;
 class Model;
 class ModelLoadManager;
+class ModelCommandRouter;
 class SessionManager;
 struct ModelInfo;
 
@@ -126,6 +127,9 @@ class Manager {
   //   catalog_                 — owns all Model instances. used by download_manager, model_load_manager, and web service
   //   download_manager_        — uses ModelInfo owned by catalog
   //   model_load_manager_      — holds loaded model state referencing catalog models
+  //   model_command_router_    — routes load/unload/list to model_load_manager_ (local) or a
+  //                              remote service; destroyed before model_load_manager_, which it
+  //                              references
   //   session_manager_         — tracks all active sessions. destroyed after web service, before models
   //   shutdown_requested_      — atomic flag checked by subsystems and the host process
   //   web service members      — use catalog, model_load_manager, session_manager, telemetry, logger
@@ -140,6 +144,7 @@ class Manager {
   std::unique_ptr<ICatalog> catalog_;
   std::unique_ptr<DownloadManager> download_manager_;
   std::unique_ptr<ModelLoadManager> model_load_manager_;
+  std::unique_ptr<ModelCommandRouter> model_command_router_;
   std::unique_ptr<SessionManager> session_manager_;
   std::atomic<bool> shutdown_requested_{false};
   std::atomic<bool> web_service_running_{false};

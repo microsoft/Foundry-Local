@@ -168,6 +168,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/model_load_manager.cc
     src/inferencing/generative/chat/onnx_chat_generator.cc
     src/model.cc
+    src/model_command_router.cc
     src/inferencing/generative/openresponses/response_converter.cc
     src/inferencing/generative/openresponses/response_store.cc
     src/contracts/responses_json.cc

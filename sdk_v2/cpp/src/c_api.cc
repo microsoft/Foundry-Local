@@ -1662,6 +1662,13 @@ FL_API_STATUS_IMPL(Session_CreateImpl, const flModel* model, flSession** out_ses
     return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "null argument");
   }
 
+  // External mode runs inference via the remote HTTP endpoints, not through a local session.
+  // Fail fast with a clear message instead of failing indirectly when no local instance exists.
+  if (fl::Manager::Instance().GetConfiguration().external_service_url.has_value()) {
+    return MakeStatus(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+                      "cannot create a local inference session when external_service_url is configured");
+  }
+
   auto session = fl::Session::Create(*AsImpl(model));
   *out_session = AsHandle<flSession>(session.release());
   return nullptr;

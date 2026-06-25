@@ -20,6 +20,7 @@
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/session/session_manager.h"
+#include "model_command_router.h"
 #include "spdlog_logger.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
@@ -294,6 +295,10 @@ Manager::Manager(const Configuration& config)
       *logger_,
       disable_region_fallback);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
+  // The router owns the local-vs-external decision for load/unload/list. Constructed before the
+  // catalog (which holds it by reference) and after the load manager it delegates to locally.
+  model_command_router_ = std::make_unique<ModelCommandRouter>(
+      config_.external_service_url, *model_load_manager_, config_.app_name, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
   catalog_ = std::make_unique<AzureModelCatalog>(
@@ -302,6 +307,7 @@ Manager::Manager(const Configuration& config)
       [this](ModelInfo info, std::string local_path) {
         return CreateModel(std::move(info), std::move(local_path));
       },
+      *model_command_router_,
       *ep_detector_, *logger_,
       config_.external_service_url.has_value(),
       config_.catalog_region.value_or("auto"),
@@ -328,6 +334,8 @@ Manager::~Manager() {
   web_service_.reset();
 #endif
   session_manager_.reset();
+  // Router references model_load_manager_, so it must be torn down first.
+  model_command_router_.reset();
   model_load_manager_.reset();
   download_manager_.reset();
   catalog_.reset();
@@ -509,7 +517,7 @@ Model Manager::CreateModel(ModelInfo info, std::string local_path) {
   return Model::FromModelInfo(std::move(info),
                               std::move(local_path),
                               *download_manager_,
-                              *model_load_manager_);
+                              *model_command_router_);
 }
 
 DownloadManager& Manager::GetDownloadManager() {

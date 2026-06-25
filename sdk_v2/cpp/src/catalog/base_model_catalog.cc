@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #include "catalog/base_model_catalog.h"
 
+#include "model_command_router.h"
+
 #include <foundry_local/foundry_local_c.h>
 
 #include <algorithm>
@@ -9,6 +11,7 @@
 #include <cctype>
 #include <fmt/format.h>
 #include <map>
+#include <unordered_set>
 
 namespace fl {
 
@@ -88,8 +91,8 @@ bool CompareModelsForSort(const Model& m1, const Model& m2) {
 
 }  // anonymous namespace
 
-BaseModelCatalog::BaseModelCatalog(std::string name, ILogger& logger)
-    : name_(std::move(name)), logger_(logger) {}
+BaseModelCatalog::BaseModelCatalog(std::string name, ModelCommandRouter& router, ILogger& logger)
+    : name_(std::move(name)), router_(router), logger_(logger) {}
 BaseModelCatalog::~BaseModelCatalog() = default;
 
 void BaseModelCatalog::PopulateModels(std::vector<Model> variants) const {
@@ -318,10 +321,17 @@ std::vector<Model*> BaseModelCatalog::GetCachedModels() const {
 std::vector<Model*> BaseModelCatalog::GetLoadedModels() const {
   EnsurePopulated();
 
+  // Single batch call instead of N per-model IsLoaded() round-trips. This is also correct in
+  // external mode, where the router fetches the loaded-id set from the remote service in one
+  // request; the old per-model path always returned empty there.
+  auto loaded = router_.ListLoadedModelIds();
+  std::unordered_set<std::string> loaded_set(loaded.begin(), loaded.end());
+
   std::lock_guard<std::mutex> lock(mutex_);
   std::vector<Model*> result;
   for (auto& m : models_) {
-    if (m->IsLoaded()) {
+    // Container Id() delegates to the selected variant, preserving the prior semantics.
+    if (loaded_set.count(m->Id()) > 0) {
       result.push_back(m.get());
     }
   }

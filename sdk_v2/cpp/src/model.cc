@@ -4,9 +4,9 @@
 
 #include "download/download_manager.h"
 #include "exception.h"
-#include "inferencing/model_load_manager.h"
 #include "items/item.h"
 #include "items/text_item.h"
+#include "model_command_router.h"
 #include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
@@ -25,12 +25,12 @@ Model::Model(Model&& other) noexcept
       cached_(other.cached_.load()),
       local_path_(std::move(other.local_path_)),
       download_manager_(other.download_manager_),
-      model_load_manager_(other.model_load_manager_),
+      router_(other.router_),
       variants_(std::move(other.variants_)),
       selected_variant_(other.selected_variant_) {
   // After vector move, selected_variant_ still points into the transferred buffer.
   other.download_manager_ = nullptr;
-  other.model_load_manager_ = nullptr;
+  other.router_ = nullptr;
   other.selected_variant_ = nullptr;
 }
 
@@ -40,11 +40,11 @@ Model& Model::operator=(Model&& other) noexcept {
     cached_.store(other.cached_.load());
     local_path_ = std::move(other.local_path_);
     download_manager_ = other.download_manager_;
-    model_load_manager_ = other.model_load_manager_;
+    router_ = other.router_;
     variants_ = std::move(other.variants_);
     selected_variant_ = other.selected_variant_;
     other.download_manager_ = nullptr;
-    other.model_load_manager_ = nullptr;
+    other.router_ = nullptr;
     other.selected_variant_ = nullptr;
   }
 
@@ -58,11 +58,11 @@ Model& Model::operator=(Model&& other) noexcept {
 Model Model::FromModelInfo(ModelInfo info,
                            std::string local_path,
                            DownloadManager& download_manager,
-                           ModelLoadManager& model_load_manager) {
+                           ModelCommandRouter& router) {
   Model model;
   model.info_ = std::move(info);
   model.download_manager_ = &download_manager;
-  model.model_load_manager_ = &model_load_manager;
+  model.router_ = &router;
 
   if (!local_path.empty()) {
     model.cached_ = true;
@@ -165,10 +165,10 @@ bool Model::IsLoaded() const {
     return selected_variant_->IsLoaded();
   }
 
-  // ModelLoadManager owns the authoritative loaded-instance map. The pointer is set at
-  // construction and never reassigned, so querying it here stays in sync with paths that
-  // bypass Model::Load/Unload (e.g., Manager::Shutdown -> ModelLoadManager::UnloadAll).
-  return model_load_manager_->GetLoadedModel(info_.model_id) != nullptr;
+  // The router owns the local-vs-external decision. The pointer is set at construction and
+  // never reassigned, so querying it here stays in sync with paths that bypass
+  // Model::Load/Unload (e.g., Manager::Shutdown -> ModelLoadManager::UnloadAll).
+  return router_->IsLoaded(info_.model_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -211,13 +211,9 @@ void Model::Load(ExecutionProvider ep) {
     return;
   }
 
-  // LoadModel is idempotent — it returns kModelAlreadyLoaded if the id is already
-  // in the load manager's map, so no need for a local short-circuit.
-  auto result = model_load_manager_->LoadModel(local_path_, info_.model_id, ep);
-
-  if (result.status == ModelLoadManager::LoadStatus::kModelNotFound) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model not found at path: " + local_path_);
-  }
+  // The router decides local-vs-external; the model-not-found check lives there for the
+  // local branch, so callers see a uniform error regardless of mode.
+  router_->Load(info_.model_id, local_path_, ep);
 }
 
 void Model::Unload() {
@@ -226,8 +222,8 @@ void Model::Unload() {
     return;
   }
 
-  // UnloadModel is idempotent — returns false if the id isn't loaded.
-  model_load_manager_->UnloadModel(info_.model_id);
+  // Idempotent in both modes — unloading an already-unloaded model is a no-op.
+  router_->Unload(info_.model_id);
 }
 
 void Model::RemoveFromCache() {

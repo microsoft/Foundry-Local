@@ -14,6 +14,8 @@
 
 namespace fl {
 
+class ModelCommandRouter;
+
 /// BaseModelCatalog: holds model collection, indices, and lookup logic.
 /// Derived classes implement FetchModels() to provide models from their specific source.
 /// The base class owns caching, indexing, and thread-safe refresh.
@@ -26,7 +28,7 @@ namespace fl {
 /// Maps to C# BaseModelCatalog<TModelInfo>.
 class BaseModelCatalog : public ICatalog {
  public:
-  BaseModelCatalog(std::string name, ILogger& logger);
+  BaseModelCatalog(std::string name, ModelCommandRouter& router, ILogger& logger);
   ~BaseModelCatalog() override;
 
   const std::string& GetName() const override { return name_; }
@@ -87,6 +89,7 @@ class BaseModelCatalog : public ICatalog {
   void EnsurePopulated(bool allow_refresh = false) const;
 
   std::string name_;
+  ModelCommandRouter& router_;
   ILogger& logger_;
 };
 
