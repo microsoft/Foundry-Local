@@ -44,7 +44,7 @@ steps:
 - ${{ if eq(parameters.rid, 'win-x64') }}:
   - pwsh: |
       $src = "${{ parameters.prebuildArtifactDir }}/prebuilds"
-      $dst = "$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds"
+      $dst = "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js/prebuilds"
       if (-not (Test-Path $src)) { throw "Prebuild artifact missing: $src" }
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
@@ -56,7 +56,7 @@ steps:
   - bash: |
       set -euo pipefail
       src="${{ parameters.prebuildArtifactDir }}/prebuilds"
-      dst="$(Build.Repository.LocalPath)/sdk_v2/js/prebuilds"
+      dst="$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js/prebuilds"
       if [ ! -d "$src" ]; then echo "Prebuild artifact missing: $src" >&2; exit 1; fi
       rm -rf "$dst"
       mkdir -p "$dst"
@@ -69,13 +69,13 @@ steps:
     displayName: 'npm ci (runs install-native postinstall)'
     inputs:
       command: custom
-      workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
-      customCommand: 'ci --no-audit --no-fund'
+      workingDir: '$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js'
+      customCommand: 'ci --no-audit --no-fund --include=dev'
     env:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - pwsh: |
-      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
+      Set-Location "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
       npm run build:ts
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build TypeScript'
@@ -83,7 +83,7 @@ steps:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - pwsh: |
-      Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
+      Set-Location "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
       npx --no-install vitest run --reporter=verbose
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Run vitest'
@@ -94,15 +94,15 @@ steps:
 - ${{ if or(eq(parameters.rid, 'linux-x64'), eq(parameters.rid, 'osx-arm64')) }}:
   - bash: |
       set -euo pipefail
-      cd "$(Build.Repository.LocalPath)/sdk_v2/js"
-      npm ci --no-audit --no-fund
+      cd "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
+      npm ci --no-audit --no-fund --include=dev
     displayName: 'npm ci (runs install-native postinstall)'
     env:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
   - bash: |
       set -euo pipefail
-      cd "$(Build.Repository.LocalPath)/sdk_v2/js"
+      cd "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
       npm run build:ts
     displayName: 'Build TypeScript'
     env:
@@ -110,7 +110,7 @@ steps:
 
   - bash: |
       set -euo pipefail
-      cd "$(Build.Repository.LocalPath)/sdk_v2/js"
+      cd "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/js"
       npx --no-install vitest run --reporter=verbose
     displayName: 'Run vitest'
     env:

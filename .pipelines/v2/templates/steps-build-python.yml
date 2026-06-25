@@ -37,12 +37,40 @@ parameters:
 
 steps:
 
-- task: UsePythonVersion@0
-  displayName: 'Use Python 3.12'
-  inputs:
-    versionSpec: '3.12'
-    addToPath: true
-    architecture: '${{ parameters.pythonArchitecture }}'
+- ${{ if ne(parameters.rid, 'linux-x64') }}:
+  - task: UsePythonVersion@0
+    displayName: 'Use Python 3.12'
+    inputs:
+      versionSpec: '3.12'
+      addToPath: true
+      architecture: '${{ parameters.pythonArchitecture }}'
+
+- ${{ if eq(parameters.rid, 'linux-x64') }}:
+  - task: PowerShell@2
+    displayName: 'Use preinstalled system Python (Linux)'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          # Hosted Linux images may not have Python in Agent.ToolsDirectory,
+          # and UsePythonVersion then attempts a blocked GitHub download path.
+          # Use the preinstalled system python3 instead.
+          $pythonCmd = if (Get-Command python3.12 -ErrorAction SilentlyContinue) { 'python3.12' } else { 'python3' }
+          if (-not (Get-Command $pythonCmd -ErrorAction SilentlyContinue)) {
+              throw "Neither python3.12 nor python3 is available on PATH"
+          }
+          & $pythonCmd --version
+          $pythonPath = (& which $pythonCmd).Trim()
+          if (-not $pythonPath) { throw "Unable to resolve path for $pythonCmd" }
+
+          $userBase = (& $pythonCmd -c "import site; print(site.USER_BASE)").Trim()
+          $userBin = Join-Path $userBase 'bin'
+          New-Item -ItemType Directory -Force -Path $userBin | Out-Null
+          & ln -sf $pythonPath (Join-Path $userBin 'python')
+
+          Write-Host "System python: $pythonPath"
+          Write-Host "##vso[task.prependpath]$userBin"
+          Write-Host "##vso[task.setvariable variable=PIP_USER]1"
 
 - task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
@@ -164,12 +192,10 @@ steps:
     pwsh: true
     script: |
         # Use the Azure Artifacts feed as the sole package index for build tooling.
-        # This avoids implicit fetches from public PyPI on hosted agents.
-        python -m pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
-        python -m pip config unset global.extra-index-url
-        if ($LASTEXITCODE -ne 0) { Write-Host 'No existing extra-index-url configured; continuing.' }
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade build setuptools wheel "cffi>=1.16"
+        # Pass --index-url directly to avoid host-level pip config writes.
+        $indexUrl = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/'
+        python -m pip install --upgrade pip --index-url $indexUrl
+        python -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:

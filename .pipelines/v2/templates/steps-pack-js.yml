@@ -72,7 +72,7 @@ steps:
   inputs:
     command: custom
     workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
-    customCommand: 'ci --no-audit --no-fund --ignore-scripts'
+    customCommand: 'ci --no-audit --no-fund --ignore-scripts --include=dev'
   env:
     NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 

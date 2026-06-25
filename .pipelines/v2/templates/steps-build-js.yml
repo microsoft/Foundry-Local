@@ -104,7 +104,7 @@ steps:
   inputs:
     command: custom
     workingDir: '$(Build.Repository.LocalPath)/sdk_v2/js'
-    customCommand: 'ci --no-audit --no-fund --ignore-scripts'
+    customCommand: 'ci --no-audit --no-fund --ignore-scripts --include=dev'
   env:
     NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
 
@@ -119,7 +119,9 @@ steps:
       $args = if ($arch -eq 'native') { 'rebuild' } else { "rebuild --arch=$arch" }
       Write-Host "node-gyp $args"
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
-      npx --no-install node-gyp $args.Split(' ')
+      $nodeGyp = Join-Path (Get-Location) 'node_modules/.bin/node-gyp.cmd'
+      if (-not (Test-Path $nodeGyp)) { throw "node-gyp not found at $nodeGyp" }
+      & $nodeGyp $args.Split(' ')
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build Node-API addon'
     env:
@@ -136,7 +138,11 @@ steps:
   - bash: |
       set -euo pipefail
       cd "$(Build.Repository.LocalPath)/sdk_v2/js"
-      npx --no-install node-gyp rebuild
+      if [ ! -x ./node_modules/.bin/node-gyp ]; then
+        echo "node-gyp not found at ./node_modules/.bin/node-gyp" >&2
+        exit 1
+      fi
+      ./node_modules/.bin/node-gyp rebuild
     displayName: 'Build Node-API addon'
     env:
       NPM_CONFIG_USERCONFIG: '$(npmUserConfig)'
