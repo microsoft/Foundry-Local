@@ -7,7 +7,7 @@
 // NOT used by CI publish — see pack-prebuilds.mjs. The published npm tarball
 // only ships foundry_local.{dll,so,dylib}; ORT/GenAI/WinML are the user's
 // responsibility at runtime per the legacy libraryPath contract.
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, symlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,10 +58,9 @@ const wanted = (() => {
     ];
   }
   if (process.platform === "darwin") {
-    // Copy only the versioned ORT soname (libonnxruntime.1.dylib) — the name
-    // libfoundry_local records. GenAI is pointed at it via ORT_LIB_PATH (set by the
-    // addon loader in detail/native.ts), so the unversioned alias isn't needed. The
-    // C++ build stages the versioned name as a symlink; copyFileSync dereferences it.
+    // Copy the versioned ORT soname (libonnxruntime.1.dylib) — the name libfoundry_local
+    // records. The C++ build stages it as a symlink; copyFileSync dereferences it. The
+    // unversioned alias is added as a symlink after the copy loop (see below).
     return [
       "libfoundry_local.dylib",
       "libonnxruntime.1.dylib",
@@ -90,6 +89,19 @@ for (const file of wanted) {
 if (copied === 0) {
   console.error(`[copy-native] No expected files found in ${sourceDir}`);
   process.exit(1);
+}
+
+// On macOS, expose the unversioned ORT name as a symlink to the versioned file we
+// copied. onnxruntime-genai references ORT under the unversioned name, and macOS dyld
+// keys loaded images by path; one physical file under both names keeps the process to a
+// single ORT image (two would abort in ORT's global teardown on exit).
+if (process.platform === "darwin") {
+  const versioned = resolve(destDir, "libonnxruntime.1.dylib");
+  const unversioned = resolve(destDir, "libonnxruntime.dylib");
+  if (existsSync(versioned) && !existsSync(unversioned)) {
+    symlinkSync("libonnxruntime.1.dylib", unversioned);
+    console.log("[copy-native] linked libonnxruntime.dylib -> libonnxruntime.1.dylib");
+  }
 }
 
 console.log(`[copy-native] Copied ${copied} file(s) to ${destDir}`);

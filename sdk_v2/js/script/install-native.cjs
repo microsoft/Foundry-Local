@@ -225,13 +225,18 @@ async function installPackage(artifact, tempDir, binDir) {
     );
 }
 
-// The Foundry ORT nupkg extracts the unversioned `libonnxruntime.{so,dylib}`, but
-// libfoundry_local records a versioned SONAME/install_name dependency
-// (libonnxruntime.so.1 / libonnxruntime.1.dylib). Rename the extracted file to that
-// versioned soname so foundry_local resolves it via rpath. GenAI is pointed at the
-// same file by the ORT_LIB_PATH env var the addon loader sets (onnxruntime-genai
-// honors it before its unversioned-name fallback), so no unversioned alias is
-// shipped. Windows uses onnxruntime.dll, which has no soname.
+// libfoundry_local records a versioned SONAME/install_name dependency on ORT
+// (libonnxruntime.so.1 / libonnxruntime.1.dylib), but the Foundry ORT nupkg extracts
+// the unversioned libonnxruntime.{so,dylib}. Rename the extracted file to the versioned
+// soname so foundry_local resolves it via rpath. Windows uses onnxruntime.dll, which has
+// no soname.
+//
+// On macOS also expose the unversioned libonnxruntime.dylib as a symlink to the versioned
+// file. onnxruntime-genai references ORT under the unversioned name, and macOS dyld keys
+// loaded images by path: with only the versioned file present, the unversioned reference
+// resolves to a separate ORT image, and the two runtimes abort in ORT's global teardown
+// on process exit. One physical file under both names keeps the process to a single ORT
+// image. Linux's loader dedups by soname, so it needs only the versioned name.
 function normalizeOrtLibName(binDir, ortVersion) {
     let unversioned;
     let versioned;
@@ -245,12 +250,13 @@ function normalizeOrtLibName(binDir, ortVersion) {
     } else {
         return;
     }
-    if (fs.existsSync(versioned)) {
-        return;
-    }
-    if (fs.existsSync(unversioned)) {
+    if (!fs.existsSync(versioned) && fs.existsSync(unversioned)) {
         fs.renameSync(unversioned, versioned);
         console.log(`  Renamed ${path.basename(unversioned)} -> ${path.basename(versioned)}`);
+    }
+    if (os.platform() === 'darwin' && fs.existsSync(versioned) && !fs.existsSync(unversioned)) {
+        fs.symlinkSync(path.basename(versioned), unversioned);
+        console.log(`  Linked ${path.basename(unversioned)} -> ${path.basename(versioned)}`);
     }
 }
 
