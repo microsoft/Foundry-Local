@@ -18,11 +18,6 @@
 #include <filesystem>
 #include <string>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
 namespace {
 
 constexpr const char* kPackageFileName = "cuda-ep.zip";
@@ -99,6 +94,10 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
       if (progress_cb) {
         progress_cb(name_, 90.0f);
       }
+
+      // Prepend the override directory to PATH so sibling dependency DLLs are discoverable,
+      // matching the normal install path. The provider DLL delay-loads CUDA/cuDNN dependencies.
+      PrependDirToProcessPath(provider_path.parent_path());
 
       if (!register_ep_(kRegistrationName, provider_path)) {
         logger.Log(LogLevel::Warning,
@@ -190,18 +189,7 @@ bool CudaEpBootstrapper::DownloadAndRegister(bool force,
     //   - onnxruntime_providers_cuda.dll delay-loads some dependencies
     //   - onnxruntime-genai-cuda.dll is loaded later at model-load time
     //   - ORT creates CUDA sessions after registration
-    {
-      DWORD len = GetEnvironmentVariableW(L"PATH", nullptr, 0);
-      std::wstring prev_path;
-      if (len > 0) {
-        prev_path.resize(len);
-        GetEnvironmentVariableW(L"PATH", prev_path.data(), len);
-        prev_path.resize(len - 1);  // remove trailing null
-      }
-
-      std::wstring new_path = ep_dir.wstring() + L";" + prev_path;
-      SetEnvironmentVariableW(L"PATH", new_path.c_str());
-    }
+    PrependDirToProcessPath(ep_dir);
 #endif
 
     auto cuda_dll_path = ep_dir / kCudaProviderDll;

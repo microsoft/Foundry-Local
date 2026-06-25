@@ -21,11 +21,6 @@
 #include <filesystem>
 #include <string>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
-
 namespace {
 
 constexpr const char* kPackageFileName = "webgpu-ep.zip";
@@ -157,6 +152,10 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         progress_cb(name_, 90.0f);
       }
 
+      // Prepend the override directory to PATH so sibling dependency DLLs are discoverable,
+      // matching the normal install path. The WebGPU EP may delay-load dependencies.
+      PrependDirToProcessPath(provider_path.parent_path());
+
       if (!register_ep_(kRegistrationName, provider_path)) {
         logger.Log(LogLevel::Warning,
                    fmt::format("WebGPU EP: ORT registration failed for override {}={}",
@@ -269,18 +268,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 #ifdef _WIN32
     // Prepend the EP directory to PATH for the process lifetime.
     // WebGPU EP may delay-load additional dependencies from the same directory.
-    {
-      DWORD len = GetEnvironmentVariableW(L"PATH", nullptr, 0);
-      std::wstring prev_path;
-      if (len > 0) {
-        prev_path.resize(len);
-        GetEnvironmentVariableW(L"PATH", prev_path.data(), len);
-        prev_path.resize(len - 1);  // remove trailing null
-      }
-
-      std::wstring new_path = ep_dir.wstring() + L";" + prev_path;
-      SetEnvironmentVariableW(L"PATH", new_path.c_str());
-    }
+    PrependDirToProcessPath(ep_dir);
 #endif
 
     auto provider_path = ep_dir / kWebGpuProviderLib;

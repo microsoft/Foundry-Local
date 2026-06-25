@@ -24,4 +24,14 @@ bool VerifyEpPackage(
     std::string_view ep_name,
     ILogger& logger);
 
+/// Prepend @p dir to the process `PATH` environment variable for the lifetime of the process.
+///
+/// EP provider libraries (CUDA, WebGPU) delay-load sibling dependency DLLs from their own directory,
+/// and `RegisterExecutionProviderLibrary` loads the provider DLL eagerly. The directory must be on
+/// `PATH` before registration so those dependencies are discoverable. This is a no-op on non-Windows
+/// platforms.
+///
+/// @param dir Directory to prepend to `PATH`.
+void PrependDirToProcessPath(const std::filesystem::path& dir);
+
 }  // namespace fl

@@ -11,6 +11,11 @@
 #include <cctype>
 #include <string>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 namespace fl {
 
 bool VerifyEpPackage(
@@ -38,6 +43,21 @@ bool VerifyEpPackage(
   }
 
   return true;
+}
+
+void PrependDirToProcessPath([[maybe_unused]] const std::filesystem::path& dir) {
+#ifdef _WIN32
+  DWORD len = GetEnvironmentVariableW(L"PATH", nullptr, 0);
+  std::wstring prev_path;
+  if (len > 0) {
+    prev_path.resize(len);
+    GetEnvironmentVariableW(L"PATH", prev_path.data(), len);
+    prev_path.resize(len - 1);  // remove trailing null
+  }
+
+  std::wstring new_path = dir.wstring() + L";" + prev_path;
+  SetEnvironmentVariableW(L"PATH", new_path.c_str());
+#endif
 }
 
 }  // namespace fl

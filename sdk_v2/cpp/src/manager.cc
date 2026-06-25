@@ -182,6 +182,7 @@ Manager::Manager(const Configuration& config)
   const auto logger_level = genai_verbose_logging ? LogLevel::Verbose : config_.log_level;
 
   logger_ = std::make_unique<SpdlogLogger>(logger_level, config_.logs_dir.value_or(""));
+  s_ort_logger.store(logger_.get(), std::memory_order_release);
 
   if (genai_verbose_logging) {
     SetOgaLogCallback(logger_.get());
@@ -305,15 +306,9 @@ Manager::Manager(const Configuration& config)
       config_.external_service_url.has_value(),
       config_.catalog_region.value_or("auto"),
       disable_region_fallback);
-
-  s_ort_logger.store(logger_.get(), std::memory_order_release);
 }
 
 Manager::~Manager() {
-  // ORT may still emit late teardown logs from internal static cleanup after Manager destruction.
-  // Route those callbacks to a null logger to avoid dereferencing a dangling pointer.
-  s_ort_logger.store(nullptr, std::memory_order_release);
-
   // Signal subsystems to drain before tearing down infrastructure
   try {
     Shutdown();
@@ -362,6 +357,11 @@ Manager::~Manager() {
   }
 
   logger_->Log(LogLevel::Information, "Manager is being disposed.");
+
+  // ORT may still emit late teardown logs from internal static cleanup after Manager destruction
+  // due to GenAI keeping the OrtEnv alive until the process exits.
+  // Clear s_ort_logger so OrtLogCallback does not dereference a dangling pointer and ignores late logs.
+  s_ort_logger.store(nullptr, std::memory_order_release);
 }
 
 Manager& Manager::Create(const Configuration& config) {
