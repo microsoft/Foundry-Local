@@ -61,7 +61,7 @@ class BlobDownloadState {
 
   /// Construct a fresh state for a new download. Bitmap sized for `total_chunks`.
   static std::unique_ptr<BlobDownloadState> CreateNew(std::string blob_name,
-                                                      std::filesystem::path local_file_path,
+                                                      const std::filesystem::path& local_file_path,
                                                       int64_t blob_size,
                                                       int32_t chunk_size,
                                                       int32_t total_chunks);
@@ -74,7 +74,7 @@ class BlobDownloadState {
   /// `logger` receives diagnostics for corrupt/incompatible state files. Required: the
   /// downloader always has a logger, so there is no optional/null case to handle.
   static std::unique_ptr<BlobDownloadState> LoadState(std::string blob_name,
-                                                      std::filesystem::path local_file_path,
+                                                      const std::filesystem::path& local_file_path,
                                                       int64_t expected_blob_size,
                                                       int32_t expected_chunk_size,
                                                       int32_t expected_total_chunks,

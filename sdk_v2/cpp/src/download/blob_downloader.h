@@ -112,7 +112,7 @@ class AzureBlobDownloader : public IBlobDownloader {
   /// download. The orchestrator calls `Azure::Core::Context::Cancel()` after a
   /// sibling chunk fails or on external cancellation, and the Azure SDK
   /// interrupts in-flight transfers as a result.
-  bool IsCancellationRequested(ChunkContext& ctx);
+  bool IsCancellationRequested(const ChunkContext& ctx) const;
 
  private:
   ILogger& logger_;

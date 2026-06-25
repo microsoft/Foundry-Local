@@ -79,7 +79,7 @@ int64_t AzureBlobDownloader::GetBlobSize(ChunkContext& ctx) {
   return props.BlobSize;
 }
 
-bool AzureBlobDownloader::IsCancellationRequested(ChunkContext& ctx) {
+bool AzureBlobDownloader::IsCancellationRequested(const ChunkContext& ctx) const {
   return ctx.azure_ctx.IsCancelled();
 }
 

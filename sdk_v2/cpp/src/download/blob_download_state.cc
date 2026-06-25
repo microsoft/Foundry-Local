@@ -69,7 +69,7 @@ std::filesystem::path BlobDownloadState::GetStateFilePath(const std::filesystem:
 }
 
 std::unique_ptr<BlobDownloadState> BlobDownloadState::CreateNew(std::string blob_name,
-                                                                std::filesystem::path local_file_path,
+                                                                const std::filesystem::path& local_file_path,
                                                                 int64_t blob_size,
                                                                 int32_t chunk_size,
                                                                 int32_t total_chunks) {
@@ -89,7 +89,7 @@ std::unique_ptr<BlobDownloadState> BlobDownloadState::CreateNew(std::string blob
 }
 
 std::unique_ptr<BlobDownloadState> BlobDownloadState::LoadState(std::string blob_name,
-                                                                std::filesystem::path local_file_path,
+                                                                const std::filesystem::path& local_file_path,
                                                                 int64_t expected_blob_size,
                                                                 int32_t expected_chunk_size,
                                                                 int32_t expected_total_chunks,
