@@ -131,9 +131,9 @@ steps:
       $args = if ($arch -eq 'native') { 'rebuild' } else { "rebuild --arch=$arch" }
       Write-Host "node-gyp $args"
       Set-Location "$(Build.Repository.LocalPath)/sdk_v2/js"
-  $nodeGyp = Join-Path (Get-Location) 'node_modules/node-gyp/bin/node-gyp.js'
+      $nodeGyp = Join-Path (Get-Location) 'node_modules/node-gyp/bin/node-gyp.js'
       if (-not (Test-Path $nodeGyp)) { throw "node-gyp not found at $nodeGyp" }
-  & node $nodeGyp $args.Split(' ')
+      & node $nodeGyp $args.Split(' ')
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build Node-API addon'
     env:
