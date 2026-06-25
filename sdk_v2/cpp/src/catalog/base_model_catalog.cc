@@ -484,7 +484,7 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
   // existing alias container exists to merge into.
   EnsurePopulated();
 
-  FetchedModelVersions fetched;
+  std::vector<Model> fetched;
   try {
     fetched = FetchModelVersions(model_alias, variant_name);  // variant_name is used as model_name filter
   } catch (const std::exception& ex) {
@@ -502,14 +502,14 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
   // Capture fetch order before moving so we can return models in the order the
   // underlying source produced them — important for stable pagination.
   std::vector<std::string> fetched_ids;
-  fetched_ids.reserve(fetched.models.size());
-  for (const auto& m : fetched.models) {
+  fetched_ids.reserve(fetched.size());
+  for (const auto& m : fetched) {
     fetched_ids.push_back(m.Info().model_id);
   }
 
-  if (!fetched.models.empty()) {
+  if (!fetched.empty()) {
     std::lock_guard<std::mutex> lock(mutex_);
-    IntegrateVariantsLocked(std::move(fetched.models));
+    IntegrateVariantsLocked(std::move(fetched));
   }
 
   std::vector<Model*> result;

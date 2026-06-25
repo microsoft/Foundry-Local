@@ -55,11 +55,7 @@ class BaseModelCatalog : public ICatalog {
   /// for the given alias.
   /// Default implementation returns `{}` (no remote source — local-only catalogs).
   /// Maps to C# `BaseModelCatalog.GetModelVersionsAsync` -> derived overrides.
-  struct FetchedModelVersions {
-    std::vector<Model> models;
-  };
-
-  virtual FetchedModelVersions FetchModelVersions(
+  virtual std::vector<Model> FetchModelVersions(
       const std::string& /*model_alias*/,
       const std::string& /*model_name*/ = "") const {
     return {};

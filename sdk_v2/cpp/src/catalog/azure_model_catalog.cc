@@ -159,10 +159,10 @@ std::vector<std::pair<std::string, std::optional<std::string>>> EnumerateEndpoin
 
 }  // namespace
 
-BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
+std::vector<Model> AzureModelCatalog::FetchModelVersions(
     const std::string& model_alias,
     const std::string& model_name) const {
-  FetchedModelVersions out;
+  std::vector<Model> out;
   if (cache_only_) {
     // In cache-only mode we have no remote source to query for older versions.
     logger_.Log(LogLevel::Debug,
@@ -181,7 +181,7 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
                                       catalog_region_, disable_region_fallback_);
       auto model_infos = client->FetchAllVersionsByAlias(model_alias, model_name);
 
-      out.models.reserve(out.models.size() + model_infos.size());
+      out.reserve(out.size() + model_infos.size());
       for (auto& info : model_infos) {
         std::string local_path;
         auto it = local_models.find(info.model_id);
@@ -189,7 +189,7 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
           local_path = it->second;
         }
 
-        out.models.push_back(model_factory_(std::move(info), std::move(local_path)));
+        out.push_back(model_factory_(std::move(info), std::move(local_path)));
       }
     } catch (const std::exception& ex) {
       logger_.Log(LogLevel::Error,
@@ -199,7 +199,7 @@ BaseModelCatalog::FetchedModelVersions AzureModelCatalog::FetchModelVersions(
 
   logger_.Log(LogLevel::Information,
               fmt::format("FetchModelVersions('{}') returned {} variant(s).",
-                          model_alias, out.models.size()));
+                          model_alias, out.size()));
 
   return out;
 }

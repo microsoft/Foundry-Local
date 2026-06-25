@@ -365,22 +365,6 @@ Manager& Manager::Create(const Configuration& config) {
                      "Manager already created. Call Destroy() first.");
   }
 
-  // Optional Windows App SDK bootstrap. When the caller enables Bootstrap in
-  // additional_options we initialize the WinAppSDK framework package for this process. This
-  // must run before the Manager constructor so that WinML EP discovery (inside
-  // Manager::Manager) can resolve Microsoft.Windows.AI.MachineLearning.dll. We use a
-  // temporary stderr logger here because the Manager-owned logger doesn't exist yet;
-  // bootstrap output is low-volume (one line on success, one warning on failure). Mirrors
-  // the C# FoundryLocalCore IS_WINML path. Only meaningful in WinML builds; outside that
-  // configuration TryInitializeWindowsAppSdk is a no-op stub.
-#if defined(FOUNDRY_LOCAL_USE_WINML) && FOUNDRY_LOCAL_USE_WINML
-  {
-    if (IsAdditionalOptionEnabled(config, "Bootstrap")) {
-      StderrLogger bootstrap_logger;
-      TryInitializeWindowsAppSdk(bootstrap_logger);
-    }
-  }
-#endif
   // Construct into a local unique_ptr so a throw between construction and the post-init
   // telemetry/log calls cleans up the partially-initialized Manager instead of leaking it.
   // The constructor validates and resolves defaults; if it throws, no Manager exists.
