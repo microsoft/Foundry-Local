@@ -117,34 +117,51 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
   tool_ctx.tool_call_start = get_param(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
   tool_ctx.tool_call_end = get_param(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
 
-  // Fall back to GenAI model API (reads genai_config.json + model-family fallback map)
-  if (tool_ctx.tool_call_start.empty()) {
-    tool_ctx.tool_call_start = Model().GetGenerationTag("tool_call_start");
-  }
-  if (tool_ctx.tool_call_end.empty()) {
-    tool_ctx.tool_call_end = Model().GetGenerationTag("tool_call_end");
+  // Fall back to model info properties if not specified in the request
+  const auto& info = CatalogModel().Info();
+
+  // Check if the model supports tool calling
+  const auto* tool_calling_val = info.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT);
+  if (tool_calling_val && *tool_calling_val == 1) {
+    tool_ctx.supports_tool_calling = true;
   }
 
-  // Non-empty tool_call_start implies the model supports tool calling
-  if (!tool_ctx.tool_call_start.empty()) {
-    tool_ctx.supports_tool_calling = true;
+  if (tool_ctx.tool_call_start.empty()) {
+    const auto* val = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
+    if (val) {
+      tool_ctx.tool_call_start = *val;
+    }
+  }
+
+  if (tool_ctx.tool_call_end.empty()) {
+    const auto* val = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
+    if (val) {
+      tool_ctx.tool_call_end = *val;
+    }
+  }
+
+  // Check if the model supports chain-of-thought reasoning
+  const auto* reasoning_val = info.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT);
+  if (reasoning_val && *reasoning_val == 1) {
+    tool_ctx.supports_reasoning = true;
   }
 
   // Read reasoning marker tokens — same pattern as tool_call tokens
   tool_ctx.reasoning_start = get_param(FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
   tool_ctx.reasoning_end = get_param(FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
 
-  // Fall back to GenAI model API for reasoning tokens
   if (tool_ctx.reasoning_start.empty()) {
-    tool_ctx.reasoning_start = Model().GetGenerationTag("reasoning_start");
-  }
-  if (tool_ctx.reasoning_end.empty()) {
-    tool_ctx.reasoning_end = Model().GetGenerationTag("reasoning_end");
+    const auto* val = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
+    if (val) {
+      tool_ctx.reasoning_start = *val;
+    }
   }
 
-  // Non-empty reasoning_start implies the model supports reasoning
-  if (!tool_ctx.reasoning_start.empty()) {
-    tool_ctx.supports_reasoning = true;
+  if (tool_ctx.reasoning_end.empty()) {
+    const auto* val = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
+    if (val) {
+      tool_ctx.reasoning_end = *val;
+    }
   }
 
   // Accumulate tool definitions from the session.

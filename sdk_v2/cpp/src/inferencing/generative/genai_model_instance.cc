@@ -111,11 +111,11 @@ OgaModel& GenAIModelInstance::GetOgaModel() {
   return *oga_model_;
 }
 
-std::string GenAIModelInstance::GetGenerationTag(const char* tag_name) const {
+std::string GenAIModelInstance::GetTag(const char* tag_name) const {
   if (!oga_model_) {
     return {};
   }
-  OgaString tag = oga_model_->GetGenerationTag(tag_name);
+  OgaString tag = oga_model_->GetTag(tag_name);
   const char* p = tag;
   return p ? std::string(p) : std::string();
 }

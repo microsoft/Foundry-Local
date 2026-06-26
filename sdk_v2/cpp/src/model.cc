@@ -218,6 +218,37 @@ void Model::Load(ExecutionProvider ep) {
   if (result.status == ModelLoadManager::LoadStatus::kModelNotFound) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model not found at path: " + local_path_);
   }
+
+  // Enrich ModelInfo with metadata from the loaded GenAI model (genai_config.json + fallback map).
+  // This makes tool/reasoning tags available via ModelInfo regardless of whether they came from
+  // catalog metadata, so downstream code doesn't need to know about multiple metadata sources.
+  if (result.model && result.status == ModelLoadManager::LoadStatus::kSuccess) {
+    auto enrich = [&](const char* tag_name, const char* prop_key) {
+      std::string val = result.model->GetTag(tag_name);
+      if (!val.empty() && !info_.GetPropertyStr(prop_key)) {
+        info_.string_properties[prop_key] = std::move(val);
+      }
+    };
+
+    enrich("tool_call_start", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
+    enrich("tool_call_end", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
+    enrich("reasoning_start", FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
+    enrich("reasoning_end", FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
+
+    // Infer support flags from the presence of start tokens
+    if (!info_.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT)) {
+      const auto* tc = info_.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
+      if (tc && !tc->empty()) {
+        info_.int_properties[FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT] = 1;
+      }
+    }
+    if (!info_.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT)) {
+      const auto* rs = info_.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
+      if (rs && !rs->empty()) {
+        info_.int_properties[FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT] = 1;
+      }
+    }
+  }
 }
 
 void Model::Unload() {
