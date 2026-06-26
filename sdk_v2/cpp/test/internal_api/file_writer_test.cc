@@ -44,7 +44,7 @@ class TempPath {
 
 TEST(FileWriterTest, OpenCreatesFileAtRequestedSize) {
   TempPath p;
-  FileWriter w;
+  FileWriter w(fl::test::NullLog());
   w.Open(p.path(), 4096);
   w.Close();
   EXPECT_TRUE(fs::exists(p.path()));
@@ -66,7 +66,7 @@ TEST(FileWriterTest, OpenPreservesExistingFileAtSameSize) {
     f.put(static_cast<char>(0xAB));
   }
 
-  FileWriter w;
+  FileWriter w(fl::test::NullLog());
   w.Open(p.path(), 1024);  // same size -> must not truncate
   w.Close();
 
@@ -86,7 +86,7 @@ TEST(FileWriterTest, OpenRecreatesFileWhenSizeDiffers) {
   }
   EXPECT_EQ(fs::file_size(p.path()), 101u);
 
-  FileWriter w;
+  FileWriter w(fl::test::NullLog());
   w.Open(p.path(), 4096);
   w.Close();
   EXPECT_EQ(fs::file_size(p.path()), 4096u);
@@ -94,7 +94,7 @@ TEST(FileWriterTest, OpenRecreatesFileWhenSizeDiffers) {
 
 TEST(FileWriterTest, SingleThreadWriteAt) {
   TempPath p;
-  FileWriter w;
+  FileWriter w(fl::test::NullLog());
   w.Open(p.path(), 1024);
 
   std::vector<uint8_t> data(256, 0xEF);
@@ -118,7 +118,7 @@ TEST(FileWriterTest, ConcurrentDisjointWritesProduceCorrectFile) {
   constexpr int64_t kTotalSize = int64_t{kThreads} * kRegionSize;
   static_assert(kRegionSize % kPieceSize == 0, "");
 
-  FileWriter w;
+  FileWriter w(fl::test::NullLog());
   w.Open(p.path(), kTotalSize);
 
   std::atomic<int> started{0};

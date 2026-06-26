@@ -230,7 +230,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // the file to blob_size if needed, preserving any existing bytes from a
     // resume. Concurrent WriteAt calls to disjoint ranges are thread-safe — the
     // OS arbitrates positional writes to non-overlapping ranges.
-    FileWriter writer;
+    FileWriter writer(logger_);
     writer.Open(local_path, blob_size);
 
     // Flush the resume sidecar roughly every 16 MB of completed chunks, so a

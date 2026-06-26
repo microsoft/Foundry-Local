@@ -8,6 +8,8 @@
 
 namespace fl {
 
+class ILogger;
+
 /// Thread-safe positional writer for blob downloads.
 ///
 /// Workers in a single download claim disjoint chunks, so concurrent `WriteAt`
@@ -16,7 +18,7 @@ namespace fl {
 /// to disjoint ranges, so no user-space lock is taken.
 class FileWriter {
  public:
-  FileWriter() = default;
+  explicit FileWriter(ILogger& logger);
   ~FileWriter();
 
   FileWriter(const FileWriter&) = delete;
@@ -35,6 +37,7 @@ class FileWriter {
   void Close();
 
  private:
+  ILogger& logger_;
 #ifdef _WIN32
   // Win32 HANDLE. Holds a valid handle while open, nullptr otherwise.
   void* handle_ = nullptr;

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "download/file_writer.h"
 #include "exception.h"
+#include "logger.h"
 
 #include <foundry_local/foundry_local_c.h>
 
@@ -66,6 +67,8 @@ void EnsureFileExistsAtSize(const fs::path& path, int64_t expected_size) {
 
 }  // namespace
 
+FileWriter::FileWriter(ILogger& logger) : logger_(logger) {}
+
 #ifdef _WIN32
 
 FileWriter::~FileWriter() { Close(); }
@@ -114,7 +117,11 @@ void FileWriter::WriteAt(int64_t offset, const uint8_t* data, size_t len) {
 
 void FileWriter::Close() {
   if (handle_ != nullptr) {
-    ::CloseHandle(handle_);
+    if (!::CloseHandle(handle_)) {
+      const DWORD err = ::GetLastError();
+      logger_.Log(LogLevel::Warning,
+                  "FileWriter: CloseHandle failed (Win32 err " + std::to_string(err) + ")");
+    }
     handle_ = nullptr;
   }
 }
@@ -154,7 +161,16 @@ void FileWriter::WriteAt(int64_t offset, const uint8_t* data, size_t len) {
 
 void FileWriter::Close() {
   if (fd_ >= 0) {
-    ::close(fd_);
+    // A failing close() can surface a deferred write error (e.g. EIO, or ENOSPC
+    // on delayed allocation / a networked filesystem), so the file may be
+    // incomplete even though every pwrite returned success. Log it for
+    // diagnosis. Don't retry: on Linux the descriptor is freed even when close()
+    // returns EINTR, so a retry could close an unrelated, since-reused fd.
+    if (::close(fd_) != 0) {
+      const int err = errno;
+      logger_.Log(LogLevel::Warning,
+                  "FileWriter: close failed (errno " + std::to_string(err) + ")");
+    }
     fd_ = -1;
   }
 }
