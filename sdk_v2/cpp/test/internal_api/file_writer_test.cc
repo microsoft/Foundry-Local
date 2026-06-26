@@ -6,7 +6,7 @@
 // disjoint-range positional writes.
 
 #include "download/file_writer.h"
-
+#include "test_helpers.h"
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <random>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -28,10 +27,8 @@ namespace {
 class TempPath {
  public:
   TempPath() {
-    auto base = fs::temp_directory_path();
-    std::random_device rd;
-    std::uniform_int_distribution<uint64_t> dist;
-    path_ = base / ("file_writer_test_" + std::to_string(dist(rd)) + ".bin");
+    path_ = fl::test::MakeUniqueTempPath("file_writer_test_");
+    path_ += ".bin";
   }
   ~TempPath() {
     std::error_code ec;

@@ -13,7 +13,6 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <random>
 #include <string>
 #include <thread>
 
@@ -33,10 +32,7 @@ namespace {
 class TempDir {
  public:
   TempDir() {
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint64_t> dist;
-    path_ = fs::temp_directory_path() / ("fl_lock_test_" + std::to_string(dist(gen)));
+    path_ = fl::test::MakeUniqueTempPath("fl_lock_test_");
     fs::create_directories(path_);
   }
 
