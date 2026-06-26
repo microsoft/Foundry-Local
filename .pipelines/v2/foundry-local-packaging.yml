@@ -8,7 +8,7 @@
 
 # PR validation only. CI (push) is disabled to avoid duplicate runs when
 # branch policy and YAML triggers both fire for the same commit.
-trigger: none
+trigger: none 
 
 pr:
   branches:
