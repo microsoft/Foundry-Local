@@ -246,6 +246,9 @@ void BaseModelCatalog::IntegrateVariants(std::vector<Model> variants) const {
         it->second->AddVariant(std::move(v));
         ++added_variants;
       }
+
+      // Keep container variant order consistent with catalog priority after append-based inserts.
+      it->second->SortVariants(CompareModelsForSort);
     } else {
       // New alias: build a container in priority order (best first).
       auto first = std::move(alias_variants.front());
@@ -531,14 +534,42 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
   }
 
   if (max_versions > 0 && !result.empty()) {
-    // Enforce latest X per variant name by scanning the sorted list from the
-    // back (highest version first within each variant group).
+    // Normalize order first so max_versions selection is independent of
+    // source fetch ordering. Group by variant name and place latest versions first.
+    std::stable_sort(result.begin(), result.end(), [](const Model* lhs, const Model* rhs) {
+      const auto& l = lhs->Info();
+      const auto& r = rhs->Info();
+
+      const int name_cmp = CompareCaseInsensitive(l.name, r.name);
+      if (name_cmp != 0) {
+        return name_cmp < 0;
+      }
+
+      if (l.version != r.version) {
+        return l.version > r.version;
+      }
+
+      const int lp = GetModelDevicePriority(l.model_id);
+      const int rp = GetModelDevicePriority(r.model_id);
+      if (lp != rp) {
+        return lp < rp;
+      }
+
+      int64_t l_created = l.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
+      int64_t r_created = r.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
+      if (l_created != r_created) {
+        return l_created > r_created;
+      }
+
+      return l.model_id < r.model_id;
+    });
+
+    // Enforce latest X per variant name from the normalized ordering.
     std::unordered_map<std::string, int> selected_per_variant;
     std::vector<Model*> limited;
     limited.reserve(result.size());
 
-    for (auto it = result.rbegin(); it != result.rend(); ++it) {
-      Model* model = *it;
+    for (Model* model : result) {
       const std::string& variant = model->Info().name;
       int& count = selected_per_variant[variant];
       if (count >= max_versions) {
@@ -549,7 +580,7 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
       limited.push_back(model);
     }
 
-    result.assign(limited.rbegin(), limited.rend());
+    result = std::move(limited);
   }
 
   std::stable_sort(result.begin(), result.end(), CompareModelPointersForVersionList);

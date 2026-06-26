@@ -12,6 +12,8 @@
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace fl {
 
 // ---------------------------------------------------------------------------
@@ -103,6 +105,29 @@ void Model::AddVariant(Model variant) {
     selected_variant_ = &variants_.back();
   } else {
     selected_variant_ = &variants_[selected_idx];  // Restore after potential reallocation
+  }
+}
+
+void Model::SortVariants(const std::function<bool(const Model&, const Model&)>& comparator) {
+  if (!IsContainer()) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(state_mutex_);
+
+  if (variants_.size() < 2) {
+    return;
+  }
+
+  const std::string selected_id = selected_variant_->Info().model_id;
+  std::stable_sort(variants_.begin(), variants_.end(), comparator);
+
+  auto selected_it = std::find_if(variants_.begin(), variants_.end(),
+                                  [&](const Model& m) { return m.Info().model_id == selected_id; });
+  if (selected_it != variants_.end()) {
+    selected_variant_ = &(*selected_it);
+  } else {
+    selected_variant_ = &variants_.front();
   }
 }
 

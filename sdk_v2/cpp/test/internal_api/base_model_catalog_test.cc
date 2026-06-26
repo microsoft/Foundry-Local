@@ -342,6 +342,22 @@ TEST_F(BaseModelCatalogTest, GetModelVersionsDoesNotIntegrateFetchedVariants) {
       << "GetModelVersions should not add fetched versions to the catalog's main indices.";
 }
 
+    TEST_F(BaseModelCatalogTest, GetModelVersionsMaxVersionsSelectsLatestRegardlessOfFetchOrder) {
+      QueryingTestCatalog catalog(logger_);
+
+      std::vector<Model> version_results;
+      // Intentionally unsorted fetch order: v2, v1, v3.
+      version_results.push_back(MakeModel("phi-3-mini-generic-cpu:2", "phi-3-mini", 2, "phi-3"));
+      version_results.push_back(MakeModel("phi-3-mini-generic-cpu:1", "phi-3-mini", 1, "phi-3"));
+      version_results.push_back(MakeModel("phi-3-mini-generic-cpu:3", "phi-3-mini", 3, "phi-3"));
+      catalog.SetVersionFetchResults(std::move(version_results));
+
+      auto versions = catalog.GetModelVersions("phi-3", "", /*max_versions=*/1);
+      ASSERT_EQ(versions.size(), 1u);
+      EXPECT_EQ(versions.front()->Info().version, 3)
+      << "max_versions=1 should pick the latest version even when fetch order is arbitrary.";
+    }
+
 TEST_F(BaseModelCatalogTest, GetModelVariantIdIntegratesFetchedVariant) {
   QueryingTestCatalog catalog(logger_);
   catalog.AddModel(MakeModel("phi-3-mini:2", "phi-3-mini", 2, "phi-3"));
@@ -358,4 +374,23 @@ TEST_F(BaseModelCatalogTest, GetModelVariantIdIntegratesFetchedVariant) {
   ASSERT_NE(container, nullptr);
   EXPECT_EQ(container->Variants().size(), 2u)
       << "ID-based fetches should still integrate so download-specific lookups persist in the catalog.";
+}
+
+TEST_F(BaseModelCatalogTest, GetModelVariantIdIntegrationPreservesPriorityOrdering) {
+  QueryingTestCatalog catalog(logger_);
+  catalog.AddModel(MakeModel("phi-3-mini-generic-cpu:1", "phi-3-mini", 1, "phi-3"));
+
+  std::vector<Model> id_results;
+  id_results.push_back(MakeModel("phi-3-mini-npu:1", "phi-3-mini", 1, "phi-3"));
+  catalog.SetIdFetchResults(std::move(id_results));
+
+  auto* fetched = catalog.GetModelVariant("phi-3-mini-npu:1");
+  ASSERT_NE(fetched, nullptr);
+
+  auto* container = catalog.GetModel("phi-3");
+  ASSERT_NE(container, nullptr);
+  auto variants = container->Variants();
+  ASSERT_EQ(variants.size(), 2u);
+  EXPECT_EQ(variants.front()->Info().model_id, "phi-3-mini-npu:1")
+      << "Integrated variants should be re-sorted so higher-priority devices stay first.";
 }

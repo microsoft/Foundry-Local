@@ -63,6 +63,11 @@ class Model {
   /// becomes the selected variant (matches C# behavior).
   void AddVariant(Model variant);
 
+  /// Reorder variants in this container using the provided comparator.
+  /// Preserves the currently selected variant by model_id when possible.
+  /// No-op for leaf models.
+  void SortVariants(const std::function<bool(const Model&, const Model&)>& comparator);
+
   // --- Properties ---
 
   /// Unique model identifier. For containers, delegates to the selected variant.
