@@ -88,7 +88,7 @@ TEST(BlobDownloadStateTest, MarkChunkCompleteIsIdempotent) {
 TEST(BlobDownloadStateTest, CalculateDownloadedSizeAccountsForPartialFinalChunk) {
   TempDir d;
   auto local = d.path() / "blob.bin";
-  constexpr int64_t kOddBlobSize = 5 * 1024 * 1024 + 17;  // last chunk is 17 bytes
+  constexpr int64_t kOddBlobSize = 4 * 1024 * 1024 + 17;  // 3 chunks of 2 MiB; last chunk is a partial 17 bytes
   constexpr int32_t kOddNumChunks = 3;
   auto s = BlobDownloadState::CreateNew("blob", local, kOddBlobSize, kChunkSize, kOddNumChunks);
   for (int32_t i = 0; i < kOddNumChunks; ++i) {
