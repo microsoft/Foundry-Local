@@ -117,9 +117,9 @@ class ModelCommandRouter {
    in the session layer, never through `Model`/the router, so it needs no change.
 5. **Reuse existing infrastructure.**
    [`http/http_client.h`](../src/http/http_client.h) (`HttpGetWithResponse`,
-   `DescribeFailure`) for HTTP + errors, the `UrlEncode` helper from
-   [`download/model_registry_client.cc`](../src/download/model_registry_client.cc) for
-   the `{id}` path segment, and `Configuration::app_name` for the `User-Agent`.
+   `DescribeFailure`) for HTTP + errors, the shared `UrlEncode` helper in
+   [`utils.h`](../src/utils.h) for the `{id}` path segment, and `Configuration::app_name` for the
+   `User-Agent`.
 
 ---
 
