@@ -177,9 +177,14 @@ std::unique_ptr<CrossProcessFileLock> CrossProcessFileLock::TryAcquireForDirecto
     return nullptr;
   }
 
-  (void)::ftruncate(fd, 0);
   auto info = FormatProcessInfo();
-  (void)::write(fd, info.data(), info.size());
+  // Best-effort: record this process's identity in the lock file for diagnostics.
+  // A failure here doesn't affect lock correctness, so it is only logged at Debug.
+  if (::ftruncate(fd, 0) != 0 || ::write(fd, info.data(), info.size()) < 0) {
+    logger.Log(LogLevel::Debug,
+               "CrossProcessFileLock: failed to write diagnostic process info to lock file '" +
+                   lock_path.string() + "' (errno=" + std::to_string(errno) + ")");
+  }
 
   state = std::unique_ptr<State>(new State{fd, lock_path});
 #endif
