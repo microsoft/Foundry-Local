@@ -30,6 +30,7 @@ add_executable(foundry_local_tests
     internal_api/file_lock_test.cc
     internal_api/file_uri_test.cc
     internal_api/genai_config_test.cc
+    internal_api/http_download_test.cc
     internal_api/http_retry_test.cc
     internal_api/item_test.cc
     internal_api/local_model_scanner_test.cc
