@@ -49,6 +49,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -81,6 +82,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -114,6 +116,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -148,6 +151,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -177,10 +181,10 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-win-x64'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - checkout: test-data-shared
+          lfs: true
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-win-x64'
@@ -203,10 +207,10 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-linux-x64'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - checkout: test-data-shared
+          lfs: true
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-linux-x64'
@@ -231,6 +235,7 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-base-osx-arm64'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - bash: |
               set -euo pipefail
@@ -239,9 +244,8 @@ stages:
               fi
               git lfs install
           displayName: 'Install git-lfs (macOS)'
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - checkout: test-data-shared
+          lfs: true
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-osx-arm64'
@@ -278,6 +282,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -310,6 +315,7 @@ stages:
             targetPath: '$(Build.ArtifactStagingDirectory)/python-sdk'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
         - template: steps-build-python.yml
           parameters:
@@ -335,12 +341,17 @@ stages:
             targetPath: '$(Pipeline.Workspace)/python-sdk-winml-win-x64'
         steps:
         - checkout: self
+          path: s/Foundry-Local
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - checkout: test-data-shared
+          lfs: true
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-winml-win-x64'
             testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
             isWinML: true
+
+
+
+
+

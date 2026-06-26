@@ -1,0 +1,128 @@
+# Foundry Local Packaging Pipeline (v2)
+#
+# Builds and packages sdk_v2 artifacts only:
+#   - Native runtime artifacts (base + WinML)
+#   - C# SDK (base + WinML)
+#   - Python SDK (base + WinML)
+#   - JS SDK
+
+# PR validation only. CI (push) is disabled to avoid duplicate runs when
+# branch policy and YAML triggers both fire for the same commit.
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+      - releases/*
+  paths:
+    include:
+      - .pipelines/v2/**
+      - sdk_v2/**
+
+name: $(Date:yyyyMMdd).$(Rev:r)
+
+parameters:
+- name: version
+  displayName: 'Package version (sdk_v2/...)'
+  type: string
+  default: '2.0.0'
+- name: prereleaseId
+  displayName: 'Pre-release identifier (e.g. rc1, beta).'
+  type: string
+  default: 'none'
+- name: isRelease
+  displayName: 'Release build'
+  type: boolean
+  default: false
+
+variables:
+- group: FoundryLocal-ESRP-Signing
+# C++ SDK (sdk_v2/cpp) native dependency versions. Must match cmake defaults
+# in sdk_v2/deps_versions.json.
+- name: cppOrtVersion
+  value: '1.26.0'
+- name: cppGenaiVersion
+  value: '0.14.1'
+- name: cppWinmlVersion
+  value: '2.1.70'
+- name: cppBuildConfig
+  value: 'RelWithDebInfo'
+
+resources:
+  repositories:
+  - repository: 1ESPipelineTemplates
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+  - repository: test-data-shared
+    type: git
+    name: AIFoundryLocal/test-data-shared
+    ref: refs/heads/main
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    settings:
+      networkIsolationPolicy: Permissive
+    pool:
+      # default all windows jobs, individual jobs override
+      name: onnxruntime-Win-CPU-2022
+      os: windows
+    sdl:
+      sourceRepositoriesToScan:
+        exclude:
+        - repository: test-data-shared
+      binskim:
+        break: false
+        scanOutputDirectoryOnly: true
+    stages:
+    - stage: compute_version
+      displayName: 'Compute Version'
+      dependsOn: []
+      jobs:
+      - job: version
+        displayName: 'Compute Version'
+        pool:
+          name: onnxruntime-Win-CPU-2022
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            artifactName: 'version-info'
+            targetPath: '$(Build.ArtifactStagingDirectory)/version-info'
+        steps:
+        - checkout: none
+        - task: PowerShell@2
+          displayName: 'Compute and write version files'
+          inputs:
+            targetType: inline
+            script: |
+              $preId = "${{ parameters.prereleaseId }}"
+              $ts = Get-Date -Format "yyyyMMddHHmm"
+
+              if ($preId -ne '' -and $preId -ne 'none') {
+                $sdkVersion = "${{ parameters.version }}-$preId"
+                $pyVersion = "${{ parameters.version }}$preId"
+              } elseif ("${{ parameters.isRelease }}" -ne "True") {
+                $sdkVersion = "${{ parameters.version }}-dev.$ts"
+                $pyVersion = "${{ parameters.version }}.dev$ts"
+              } else {
+                $sdkVersion = "${{ parameters.version }}"
+                $pyVersion = "${{ parameters.version }}"
+              }
+
+              $outDir = "$(Build.ArtifactStagingDirectory)/version-info"
+              New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+              Set-Content -Path "$outDir/sdkVersion.txt" -Value $sdkVersion -NoNewline
+              Set-Content -Path "$outDir/pyVersion.txt" -Value $pyVersion -NoNewline
+
+              Write-Host "v2 SDK version:    $sdkVersion"
+              Write-Host "v2 Python version: $pyVersion"
+
+    - template: templates/stages-sdk-v2.yml
+      parameters:
+        buildConfig: $(cppBuildConfig)
+        ortVersion: $(cppOrtVersion)
+        genaiVersion: $(cppGenaiVersion)
+        winmlVersion: $(cppWinmlVersion)

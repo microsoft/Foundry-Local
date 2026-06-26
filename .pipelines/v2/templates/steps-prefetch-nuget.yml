@@ -10,7 +10,7 @@
 #   winmlVersion   – Microsoft.Windows.AI.MachineLearning version (Windows only)
 #   includeWinml   – Download WinML and emit WINML_EP_CATALOG_FETCH_URL
 #   includeOrtGpuLinux – Also download Microsoft.ML.OnnxRuntime.Gpu.Linux (Linux only)
-#   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux)
+#   shell          – 'pwsh' (Windows/macOS) or 'bash' (Linux only)
 
 parameters:
 - name: ortVersion
@@ -32,6 +32,9 @@ parameters:
 
 steps:
 
+- task: NuGetToolInstaller@1
+  displayName: 'Install NuGet'
+
 # Fail fast if the pipeline-pinned versions drift from the cmake source of
 # truth in sdk_v2/deps_versions.json.
 - task: PowerShell@2
@@ -41,8 +44,12 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"
-      if (-not (Test-Path $depsFile)) { throw "deps_versions.json not found at $depsFile" }
+      $depsFile = Join-Path "$(Pipeline.Workspace)/s/Foundry-Local" "sdk_v2/deps_versions.json"
+      if (-not (Test-Path $depsFile)) {
+        throw "deps_versions.json not found at $depsFile"
+      }
+
+      Write-Host "Using deps_versions.json at: $depsFile"
       $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
       $expected = @{
         'onnxruntime'                = '${{ parameters.ortVersion }}'
@@ -61,11 +68,14 @@ steps:
       if ($errors.Count -gt 0) {
         Write-Host "Version drift detected between pipeline literals and sdk_v2/deps_versions.json:"
         $errors | ForEach-Object { Write-Host $_ }
-        throw "Bump the matching cpp*Version variable in .pipelines/foundry-local-packaging.yml"
+        throw "Bump the matching cpp*Version variable in .pipelines/v2/foundry-local-packaging.yml"
       }
       Write-Host "Pinned versions agree with sdk_v2/deps_versions.json."
 
 - ${{ if eq(parameters.shell, 'pwsh') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - task: PowerShell@2
     displayName: 'Pre-download NuGet packages'
     inputs:
@@ -76,11 +86,56 @@ steps:
         $cacheDir = "$(Build.BinariesDirectory)/nuget_packages"
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-        # All four packages are public on nuget.org. Foundry Local Core's
-        # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-        # (see .pipelines/templates/build-core-steps.yml), so we follow the
-        # same source of truth here.
-        $feed = "https://www.nuget.org/api/v2/package"
+        $nugetCmd = Get-Command nuget -ErrorAction SilentlyContinue
+        if (-not $nugetCmd) {
+          throw "nuget CLI not found on PATH. This step uses nuget install to fetch package artifacts."
+        }
+
+        function Install-NuGetPackage {
+          param(
+            [string]$Id,
+            [string]$Version,
+            [string]$OutDir
+          )
+
+          $pkgDir = Join-Path $OutDir $Id
+          if (Test-Path $pkgDir) {
+            Remove-Item -Recurse -Force $pkgDir
+          }
+
+          $nugetArgs = @(
+            'install', $Id,
+            '-Version', $Version,
+            '-Source', 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json',
+            '-OutputDirectory', $OutDir,
+            '-ExcludeVersion',
+            '-NonInteractive',
+            '-DirectDownload',
+            '-PackageSaveMode', 'nupkg'
+          )
+
+          Write-Host "Running: nuget $($nugetArgs -join ' ')"
+          # nuget writes status lines to stdout; forward them to logs but keep
+          # this function's output channel reserved for the return path.
+          & nuget $nugetArgs | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            throw "nuget install failed for $Id $Version"
+          }
+
+          $nupkg = Get-ChildItem -Path $pkgDir -Filter '*.nupkg' -File -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $nupkg) {
+            throw "nuget install did not produce a .nupkg under $pkgDir"
+          }
+
+          $resolvedPath = $nupkg | Select-Object -ExpandProperty FullName -First 1
+          if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+            throw "nuget install produced an invalid path under $pkgDir"
+          }
+
+          return $resolvedPath
+        }
 
         $packages = @(
           @{ key = 'genai'; id = 'Microsoft.ML.OnnxRuntimeGenAI.Foundry'; version = '${{ parameters.genaiVersion }}' },
@@ -92,30 +147,28 @@ steps:
 
         $defines = @()
         foreach ($pkg in $packages) {
-          $url = "$feed/$($pkg.id)/$($pkg.version)"
-          $out = "$cacheDir/$($pkg.key).nupkg"
-          Write-Host "Downloading $($pkg.id) $($pkg.version)"
-          Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing
-          if (-not (Test-Path $out)) { throw "$($pkg.key) download failed" }
-          Write-Host "  -> $out ($((Get-Item $out).Length) bytes)"
+          Write-Host "Downloading $($pkg.id) $($pkg.version) via nuget install"
+          $out = Install-NuGetPackage -Id $pkg.id -Version $pkg.version -OutDir $cacheDir
+          if ([string]::IsNullOrWhiteSpace($out)) { throw "$($pkg.key) download failed" }
+          $downloaded = Get-Item -LiteralPath $out -ErrorAction Stop
+          Write-Host "  -> $($downloaded.FullName) ($($downloaded.Length) bytes)"
 
           switch ($pkg.key) {
-            'genai'         { $defines += "GENAI_FETCH_URL=$out" }
-            'ort'           { $defines += "ORT_FETCH_URL=$out" }
-            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$out" }
+            'genai'         { $defines += "GENAI_FETCH_URL=$($downloaded.FullName)" }
+            'ort'           { $defines += "ORT_FETCH_URL=$($downloaded.FullName)" }
+            'ort_gpu_linux' { $defines += "ORT_GPU_LINUX_FETCH_URL=$($downloaded.FullName)" }
           }
         }
 
         if ($${{ parameters.includeWinml }}) {
           # WinML 2.x (Microsoft.Windows.AI.MachineLearning) is reg-free — a single self-contained
           # native package with no transitive Windows App SDK Foundation dependency to resolve.
-          $winmlUrl = "$feed/Microsoft.Windows.AI.MachineLearning/${{ parameters.winmlVersion }}"
-          $winmlOut = "$cacheDir/winml.nupkg"
-          Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }}"
-          Invoke-WebRequest -Uri $winmlUrl -OutFile $winmlOut
-          if (-not (Test-Path $winmlOut)) { throw "WinML download failed" }
-          Write-Host "  -> $winmlOut ($((Get-Item $winmlOut).Length) bytes)"
-          $defines += "WINML_EP_CATALOG_FETCH_URL=$winmlOut"
+          Write-Host "Downloading Microsoft.Windows.AI.MachineLearning ${{ parameters.winmlVersion }} via nuget install"
+          $winmlOut = Install-NuGetPackage -Id 'Microsoft.Windows.AI.MachineLearning' -Version '${{ parameters.winmlVersion }}' -OutDir $cacheDir
+          if ([string]::IsNullOrWhiteSpace($winmlOut)) { throw "WinML download failed" }
+          $winmlDownloaded = Get-Item -LiteralPath $winmlOut -ErrorAction Stop
+          Write-Host "  -> $($winmlDownloaded.FullName) ($($winmlDownloaded.Length) bytes)"
+          $defines += "WINML_EP_CATALOG_FETCH_URL=$($winmlDownloaded.FullName)"
         }
 
         $joined = ($defines | ForEach-Object { "`"$_`"" }) -join ' '
@@ -123,16 +176,28 @@ steps:
         Write-Host "cmakeFetchDefines = $joined"
 
 - ${{ if eq(parameters.shell, 'bash') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - bash: |
       set -euo pipefail
       cacheDir="$(Build.BinariesDirectory)/nuget_packages"
       mkdir -p "$cacheDir"
 
-      # All four packages are public on nuget.org. Foundry Local Core's
-      # nuget.config maps everything except Microsoft.Telemetry* to nuget.org
-      # (see .pipelines/templates/build-core-steps.yml), so we follow the
-      # same source of truth here.
-      feed="https://www.nuget.org/api/v2/package"
+      if [ "${{ parameters.includeOrtGpuLinux }}" != "True" ]; then
+        echo "ERROR: the bash prefetch branch is reserved for Linux native builds; use shell=pwsh for non-Linux platforms." >&2
+        exit 1
+      fi
+
+      if [ -z "${SYSTEM_ACCESSTOKEN:-}" ]; then
+        echo "ERROR: SYSTEM_ACCESSTOKEN is not available for authenticated package download." >&2
+        exit 1
+      fi
+
+      # Download package content from the feed's V3 flat-container endpoint.
+      # This avoids direct nuget.org access and avoids nuget.exe + mono on
+      # hosted Linux agents.
+      flatBase="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/flat2"
 
       declare -a entries=(
         "genai:Microsoft.ML.OnnxRuntimeGenAI.Foundry:${{ parameters.genaiVersion }}"
@@ -151,9 +216,13 @@ steps:
       for entry in "${entries[@]}"; do
         IFS=: read -r key id version <<< "$entry"
         out="$cacheDir/${key}.nupkg"
-        url="$feed/${id}/${version}"
+        lowerId=$(printf '%s' "$id" | tr '[:upper:]' '[:lower:]')
+        url="$flatBase/${lowerId}/${version}/${lowerId}.${version}.nupkg"
         echo "Downloading $id $version"
-        curl -fSL -o "$out" "$url"
+        curl -fSL \
+          -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+          -o "$out" \
+          "$url"
         echo "  -> $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
 
         case "$key" in
@@ -167,3 +236,7 @@ steps:
       echo "##vso[task.setvariable variable=cmakeFetchDefines]$joined"
       echo "cmakeFetchDefines = $joined"
     displayName: 'Pre-download NuGet packages'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+

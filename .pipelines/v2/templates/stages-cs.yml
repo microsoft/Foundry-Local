@@ -66,6 +66,7 @@ stages:
           targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
       - template: steps-build-cs.yml
         parameters:
@@ -98,6 +99,7 @@ stages:
           targetPath: '$(Build.ArtifactStagingDirectory)/cs-sdk'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
       - template: steps-build-cs.yml
         parameters:
@@ -128,10 +130,10 @@ stages:
           targetPath: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - checkout: test-data-shared
+        lfs: true
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
@@ -158,10 +160,10 @@ stages:
           targetPath: '$(Pipeline.Workspace)/${{ parameters._config_winml.nativeArtifact }}'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - checkout: test-data-shared
+        lfs: true
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_winml.nativeArtifact }}'
@@ -191,10 +193,10 @@ stages:
           targetPath: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - checkout: test-data-shared
+        lfs: true
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
@@ -222,6 +224,7 @@ stages:
           targetPath: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
       steps:
       - checkout: self
+        path: s/Foundry-Local
         clean: true
       - bash: |
           set -euo pipefail
@@ -230,12 +233,17 @@ stages:
           fi
           git lfs install
         displayName: 'Install git-lfs (macOS)'
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - checkout: test-data-shared
+        lfs: true
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
           isWinML: false
           testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
-          additionalTestArgs: '--settings $(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/sequential.runsettings'
+          additionalTestArgs: '--settings $(Build.Repository.LocalPath)/sdk_v2/cs/test/FoundryLocal.Tests/sequential.runsettings'
+
+
+
+
+
+

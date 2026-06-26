@@ -37,6 +37,9 @@ parameters:
   default: false
 
 steps:
+- checkout: self
+  path: s/Foundry-Local
+  clean: true
 
 # Windows hosted agents don't have python on PATH by default — the launcher
 # stub redirects to the Microsoft Store. UsePythonVersion installs and adds it
@@ -78,10 +81,9 @@ steps:
 
 # Tests need shared model files.
 - ${{ if eq(parameters.runTests, true) }}:
-  - template: ../../templates/checkout-steps.yml@self
-    parameters:
-      repoName: test-data-shared
-      basePath: '$(Agent.BuildDirectory)'
+  - checkout: test-data-shared
+    lfs: true
+    path: test-data-shared
 
 - ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, false)) }}:
   - script: >-
@@ -91,7 +93,7 @@ steps:
       --cmake_generator "Visual Studio 17 2022"
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (x64)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
@@ -105,7 +107,7 @@ steps:
       --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (x64, WinML)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
@@ -118,7 +120,7 @@ steps:
       --cmake_generator "Visual Studio 17 2022"
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (arm64 cross-compile)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
@@ -132,7 +134,7 @@ steps:
       --use_winml --winml_sdk_version ${{ parameters.winmlVersion }}
       --cmake_extra_defines $(cmakeFetchDefines)
     displayName: 'Configure and build (arm64 cross-compile, WinML)'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
@@ -140,7 +142,7 @@ steps:
 - ${{ if and(eq(parameters.runTests, true), eq(parameters.arch, 'x64')) }}:
   - script: python build.py --test --config ${{ parameters.buildConfig }}
     displayName: 'Run tests'
-    workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+    workingDirectory: $(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
       FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)\test-data-shared
@@ -162,8 +164,8 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $binDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
-      $linkDir = '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}'
+      $binDir = '$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/bin/${{ parameters.buildConfig }}'
+      $linkDir = '$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/${{ parameters.buildConfig }}'
       $dst = '$(Build.ArtifactStagingDirectory)/native'
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
@@ -189,7 +191,7 @@ steps:
   - task: CopyFiles@2
     displayName: 'Stage public headers'
     inputs:
-      SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/include'
+      SourceFolder: '$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/include'
       Contents: '**'
       TargetFolder: '$(Build.ArtifactStagingDirectory)/include'
 
@@ -202,6 +204,10 @@ steps:
   - task: CopyFiles@2
     displayName: 'Stage ms-gsl headers'
     inputs:
-      SourceFolder: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/vcpkg_installed/x64-windows/include/gsl'
+      SourceFolder: '$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cpp/build/Windows/${{ parameters.buildConfig }}/vcpkg_installed/x64-windows/include/gsl'
       Contents: '**'
       TargetFolder: '$(Build.ArtifactStagingDirectory)/include/gsl'
+
+
+
+

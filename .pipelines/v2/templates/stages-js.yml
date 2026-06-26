@@ -51,6 +51,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -90,6 +91,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -128,6 +130,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -168,6 +171,7 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-prebuild'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - template: steps-build-js.yml
       parameters:
@@ -197,10 +201,10 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-win-x64'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'win-x64'
@@ -223,10 +227,10 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-linux-x64'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'linux-x64'
@@ -251,6 +255,7 @@ stages:
         targetPath: '$(Pipeline.Workspace)/js-prebuild-osx-arm64'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - bash: |
           set -euo pipefail
@@ -259,9 +264,8 @@ stages:
           fi
           git lfs install
       displayName: 'Install git-lfs (macOS)'
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - checkout: test-data-shared
+      lfs: true
     - template: steps-test-js.yml
       parameters:
         rid: 'osx-arm64'
@@ -307,7 +311,13 @@ stages:
         targetPath: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
     steps:
     - checkout: self
+      path: s/Foundry-Local
       clean: true
     - template: steps-pack-js.yml
       parameters:
         outputDir: '$(Build.ArtifactStagingDirectory)/js-sdk-v2'
+
+
+
+
+

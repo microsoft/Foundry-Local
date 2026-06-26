@@ -37,12 +37,33 @@ parameters:
 
 steps:
 
-- task: UsePythonVersion@0
-  displayName: 'Use Python 3.12'
-  inputs:
-    versionSpec: '3.12'
-    addToPath: true
-    architecture: '${{ parameters.pythonArchitecture }}'
+- ${{ if ne(parameters.rid, 'linux-x64') }}:
+  - task: UsePythonVersion@0
+    displayName: 'Use Python 3.12'
+    inputs:
+      versionSpec: '3.12'
+      addToPath: true
+      architecture: '${{ parameters.pythonArchitecture }}'
+
+- ${{ if eq(parameters.rid, 'linux-x64') }}:
+  - task: PowerShell@2
+    displayName: 'Use preinstalled system Python (Linux)'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          # Hosted Linux images may not have Python in Agent.ToolsDirectory,
+          # and UsePythonVersion then attempts a blocked GitHub download path.
+          # Use the preinstalled system python3 instead.
+          $pythonCmd = if (Get-Command python3.12 -ErrorAction SilentlyContinue) { 'python3.12' } else { 'python3' }
+          if (-not (Get-Command $pythonCmd -ErrorAction SilentlyContinue)) {
+              throw "Neither python3.12 nor python3 is available on PATH"
+          }
+          & $pythonCmd --version
+          $pythonPath = (& which $pythonCmd).Trim()
+          if (-not $pythonPath) { throw "Unable to resolve path for $pythonCmd" }
+          Write-Host "System python: $pythonPath"
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]$pythonPath"
 
 - task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
@@ -62,7 +83,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $pyproject = "$(Build.SourcesDirectory)/sdk_v2/python/pyproject.toml"
+        $pyproject = "$(Build.Repository.LocalPath)/sdk_v2/python/pyproject.toml"
         $content = Get-Content $pyproject -Raw
         # Replace the first occurrence of `version = "..."` inside the
         # [project] table. The backend shim handles the package-name
@@ -93,7 +114,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $dest = "$(Build.SourcesDirectory)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
+        $dest = "$(Build.Repository.LocalPath)/sdk_v2/python/src/foundry_local_sdk/_native/${{ parameters.rid }}"
         if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
@@ -132,7 +153,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        $py = "$(Build.SourcesDirectory)/sdk_v2/python"
+        $py = "$(Build.Repository.LocalPath)/sdk_v2/python"
         # Remove stale, untagged cffi extension from prior dev compiles.
         # The wheel build below produces a properly ABI-tagged variant; the
         # untagged copy is bonus baggage we don't want shipped.
@@ -152,17 +173,58 @@ steps:
             }
         }
 
+- ${{ if eq(parameters.rid, 'linux-x64') }}:
+  - task: PowerShell@2
+    displayName: 'Create Linux build venv'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          $basePython = "$(buildPythonExe)"
+          if (-not $basePython) { throw "buildPythonExe is not set" }
+
+          $venvDir = "$(Pipeline.Workspace)/.venv-python-build"
+          if (Test-Path $venvDir) { Remove-Item -Recurse -Force $venvDir }
+
+          & $basePython -m venv $venvDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $venvPython = Join-Path $venvDir 'bin/python'
+          if (-not (Test-Path $venvPython)) { throw "Venv python not found at $venvPython" }
+
+          & $venvPython --version
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]$venvPython"
+
+- task: PipAuthenticate@1
+  displayName: 'Authenticate pip with Azure Artifacts'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - task: PowerShell@2
   displayName: 'Install build tooling'
   inputs:
     targetType: inline
     pwsh: true
     script: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade build setuptools wheel "cffi>=1.16"
+        # Require the authenticated pip URL injected by PipAuthenticate@1.
+        $indexUrl = $env:PIP_INDEX_URL
+        if (-not $indexUrl -and $env:PIP_EXTRA_INDEX_URL) {
+        $indexUrl = ($env:PIP_EXTRA_INDEX_URL -split '\s+')[0]
+        }
+        if (-not $indexUrl) { throw 'PipAuthenticate did not provide an authenticated pip index URL (PIP_INDEX_URL/PIP_EXTRA_INDEX_URL missing).' }
+        Write-Host "Using pip index: $indexUrl"
+        $pythonExe = if ('${{ parameters.rid }}' -eq 'linux-x64') { '$(buildPythonExe)' } else { 'python' }
+        if (-not $pythonExe) { throw 'Python executable is not set.' }
+
+        & $pythonExe -m pip install --upgrade pip --index-url $indexUrl
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $pythonExe -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:
+  - task: NuGetAuthenticate@1
+    displayName: 'Authenticate NuGet feeds'
+
   - task: PowerShell@2
     displayName: 'Locate MSVC arm64 cross-tools (vswhere)'
     inputs:
@@ -224,12 +286,12 @@ steps:
           New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
           # nuget.exe is on PATH on Microsoft-hosted Windows agents and on most
-          # self-hosted ones. The package is on nuget.org; -Source pins it
-          # explicitly so a misconfigured local nuget.config can't redirect us.
+            # self-hosted ones. Pull through the AIFoundryLocal feed (upstreamed
+            # to nuget.org) to avoid direct nuget.org network dependency.
           & nuget install pythonarm64 `
               -Version 3.12.10 `
               -OutputDirectory $stageRoot `
-              -Source 'https://api.nuget.org/v3/index.json' `
+              -Source 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json' `
               -ExcludeVersion `
               -NonInteractive
           if ($LASTEXITCODE -ne 0) { throw "nuget install pythonarm64 failed ($LASTEXITCODE)" }
@@ -285,7 +347,7 @@ steps:
             $extraArgs += '--config-setting=--build-option=--plat-name=win_arm64'
             Write-Host "Cross-compile: forcing wheel plat tag win_arm64"
         }
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(Build.Repository.LocalPath)/sdk_v2/python"
         try {
             if ($targetArch -eq 'arm64') {
                 # Run vcvarsall and the build in a single child cmd.exe process so the cross
@@ -325,7 +387,9 @@ steps:
                 cmd /v:on /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
-                python -m build --wheel --outdir $outDir @extraArgs
+                $pythonExe = if ('${{ parameters.rid }}' -eq 'linux-x64') { '$(buildPythonExe)' } else { 'python' }
+                if (-not $pythonExe) { throw 'Python executable is not set.' }
+                & $pythonExe -m build --wheel --outdir $outDir @extraArgs
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
         } finally {
@@ -340,3 +404,5 @@ steps:
     script: |
         Get-ChildItem "${{ parameters.outputDir }}" -Filter '*.whl' |
             ForEach-Object { Write-Host ("{0,12}  {1}" -f $_.Length, $_.Name) }
+
+

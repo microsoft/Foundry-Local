@@ -67,7 +67,6 @@ steps:
       <configuration>
         <packageSources>
           <clear />
-          <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
           <add key="LocalFLRuntime" value="$flFeedDir" />
           <add key="AIFoundryLocal_PublicPackages" value="https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json" />
         </packageSources>
@@ -110,9 +109,11 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
-      $rid = dotnet msbuild $proj -getProperty:NETCoreSdkRuntimeIdentifier
-      if ($LASTEXITCODE -ne 0 -or -not $rid) { throw "Failed to determine RuntimeIdentifier" }
+      $proj = "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
+      $dotnetInfo = (dotnet --info | Out-String)
+      $m = [regex]::Match($dotnetInfo, '(?m)^\s*RID:\s*(\S+)\s*$')
+      if (-not $m.Success) { throw "Failed to determine RuntimeIdentifier from dotnet --info" }
+      $rid = $m.Groups[1].Value.Trim()
       Write-Host "Restoring for RuntimeIdentifier: $rid"
 
       dotnet restore $proj `
@@ -142,7 +143,7 @@ steps:
       # The redirect file foundry_local.native.cfg is a local-dev override that, if
       # present, takes priority in DllLoader and would silently point the loader at
       # an arbitrary path on the agent. Sweep it out of every bin folder before tests.
-      $root = "$(Build.SourcesDirectory)/sdk_v2/cs"
+      $root = "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cs"
       $stale = Get-ChildItem -Path $root -Recurse -Force -Filter 'foundry_local.native.cfg' -ErrorAction SilentlyContinue
       if ($stale) {
         Write-Host "Removing stale redirect files:"
@@ -157,7 +158,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      $proj = "$(Build.SourcesDirectory)/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
+      $proj = "$(Pipeline.Workspace)/s/Foundry-Local/sdk_v2/cs/test/FoundryLocal.Tests/Microsoft.AI.Foundry.Local.Tests.csproj"
 
       # Test TFMs:
       #   * net9.0 covers the .NET (Core) runtime test surface.
@@ -185,3 +186,5 @@ steps:
   env:
     TF_BUILD: 'true'
     FOUNDRY_TEST_DATA_DIR: ${{ parameters.testDataSharedDir }}
+
+
