@@ -38,15 +38,6 @@
 #include <thread>
 #include <vector>
 
-// Current process id for unique temp-dir names. CTest (gtest_discover_tests) launches a
-// separate process per test, so the pid distinguishes concurrent test processes. process.h
-// is used instead of windows.h to avoid its min/max macros (this file uses std::min/max).
-#ifdef _WIN32
-#include <process.h>  // _getpid
-#else
-#include <unistd.h>  // getpid
-#endif
-
 namespace fs = std::filesystem;
 using namespace fl;
 
@@ -56,27 +47,16 @@ using namespace fl;
 
 namespace {
 
-/// Current process id.
-#ifdef _WIN32
-inline long CurrentPid() { return ::_getpid(); }
-#else
-inline long CurrentPid() { return static_cast<long>(::getpid()); }
-#endif
-
-/// Create a temporary directory for test isolation. The name combines the process id and a
-/// per-process atomic counter, so directories are unique both across the separate processes
-/// CTest launches per test and across multiple TempDirs within one test. create_directory
-/// must succeed — the directory must not already exist — so a residual collision (e.g. a
-/// directory leaked by an earlier process that reused this pid) advances the counter and
-/// retries instead of silently sharing an existing directory.
+/// Create a temporary directory for test isolation. The name comes from MakeUniqueTempPath, so it is
+/// unique both across the separate processes CTest launches per test and across multiple TempDirs
+/// within one test. create_directory must succeed — the directory must not already exist — so a
+/// residual collision (e.g. a directory leaked by an earlier process that reused this pid) advances
+/// to the next name and retries instead of silently sharing an existing directory.
 class TempDir {
  public:
   TempDir() {
-    static std::atomic<uint64_t> counter{0};
     while (true) {
-      auto candidate = fs::temp_directory_path() /
-                       ("fl_test_" + std::to_string(CurrentPid()) + "_" +
-                        std::to_string(counter.fetch_add(1, std::memory_order_relaxed)));
+      auto candidate = fl::test::MakeUniqueTempPath("fl_test_");
       std::error_code ec;
       if (fs::create_directory(candidate, ec)) {
         path_ = std::move(candidate);
@@ -86,7 +66,7 @@ class TempDir {
         throw std::runtime_error("TempDir: failed to create '" + candidate.string() + "': " +
                                  ec.message());
       }
-      // candidate already existed — advance the counter and try the next name.
+      // candidate already existed — try the next name.
     }
   }
   ~TempDir() {
