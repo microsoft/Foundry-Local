@@ -16,6 +16,14 @@ class ILogger;
 /// that share a cache directory. A crash while holding the lock may leave a
 /// zero-byte file behind; the next acquirer reopens and re-locks, so the leak
 /// is harmless.
+///
+/// This is deliberately a separate primitive from `fl::FileLock`
+/// (util/file_lock.h), the simple blocking RAII lock the EP bootstrappers use.
+/// Model downloads are long and cancellable, so they need non-blocking
+/// acquisition (TryAcquireForDirectory), cancellation-aware polling with a
+/// timeout (WaitForDirectoryLock), and protection against the flock()+unlink()
+/// orphan-inode race — none of which FileLock offers. A future change could
+/// consolidate the two if FileLock grows these capabilities.
 class CrossProcessFileLock {
  public:
   /// Returning true aborts WaitForDirectoryLock with FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED.
