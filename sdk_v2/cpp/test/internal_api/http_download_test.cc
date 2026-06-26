@@ -93,7 +93,10 @@ TEST(DISABLED_HttpDownload, DownloadsWebGpuManifest) {
   std::vector<float> progress;
   std::atomic<bool> cancel{false};
 
-  bool ok = HttpDownloadFile(kWebGpuManifestUrl, dest.path(), kUserAgent, &cancel, [&progress](float pct) { progress.push_back(pct); }, logger);
+  bool ok = HttpDownloadFile(
+      kWebGpuManifestUrl, dest.path(), kUserAgent, &cancel,
+      [&progress](float pct) { progress.push_back(pct); },
+      logger);
 
   ASSERT_TRUE(ok) << "WebGPU manifest download failed. Logger output:\n"
                   << logger.Dump();
