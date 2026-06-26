@@ -43,10 +43,7 @@ steps:
   displayName: 'Append version define'
 
 - ${{ if eq(parameters.runTests, true) }}:
-  - template: ../../templates/checkout-steps.yml@self
-    parameters:
-      repoName: test-data-shared
-      basePath: '$(Agent.BuildDirectory)'
+  - checkout: test-data-shared
 
 - bash: |
     set -euo pipefail
@@ -66,7 +63,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
-      FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)/test-data-shared
+      FOUNDRY_TEST_DATA_DIR: $(Build.SourcesDirectory)/test-data-shared
 
 - bash: |
     echo "=== vcpkg buildtrees error logs ==="

@@ -78,10 +78,7 @@ steps:
 
 # Tests need shared model files.
 - ${{ if eq(parameters.runTests, true) }}:
-  - template: ../../templates/checkout-steps.yml@self
-    parameters:
-      repoName: test-data-shared
-      basePath: '$(Agent.BuildDirectory)'
+  - checkout: test-data-shared
 
 - ${{ if and(eq(parameters.arch, 'x64'), eq(parameters.useWinml, false)) }}:
   - script: >-
@@ -143,7 +140,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
-      FOUNDRY_TEST_DATA_DIR: $(Agent.BuildDirectory)\test-data-shared
+      FOUNDRY_TEST_DATA_DIR: $(Build.SourcesDirectory)\test-data-shared
 
 # Stage the redistributable native artifacts.
 #   - Standard build: vcpkg statically links ORT/GenAI/azure-*/spdlog/fmt/
