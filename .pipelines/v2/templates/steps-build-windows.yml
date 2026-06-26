@@ -55,6 +55,9 @@ steps:
     echo @exit /b 0 > $(Build.BinariesDirectory)\tools\pkg-config.bat
   displayName: 'Bootstrap vcpkg'
 
+- checkout: self
+  clean: true
+
 - template: steps-prefetch-nuget.yml
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
@@ -62,9 +65,6 @@ steps:
     winmlVersion: ${{ parameters.winmlVersion }}
     includeWinml: ${{ parameters.useWinml }}
     shell: pwsh
-
-- checkout: self
-  clean: true
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
 # matches the .nupkg version (e.g. 0.1.0-dev.202605111234) instead of the cmake default.

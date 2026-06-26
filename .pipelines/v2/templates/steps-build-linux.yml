@@ -23,6 +23,9 @@ steps:
     "$(Build.BinariesDirectory)/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
   displayName: 'Bootstrap vcpkg'
 
+- checkout: self
+  clean: true
+
 - template: steps-prefetch-nuget.yml
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
@@ -31,9 +34,6 @@ steps:
     includeWinml: false
     includeOrtGpuLinux: true
     shell: bash
-
-- checkout: self
-  clean: true
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
 # matches the .nupkg version instead of the cmake default.

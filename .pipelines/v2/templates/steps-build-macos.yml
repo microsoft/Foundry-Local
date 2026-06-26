@@ -32,6 +32,9 @@ steps:
     pkg-config --version
   displayName: 'Verify build tools'
 
+- checkout: self
+  clean: true
+
 - template: steps-prefetch-nuget.yml
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
@@ -39,9 +42,6 @@ steps:
     winmlVersion: ''
     includeWinml: false
     shell: bash
-
-- checkout: self
-  clean: true
 
 # Bake the pipeline-computed version into the binary so FoundryLocalGetVersionString()
 # matches the .nupkg version instead of the cmake default.

@@ -41,7 +41,13 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
-      $depsFile = Join-Path "$(Build.SourcesDirectory)" "sdk_v2/deps_versions.json"
+      $multiCheckout = Join-Path "$(Build.SourcesDirectory)" "Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
+      $depsFile = Join-Path $repoRoot "sdk_v2/deps_versions.json"
       if (-not (Test-Path $depsFile)) { throw "deps_versions.json not found at $depsFile" }
       $deps = Get-Content $depsFile -Raw | ConvertFrom-Json
       $expected = @{
