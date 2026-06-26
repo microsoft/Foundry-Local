@@ -207,7 +207,7 @@ TEST_F(WebServiceTest, LoadedModelsReturnsModelIds) {
 }
 
 // ========================================================================
-// GET /models/load/{name}
+// GET /models/load/{model}
 // ========================================================================
 
 TEST_F(WebServiceTest, LoadModelReturnsNotFoundForUnknownModel) {
@@ -225,7 +225,7 @@ TEST_F(WebServiceTest, LoadModelReturnsBadRequestWhenNotCached) {
 }
 
 // ========================================================================
-// GET /models/unload/{name}
+// GET /models/unload/{model}
 // ========================================================================
 
 TEST_F(WebServiceTest, UnloadModelReturnsNotFoundForUnknownModel) {
@@ -298,7 +298,7 @@ TEST_F(WebServiceTest, OpenAIListModelsPopulatesPublisher) {
 }
 
 // ========================================================================
-// GET /v1/models/{name} — OpenAI-compatible retrieve
+// GET /v1/models/{model} — OpenAI-compatible retrieve
 // ========================================================================
 
 TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsModelInfo) {

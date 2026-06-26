@@ -153,7 +153,7 @@ class StatusHandler : public HttpRequestHandler {
 };
 
 // ========================================================================
-// Handler: POST /shutdown
+// Handler: GET /shutdown
 // ========================================================================
 
 class ShutdownHandler : public HttpRequestHandler {
@@ -162,6 +162,10 @@ class ShutdownHandler : public HttpRequestHandler {
       : shutdown_fn_(std::move(shutdown_fn)) {}
 
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>&) override {
+    // shutdown_fn_ is Manager::RequestShutdown: it only raises the shutdown flag and returns. The
+    // process hosting the web service watches IsShutdownRequested() and performs the actual teardown
+    // from its own thread. Tearing down here would self-deadlock — StopWebService() joins all worker
+    // threads, including this one.
     shutdown_fn_();
 
     nlohmann::json body = {{"status", "shutting_down"}};
@@ -233,17 +237,17 @@ std::vector<std::string> WebService::Start(const std::vector<std::string>& endpo
                        std::make_shared<StatusHandler>(ctx));
 
   // Shutdown
-  impl_->router->route("POST", "/shutdown",
+  impl_->router->route("GET", "/shutdown",
                        std::make_shared<ShutdownHandler>(impl_->shutdown_callback));
 
   // Model management
   impl_->router->route("GET", "/models/loaded", CreateListLoadedModelsHandler(ctx));
-  impl_->router->route("GET", "/models/load/{name}", CreateLoadModelHandler(ctx));
-  impl_->router->route("GET", "/models/unload/{name}", CreateUnloadModelHandler(ctx));
+  impl_->router->route("GET", "/models/load/{model}", CreateLoadModelHandler(ctx));
+  impl_->router->route("GET", "/models/unload/{model}", CreateUnloadModelHandler(ctx));
 
   // OpenAI-compatible endpoints
   impl_->router->route("GET", "/v1/models", CreateOpenAIListModelsHandler(ctx));
-  impl_->router->route("GET", "/v1/models/{name}", CreateOpenAIRetrieveModelHandler(ctx));
+  impl_->router->route("GET", "/v1/models/{model}", CreateOpenAIRetrieveModelHandler(ctx));
   impl_->router->route("POST", "/v1/chat/completions", CreateChatCompletionsHandler(ctx));
   impl_->router->route("POST", "/v1/audio/transcriptions", CreateAudioTranscriptionsHandler(ctx));
   impl_->router->route("POST", "/v1/embeddings", CreateEmbeddingsHandler(ctx));

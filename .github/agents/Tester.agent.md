@@ -43,6 +43,10 @@ Follow the Testing Trophy (Kent C. Dodds), not the Test Pyramid:
 - **Static analysis** (linters, sanitizers, warnings-as-errors) is always on
 - **Tests that check output must assert expected values**, not just check non-empty — validate correctness
 
+### Real integration tests for public-API surface (non-negotiable)
+
+Any new behavior reachable through the public SDK API (`Model::Load`/`Unload`, `Session`, `ChatSession`, catalog ops, web service endpoints) **must** get a "real" integration test under `test/sdk_api/` (the `sdk_integration_tests` binary) that drives the *production entry point* end-to-end against the real backend (real cached model and/or a real in-process `WebService`). An `internal_api` unit test that calls an internal class directly, or stubs the other side of a contract that also lives in this repo, is **not** a substitute. A one-sided unit test passes while the production path is broken — PR #839 proved it (router unit test called `router->Load(alias)` and passed, while `Model::Load` sending a model_id 404'd against the real service). When a feature spans a client/server or local/external boundary, write the round-trip test through the real server, with the same identifiers production uses.
+
 ### Test Patterns for This Project
 
 - Disabled live tests use `DISABLED_` prefix, run via `--gtest_also_run_disabled_tests`

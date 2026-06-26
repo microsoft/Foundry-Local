@@ -100,3 +100,68 @@ TEST_F(WebServiceIntegrationTest, UnloadModelNotFound) {
   ASSERT_TRUE(result) << "HTTP request failed";
   EXPECT_EQ(result->status, 404);
 }
+
+TEST_F(WebServiceIntegrationTest, LoadModelByModelIdReportsAlreadyLoaded) {
+  auto client = MakeClient();
+  auto result = client.Get(("/models/load/" + model_id()).c_str());
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_NE(result->status, 404) << "model_id must resolve, not 404: " << result->body;
+  ASSERT_EQ(result->status, 200) << result->body;
+
+  json response = json::parse(result->body);
+  ASSERT_TRUE(response.contains("status"));
+  EXPECT_EQ(response["status"], "already_loaded")
+      << "The SharedTestEnv chat model is resident, so load-by-id must be a no-op";
+}
+
+TEST_F(WebServiceIntegrationTest, ListLoadedModelsContainsModelId) {
+  auto client = MakeClient();
+  auto result = client.Get("/models/loaded");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_EQ(result->status, 200) << result->body;
+
+  json response = json::parse(result->body);
+  ASSERT_TRUE(response.is_array());
+
+  // The loaded list is reported as model_ids (model->Id()); the resident chat model must appear.
+  bool found = false;
+  for (const auto& entry : response) {
+    if (entry.is_string() && entry.get<std::string>() == model_id()) {
+      found = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found) << "Expected loaded list to contain '" << model_id() << "': " << result->body;
+}
+
+TEST_F(WebServiceIntegrationTest, UnloadByModelIdResolvesForNonResidentModel) {
+  // Pick a catalog model_id that is NOT the resident chat model, so the unload is a resolvable
+  // no-op ("not_loaded") rather than a destructive unload of shared state. The point is that the
+  // id resolves at all — before the fix an id-form name 404'd on /models/unload/{model}.
+  auto client = MakeClient();
+
+  auto list = client.Get("/v1/models");
+  ASSERT_TRUE(list) << "HTTP request failed";
+  ASSERT_EQ(list->status, 200) << list->body;
+
+  json models = json::parse(list->body);
+  ASSERT_TRUE(models.contains("data"));
+
+  std::string other_id;
+  for (const auto& m : models["data"]) {
+    if (m.contains("id") && m["id"].get<std::string>() != model_id()) {
+      other_id = m["id"].get<std::string>();
+      break;
+    }
+  }
+  ASSERT_FALSE(other_id.empty()) << "Expected at least one non-resident model in the catalog";
+
+  auto result = client.Get(("/models/unload/" + other_id).c_str());
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_NE(result->status, 404) << "model_id must resolve on unload, not 404: " << result->body;
+  ASSERT_EQ(result->status, 200) << result->body;
+
+  json response = json::parse(result->body);
+  ASSERT_TRUE(response.contains("status"));
+  EXPECT_EQ(response["status"], "not_loaded");
+}

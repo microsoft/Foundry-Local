@@ -436,7 +436,7 @@ void Manager::StartWebService() {
 #ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE
   web_service_ = std::make_unique<WebService>(*catalog_, *logger_, *config_.model_cache_dir, *model_load_manager_,
                                               *session_manager_, *telemetry_,
-                                              [this]() { Shutdown(); });
+                                              [this]() { RequestShutdown(); });
 
   auto endpoints = config_.web_service_endpoints;
   if (endpoints.empty()) {
@@ -482,12 +482,14 @@ void Manager::StopWebService() {
 }
 
 void Manager::Shutdown() {
+  shutdown_requested_.store(true);
+
   bool expected = false;
-  if (!shutdown_requested_.compare_exchange_strong(expected, true)) {
-    return;  // already shutting down
+  if (!teardown_started_.compare_exchange_strong(expected, true)) {
+    return;  // teardown already ran
   }
 
-  logger_->Log(LogLevel::Information, "Shutdown requested");
+  logger_->Log(LogLevel::Information, "Shutting down");
 
   if (web_service_running_) {
     StopWebService();
@@ -503,6 +505,13 @@ void Manager::Shutdown() {
   session_manager_->CancelAll();
   session_manager_->WaitForDrain();
   model_load_manager_->UnloadAll();
+}
+
+void Manager::RequestShutdown() {
+  // Only raise the flag. The host watching IsShutdownRequested() performs the actual teardown from
+  // its own thread — doing it here would self-deadlock when we're on a web service worker thread,
+  // because StopWebService() joins every worker thread (including this one).
+  shutdown_requested_.store(true);
 }
 
 bool Manager::IsShutdownRequested() const {

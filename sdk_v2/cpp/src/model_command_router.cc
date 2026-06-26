@@ -120,7 +120,7 @@ std::vector<std::string> ModelCommandRouter::ListLoadedModelIds() {
   }
 
   // Surface a malformed/non-array/non-string remote response as FOUNDRY_LOCAL_ERROR_INTERNAL
-  // as that means we're returning an invalid response from the SDK's web service (assumably).
+  // as that means we're returning an invalid response from the SDK's web service (presumably).
   nlohmann::json parsed;
 
   try {

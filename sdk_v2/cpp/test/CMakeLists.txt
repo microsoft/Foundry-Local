@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 find_package(httplib CONFIG REQUIRED)
+find_package(reproc++ CONFIG REQUIRED)
 
 # ==========================================================================
 # Internal tests — test the implementation directly
@@ -248,6 +249,66 @@ endif()
 
 gtest_discover_tests(cache_only_tests
     WORKING_DIRECTORY $<TARGET_FILE_DIR:cache_only_tests>
+    DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 60
+)
+
+# ==========================================================================
+# External-mode tests — client/server split via a separate web-service process.
+# Separate binary because Manager is a singleton: the web-service host (non-cache-only)
+# and the external-mode client (cache-only) cannot coexist in one process. The binary
+# re-executes itself with `--serve` to host the service, then runs the suite in the
+# parent process pointed at that host. Provides its own main() (no GTest::gtest_main).
+# ==========================================================================
+add_executable(external_mode_tests
+    sdk_api/external_mode_test.cc
+)
+
+set_target_properties(external_mode_tests PROPERTIES CXX_STANDARD 17)
+target_compile_options(external_mode_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+
+target_include_directories(external_mode_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(external_mode_tests
+    PRIVATE
+        foundry_local_cpp
+        GTest::gtest
+        httplib::httplib
+        reproc++
+)
+
+add_dependencies(external_mode_tests foundry_local)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(external_mode_tests PRIVATE -Wl,--disable-new-dtags)
+endif()
+
+if(APPLE)
+    set_target_properties(external_mode_tests PROPERTIES
+        BUILD_RPATH "${ORT_GENAI_LIB_DIR};${ORT_LIB_DIR}"
+    )
+endif()
+
+# Stage the tiny loadable test model next to the binary so the host process can serve it.
+add_custom_command(TARGET external_mode_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/testdata
+            $<TARGET_FILE_DIR:external_mode_tests>/testdata
+)
+
+if(ANDROID)
+    target_compile_definitions(external_mode_tests PRIVATE FOUNDRY_LOCAL_TEST_DATA_DIR="testdata")
+else()
+    target_compile_definitions(external_mode_tests PRIVATE
+        FOUNDRY_LOCAL_TEST_DATA_DIR="$<TARGET_FILE_DIR:external_mode_tests>/testdata"
+    )
+endif()
+
+gtest_discover_tests(external_mode_tests
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:external_mode_tests>
     DISCOVERY_MODE PRE_TEST
     DISCOVERY_TIMEOUT 60
 )

@@ -21,6 +21,11 @@ class ILogger;
 /// is encoded as %XX. Shared so callers building remote URLs don't reinvent it.
 std::string UrlEncode(std::string_view value);
 
+/// Percent-decode a string from a URL path segment or query value (inverse of UrlEncode).
+/// %XX escapes are decoded to their byte value; '+' is left as-is (path semantics, not form). Any
+/// malformed trailing '%' is passed through unchanged. Used to recover model_ids from request paths.
+std::string UrlDecode(std::string_view value);
+
 struct Utils {
   /// Read an environment variable value. Returns nullopt when missing.
   /// Empty string is a valid value when the variable exists but has no content.
