@@ -69,6 +69,11 @@ install per-SDK package dependencies on first run:
 | Python | `python -m pip install -e .[dev]` (compiles the cffi extension; needs MSVC/Clang) → `python -m pytest test/`. |
 | JS     | `npm install` (runs `node-gyp` against the C++ build output) → `npm run build` → `npm test` (vitest). |
 
+In CI, the shared `test-data-shared` cache is checked out from
+`AIFoundryLocal/test-data-shared` in the same ADO org that runs the Foundry
+Local Packaging pipeline, so sdk_v2 jobs no longer depend on the older
+`windows.ai.toolkit` org path.
+
 ## Common knobs
 
 ```powershell

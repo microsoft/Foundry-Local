@@ -70,6 +70,10 @@ resources:
     type: git
     name: 1ESPipelineTemplates/1ESPipelineTemplates
     ref: refs/tags/release
+  - repository: test-data-shared
+    type: git
+    name: AIFoundryLocal/test-data-shared
+    ref: refs/heads/main
 
 extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
@@ -81,6 +85,9 @@ extends:
       name: onnxruntime-Win-CPU-2022
       os: windows
     sdl:
+      sourceRepositoriesToScan:
+        exclude:
+        - repository: test-data-shared
       binskim:
         break: false
         scanOutputDirectoryOnly: true
