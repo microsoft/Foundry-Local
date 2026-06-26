@@ -571,6 +571,67 @@ TEST(CApiTest, GetModelVersionsMaxVersionsIsPerVariant) {
   api->Manager_Release(mgr);
 }
 
+TEST(CApiTest, GetModelVersionsDoesNotPersistReturnedVariantsIntoCatalogModelView) {
+  const flApi* api = GetApi();
+  ASSERT_NE(api, nullptr);
+  const flCatalogApi* catalog_api = api->GetCatalogApi();
+  const flModelApi* model_api = api->GetModelApi();
+
+  flConfiguration* config = CreateTestConfig(api);
+  ASSERT_NE(config, nullptr);
+
+  flManager* mgr = nullptr;
+  flStatus* status = api->Manager_Create(config, &mgr);
+  if (!IsOk(status)) {
+    api->Status_Release(status);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    GTEST_SKIP() << "Manager creation failed (catalog may be unreachable)";
+  }
+  flCatalog* cat = nullptr;
+  ASSERT_FL_OK(api, api->Manager_GetCatalog(mgr, &cat));
+
+  constexpr const char* kPhi3Alias = "phi-3-mini-4k";
+
+  flModel* baseline_model = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModel(cat, kPhi3Alias, &baseline_model));
+  if (!baseline_model) {
+    api->GetConfigurationApi()->Configuration_Release(config);
+    api->Manager_Release(mgr);
+    GTEST_SKIP() << "Catalog returned no grouped model for '" << kPhi3Alias
+                 << "' (catalog may be unreachable or the alias has been retired)";
+  }
+
+  flModelList* baseline_variants = nullptr;
+  ASSERT_FL_OK(api, model_api->GetVariants(baseline_model, &baseline_variants));
+  ASSERT_NE(baseline_variants, nullptr);
+  const size_t baseline_count = api->ModelList_Size(baseline_variants);
+  api->ModelList_Release(baseline_variants);
+
+  flModelList* versions = nullptr;
+  ASSERT_FL_OK(api, catalog_api->GetModelVersions(cat, kPhi3Alias, nullptr, 0, &versions));
+  ASSERT_NE(versions, nullptr);
+  const size_t fetched_count = api->ModelList_Size(versions);
+  if (fetched_count == 0) {
+    api->ModelList_Release(versions);
+    api->GetConfigurationApi()->Configuration_Release(config);
+    api->Manager_Release(mgr);
+    GTEST_SKIP() << "Catalog returned no variants for '" << kPhi3Alias << "'";
+  }
+
+  flModelList* after_variants = nullptr;
+  ASSERT_FL_OK(api, model_api->GetVariants(baseline_model, &after_variants));
+  ASSERT_NE(after_variants, nullptr);
+  const size_t after_count = api->ModelList_Size(after_variants);
+  api->ModelList_Release(after_variants);
+
+  EXPECT_EQ(after_count, baseline_count)
+      << "GetModelVersions should not add returned versions to the catalog's grouped model view.";
+
+  api->ModelList_Release(versions);
+  api->GetConfigurationApi()->Configuration_Release(config);
+  api->Manager_Release(mgr);
+}
+
 // Disabled by default: actually downloads a multi-GB model from Azure. Run manually with
 // --gtest_also_run_disabled_tests when you need to exercise the Download code path against the live
 // catalog. Skipped automatically in CI per the C++ test policy (no model downloads in CI).

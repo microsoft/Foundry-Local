@@ -189,7 +189,9 @@ void BaseModelCatalog::PopulateModels(std::vector<Model> variants) const {
   populated_ = true;
 }
 
-void BaseModelCatalog::IntegrateVariantsLocked(std::vector<Model> variants) const {
+void BaseModelCatalog::IntegrateVariants(std::vector<Model> variants) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+
   if (variants.empty()) {
     return;
   }
@@ -406,10 +408,7 @@ Model* BaseModelCatalog::GetModelVariant(const std::string& model_id) const {
     }
 
     if (!fetched.empty()) {
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        IntegrateVariantsLocked(std::move(fetched));
-      }
+      IntegrateVariants(std::move(fetched));
 
       // Look up again from the refreshed index.
       idx = GetIndex();
@@ -481,7 +480,7 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
   }
 
   // Make sure the regular "latest only" catalog is populated first so the
-  // existing alias container exists to merge into.
+  // existing alias set is available for logging/validation.
   EnsurePopulated();
 
   std::vector<Model> fetched;
@@ -499,35 +498,30 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     return {};
   }
 
-  // Capture fetch order before moving so we can return models in the order the
-  // underlying source produced them — important for stable pagination.
-  std::vector<std::string> fetched_ids;
-  fetched_ids.reserve(fetched.size());
-  for (const auto& m : fetched) {
-    fetched_ids.push_back(m.Info().model_id);
-  }
-
-  if (!fetched.empty()) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    IntegrateVariantsLocked(std::move(fetched));
-  }
-
   std::vector<Model*> result;
-
   auto idx = GetIndex();
-  for (const auto& id : fetched_ids) {
-    auto id_it = idx->id_index.find(id);
-    if (id_it == idx->id_index.end()) {
-      continue;
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    version_query_models_.clear();
+    version_query_models_.reserve(fetched.size());
+
+    for (auto& model : fetched) {
+      version_query_models_.push_back(std::make_unique<Model>(std::move(model)));
     }
-    Model* variant = id_it->second;
-    if (!variant_name.empty() && variant->Info().name != variant_name) {
-      continue;
+
+    result.reserve(version_query_models_.size());
+    for (auto& model : version_query_models_) {
+      if (!variant_name.empty() && model->Info().name != variant_name) {
+        continue;
+      }
+
+      result.push_back(model.get());
     }
-    result.push_back(variant);
   }
 
-  if (fetched_ids.empty()) {
+  if (result.empty()) {
     // Source returned nothing — log when the alias was unknown.
     auto alias_it = idx->alias_index.find(model_alias);
     if (alias_it == idx->alias_index.end()) {

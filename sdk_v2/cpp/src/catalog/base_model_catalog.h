@@ -21,7 +21,9 @@ namespace fl {
 /// Model ownership: The catalog owns all Model instances via unique_ptr in models_.
 /// These pointers are stable for the lifetime of the catalog — external code can hold
 /// raw Model* pointers safely. Indices (id_index, alias_index, name_index) are rebuilt
-/// on refresh but always point into the stable models_ storage.
+/// on refresh but always point into the stable models_ storage. GetModelVersions uses
+/// separate transient storage because its results are query-only and not integrated into
+/// the main indices.
 ///
 /// Maps to C# BaseModelCatalog<TModelInfo>.
 class BaseModelCatalog : public ICatalog {
@@ -103,12 +105,11 @@ class BaseModelCatalog : public ICatalog {
   /// Populate or refresh the catalog (under lock). Groups variants, builds indices.
   void PopulateModels(std::vector<Model> variants) const;
 
-  /// Merge new variants into the catalog's stable storage (under lock). For an
+  /// Merge new variants into the catalog's stable storage. For an
   /// existing alias container, appends any variants whose model_id isn't already
   /// present. For new aliases, creates a new container. Rebuilds the lookup
   /// index when the model set actually changed.
-  /// Caller must hold `mutex_`.
-  void IntegrateVariantsLocked(std::vector<Model> variants) const;
+  void IntegrateVariants(std::vector<Model> variants) const;
 
   /// Build lookup indices from the current models_ collection.
   /// Builds a complete new ModelIndex locally, then atomically swaps it into index_.
@@ -116,6 +117,10 @@ class BaseModelCatalog : public ICatalog {
 
   /// Thread-safe access: ensures catalog is populated, refreshes if allowed and stale.
   void EnsurePopulated(bool allow_refresh = false) const;
+
+  /// Transient storage for the most recent GetModelVersions query. Replaced on each call.
+  /// These models are intentionally not integrated into the main lookup indices.
+  mutable std::vector<std::unique_ptr<Model>> version_query_models_;
 
   std::string name_;
   ILogger& logger_;

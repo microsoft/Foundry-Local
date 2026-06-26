@@ -770,7 +770,9 @@ class ICatalog {
   /// `variant_name` optionally narrows the result to a single variant; empty
   /// returns every variant. `max_versions` selects the latest X versions per
   /// variant name (defaults to 50, matching the web service contract); pass 0
-  /// or a negative value for no per-variant cap.
+  /// or a negative value for no per-variant cap. Each call performs a fresh
+  /// query and the returned model handles remain valid until the next
+  /// GetModelVersions call on the same catalog or until the catalog is destroyed.
   virtual ModelList GetModelVersions(const std::string& model_alias,
                                      const std::string& variant_name = {},
                                      int max_versions = 50) = 0;
