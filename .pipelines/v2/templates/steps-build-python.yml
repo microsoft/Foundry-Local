@@ -62,15 +62,8 @@ steps:
           & $pythonCmd --version
           $pythonPath = (& which $pythonCmd).Trim()
           if (-not $pythonPath) { throw "Unable to resolve path for $pythonCmd" }
-
-          $userBase = (& $pythonCmd -c "import site; print(site.USER_BASE)").Trim()
-          $userBin = Join-Path $userBase 'bin'
-          New-Item -ItemType Directory -Force -Path $userBin | Out-Null
-          & ln -sf $pythonPath (Join-Path $userBin 'python')
-
           Write-Host "System python: $pythonPath"
-          Write-Host "##vso[task.prependpath]$userBin"
-          Write-Host "##vso[task.setvariable variable=PIP_USER]1"
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]$pythonPath"
 
 - task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
@@ -180,6 +173,28 @@ steps:
             }
         }
 
+- ${{ if eq(parameters.rid, 'linux-x64') }}:
+  - task: PowerShell@2
+    displayName: 'Create Linux build venv'
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+          $basePython = "$(buildPythonExe)"
+          if (-not $basePython) { throw "buildPythonExe is not set" }
+
+          $venvDir = "$(Pipeline.Workspace)/.venv-python-build"
+          if (Test-Path $venvDir) { Remove-Item -Recurse -Force $venvDir }
+
+          & $basePython -m venv $venvDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $venvPython = Join-Path $venvDir 'bin/python'
+          if (-not (Test-Path $venvPython)) { throw "Venv python not found at $venvPython" }
+
+          & $venvPython --version
+          Write-Host "##vso[task.setvariable variable=buildPythonExe]$venvPython"
+
 - task: PipAuthenticate@1
   displayName: 'Authenticate pip with Azure Artifacts'
   inputs:
@@ -198,8 +213,12 @@ steps:
         }
         if (-not $indexUrl) { throw 'PipAuthenticate did not provide an authenticated pip index URL (PIP_INDEX_URL/PIP_EXTRA_INDEX_URL missing).' }
         Write-Host "Using pip index: $indexUrl"
-        python -m pip install --upgrade pip --index-url $indexUrl
-        python -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
+        $pythonExe = if ('${{ parameters.rid }}' -eq 'linux-x64') { '$(buildPythonExe)' } else { 'python' }
+        if (-not $pythonExe) { throw 'Python executable is not set.' }
+
+        & $pythonExe -m pip install --upgrade pip --index-url $indexUrl
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $pythonExe -m pip install --upgrade build setuptools wheel "cffi>=1.16" --index-url $indexUrl
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 - ${{ if eq(parameters.targetArch, 'arm64') }}:
@@ -368,7 +387,9 @@ steps:
                 cmd /v:on /c $cmdLine
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             } else {
-                python -m build --wheel --outdir $outDir @extraArgs
+                $pythonExe = if ('${{ parameters.rid }}' -eq 'linux-x64') { '$(buildPythonExe)' } else { 'python' }
+                if (-not $pythonExe) { throw 'Python executable is not set.' }
+                & $pythonExe -m build --wheel --outdir $outDir @extraArgs
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
         } finally {
