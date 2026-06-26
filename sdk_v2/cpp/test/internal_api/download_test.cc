@@ -33,9 +33,19 @@
 #include <functional>
 #include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+
+// Current process id for unique temp-dir names. CTest (gtest_discover_tests) launches a
+// separate process per test, so the pid distinguishes concurrent test processes. process.h
+// is used instead of windows.h to avoid its min/max macros (this file uses std::min/max).
+#ifdef _WIN32
+#include <process.h>  // _getpid
+#else
+#include <unistd.h>  // getpid
+#endif
 
 namespace fs = std::filesystem;
 using namespace fl;
@@ -46,14 +56,38 @@ using namespace fl;
 
 namespace {
 
-/// Create a temporary directory for test isolation.
+/// Current process id.
+#ifdef _WIN32
+inline long CurrentPid() { return ::_getpid(); }
+#else
+inline long CurrentPid() { return static_cast<long>(::getpid()); }
+#endif
+
+/// Create a temporary directory for test isolation. The name combines the process id and a
+/// per-process atomic counter, so directories are unique both across the separate processes
+/// CTest launches per test and across multiple TempDirs within one test. create_directory
+/// must succeed — the directory must not already exist — so a residual collision (e.g. a
+/// directory leaked by an earlier process that reused this pid) advances the counter and
+/// retries instead of silently sharing an existing directory.
 class TempDir {
  public:
   TempDir() {
-    path_ = fs::temp_directory_path() / ("fl_test_" + std::to_string(std::hash<std::string>{}(
-                                                          std::to_string(reinterpret_cast<uintptr_t>(this)) +
-                                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()))));
-    fs::create_directories(path_);
+    static std::atomic<uint64_t> counter{0};
+    while (true) {
+      auto candidate = fs::temp_directory_path() /
+                       ("fl_test_" + std::to_string(CurrentPid()) + "_" +
+                        std::to_string(counter.fetch_add(1, std::memory_order_relaxed)));
+      std::error_code ec;
+      if (fs::create_directory(candidate, ec)) {
+        path_ = std::move(candidate);
+        return;
+      }
+      if (ec) {
+        throw std::runtime_error("TempDir: failed to create '" + candidate.string() + "': " +
+                                 ec.message());
+      }
+      // candidate already existed — advance the counter and try the next name.
+    }
   }
   ~TempDir() {
     std::error_code ec;
