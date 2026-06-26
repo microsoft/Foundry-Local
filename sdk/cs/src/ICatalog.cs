@@ -115,6 +115,10 @@ public interface ICatalog
     /// rotate an expired <c>BearerToken</c>). The model list is refreshed
     /// before returning.
     /// </summary>
+    /// <param name="name">
+    /// The catalog name. Idempotent key: re-adding the same name replaces the
+    /// existing registration.
+    /// </param>
     /// <param name="options">
     /// Recognised keys: <c>BearerToken</c>, <c>Audience</c>, <c>TokenEndpoint</c>,
     /// <c>ClientId</c>, <c>ClientSecret</c>, <c>Type</c> (default
@@ -122,6 +126,7 @@ public interface ICatalog
     /// MUST be Unix seconds (not milliseconds); the SDK rejects ms-shaped values.
     /// Prefer the <see cref="PrivateCatalogOptions"/> overload for IntelliSense.
     /// </param>
+    /// <param name="ct">Optional CancellationToken.</param>
     /// <exception cref="ArgumentException">Bad name, or JWT exp/iat in milliseconds.</exception>
     /// <exception cref="CatalogAuthException">MDS rejected the bearer token.</exception>
     Task AddCatalogAsync(string name, Dictionary<string, string>? options = null,
@@ -131,7 +136,7 @@ public interface ICatalog
     Task AddCatalogAsync(string name, PrivateCatalogOptions options,
                          CancellationToken? ct = null);
 
-    /// <summary>Alias for <see cref="AddCatalogAsync"/>; same idempotent behavior.</summary>
+    /// <summary>Alias for <see cref="AddCatalogAsync(string, Dictionary{string, string}?, CancellationToken?)"/>; same idempotent behavior.</summary>
     Task AddOrUpdateCatalogAsync(string name, Dictionary<string, string>? options = null,
                                  CancellationToken? ct = null);
 
