@@ -18,6 +18,20 @@ parameters:
 
 steps:
 
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+      $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+      if (Test-Path $multiCheckout) {
+        $repoRoot = $multiCheckout
+      } else {
+        $repoRoot = "$(Build.SourcesDirectory)"
+      }
+      Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+
 - task: NodeTool@0
   displayName: 'Use Node.js 20'
   inputs:
@@ -26,7 +40,7 @@ steps:
 - ${{ if eq(parameters.rid, 'win-x64') }}:
   - pwsh: |
       $src = "${{ parameters.prebuildArtifactDir }}/prebuilds"
-      $dst = "$(Build.SourcesDirectory)/sdk_v2/js/prebuilds"
+      $dst = "$(repoRoot)/sdk_v2/js/prebuilds"
       if (-not (Test-Path $src)) { throw "Prebuild artifact missing: $src" }
       if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
       New-Item -ItemType Directory -Force -Path $dst | Out-Null
@@ -38,7 +52,7 @@ steps:
   - bash: |
       set -euo pipefail
       src="${{ parameters.prebuildArtifactDir }}/prebuilds"
-      dst="$(Build.SourcesDirectory)/sdk_v2/js/prebuilds"
+      dst="$(repoRoot)/sdk_v2/js/prebuilds"
       if [ ! -d "$src" ]; then echo "Prebuild artifact missing: $src" >&2; exit 1; fi
       rm -rf "$dst"
       mkdir -p "$dst"
@@ -51,17 +65,17 @@ steps:
     displayName: 'npm ci (runs install-native postinstall)'
     inputs:
       command: custom
-      workingDir: '$(Build.SourcesDirectory)/sdk_v2/js'
+      workingDir: '$(repoRoot)/sdk_v2/js'
       customCommand: 'ci --no-audit --no-fund'
 
   - pwsh: |
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(repoRoot)/sdk_v2/js"
       npm run build:ts
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Build TypeScript'
 
   - pwsh: |
-      Set-Location "$(Build.SourcesDirectory)/sdk_v2/js"
+      Set-Location "$(repoRoot)/sdk_v2/js"
       npx --no-install vitest run --reporter=verbose
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     displayName: 'Run vitest'
@@ -71,19 +85,19 @@ steps:
 - ${{ if or(eq(parameters.rid, 'linux-x64'), eq(parameters.rid, 'osx-arm64')) }}:
   - bash: |
       set -euo pipefail
-      cd "$(Build.SourcesDirectory)/sdk_v2/js"
+      cd "$(repoRoot)/sdk_v2/js"
       npm ci --no-audit --no-fund
     displayName: 'npm ci (runs install-native postinstall)'
 
   - bash: |
       set -euo pipefail
-      cd "$(Build.SourcesDirectory)/sdk_v2/js"
+      cd "$(repoRoot)/sdk_v2/js"
       npm run build:ts
     displayName: 'Build TypeScript'
 
   - bash: |
       set -euo pipefail
-      cd "$(Build.SourcesDirectory)/sdk_v2/js"
+      cd "$(repoRoot)/sdk_v2/js"
       npx --no-install vitest run --reporter=verbose
     displayName: 'Run vitest'
     env:

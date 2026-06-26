@@ -23,6 +23,20 @@ parameters:
 
 steps:
 
+- task: PowerShell@2
+  displayName: 'Set source paths'
+  inputs:
+    targetType: inline
+    pwsh: true
+    script: |
+        $multiCheckout = "$(Build.SourcesDirectory)/Foundry-Local"
+        if (Test-Path $multiCheckout) {
+            $repoRoot = $multiCheckout
+        } else {
+            $repoRoot = "$(Build.SourcesDirectory)"
+        }
+        Write-Host "##vso[task.setvariable variable=repoRoot]$repoRoot"
+
 - task: UsePythonVersion@0
   displayName: 'Use Python 3.12'
   inputs:
@@ -80,7 +94,7 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        Push-Location "$(Build.SourcesDirectory)/sdk_v2/python"
+        Push-Location "$(repoRoot)/sdk_v2/python"
         try {
             # Override pythonpath = ["src"] from pyproject.toml so pytest
             # imports the installed wheel (which contains the compiled cffi
