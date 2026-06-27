@@ -401,15 +401,16 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
   {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    version_query_models_.clear();
-    version_query_models_.reserve(fetched.size());
+    auto& bucket = version_query_models_[model_alias];
+    bucket.clear();
+    bucket.reserve(fetched.size());
 
     for (auto& model : fetched) {
-      version_query_models_.push_back(std::make_unique<Model>(std::move(model)));
+      bucket.push_back(std::make_unique<Model>(std::move(model)));
     }
 
-    result.reserve(version_query_models_.size());
-    for (auto& model : version_query_models_) {
+    result.reserve(bucket.size());
+    for (auto& model : bucket) {
       if (!variant_name.empty() && model->Info().name != variant_name) {
         continue;
       }

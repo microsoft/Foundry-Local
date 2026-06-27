@@ -118,9 +118,10 @@ class BaseModelCatalog : public ICatalog {
   /// Thread-safe access: ensures catalog is populated, refreshes if allowed and stale.
   void EnsurePopulated(bool allow_refresh = false) const;
 
-  /// Transient storage for the most recent GetModelVersions query. Replaced on each call.
+  /// Per-alias transient storage for GetModelVersions queries. Each call replaces only the
+  /// entry for the queried alias, so pointers from prior queries on other aliases remain valid.
   /// These models are intentionally not integrated into the main lookup indices.
-  mutable std::vector<std::unique_ptr<Model>> version_query_models_;
+  mutable std::unordered_map<std::string, std::vector<std::unique_ptr<Model>>> version_query_models_;
 
   std::string name_;
   ILogger& logger_;

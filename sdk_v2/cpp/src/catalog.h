@@ -36,7 +36,8 @@ class ICatalog {
   /// catalog refresh applies and performs a fresh source query on each call.
   /// Results are not integrated into the catalog's main lookup indices.
   /// Returned pointers are owned by the catalog until the next
-  /// GetModelVersions call on that catalog or until the catalog is destroyed.
+  /// GetModelVersions call for the same alias or until the catalog is destroyed.
+  /// Queries for different aliases do not invalidate each other's results.
   ///
   /// `model_alias` is the alias of the model (e.g. "phi-4-mini") and must not
   /// be empty.

@@ -963,7 +963,8 @@ struct flCatalogApi {
   ///        negative value) for no per-model-name cap.
   /// Each call performs a fresh catalog query; results are not integrated into the
   /// catalog's main lookup indices. Returned handles are owned by the catalog until
-  /// the next GetModelVersions call on that catalog or until the catalog is released.
+  /// the next GetModelVersions call for the same alias or until the catalog is released.
+  /// Queries for different aliases do not invalidate each other's results.
   /// Releasing the list does not invalidate the underlying model handles.
   FL_API_STATUS(GetModelVersions, _In_ const flCatalog* catalog, _In_ const char* model_alias,
                 _In_opt_ const char* model_name, int32_t max_versions, _Outptr_ flModelList** out_models);

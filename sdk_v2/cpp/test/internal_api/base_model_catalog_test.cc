@@ -342,6 +342,36 @@ TEST_F(BaseModelCatalogTest, GetModelVersionsDoesNotIntegrateFetchedVariants) {
       << "GetModelVersions should not add fetched versions to the catalog's main indices.";
 }
 
+TEST_F(BaseModelCatalogTest, GetModelVersionsCrossAliasPointersRemainValid) {
+  QueryingTestCatalog catalog(logger_);
+  catalog.AddModel(MakeModel("phi-3-mini:1", "phi-3-mini", 1, "phi-3"));
+  catalog.AddModel(MakeModel("llama:1", "llama", 1, "llama"));
+
+  // Seed version results for both aliases.
+  std::vector<Model> phi3_versions;
+  phi3_versions.push_back(MakeModel("phi-3-mini:1", "phi-3-mini", 1, "phi-3"));
+  phi3_versions.push_back(MakeModel("phi-3-mini:2", "phi-3-mini", 2, "phi-3"));
+  catalog.SetVersionFetchResults(std::move(phi3_versions));
+
+  // First query: phi-3
+  auto phi3_result = catalog.GetModelVersions("phi-3", "", 0);
+  ASSERT_EQ(phi3_result.size(), 2u);
+  Model* phi3_ptr = phi3_result[0];
+
+  // Second query: llama — must not invalidate phi3_ptr.
+  std::vector<Model> llama_versions;
+  llama_versions.push_back(MakeModel("llama:1", "llama", 1, "llama"));
+  llama_versions.push_back(MakeModel("llama:2", "llama", 2, "llama"));
+  catalog.SetVersionFetchResults(std::move(llama_versions));
+
+  auto llama_result = catalog.GetModelVersions("llama", "", 0);
+  ASSERT_EQ(llama_result.size(), 2u);
+
+  // phi3_ptr must still be alive and accessible.
+  EXPECT_EQ(phi3_ptr->Info().alias, "phi-3")
+      << "Querying a different alias should not invalidate pointers from a prior GetModelVersions call.";
+}
+
     TEST_F(BaseModelCatalogTest, GetModelVersionsMaxVersionsSelectsLatestRegardlessOfFetchOrder) {
       QueryingTestCatalog catalog(logger_);
 
