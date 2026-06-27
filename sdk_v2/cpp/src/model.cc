@@ -7,14 +7,96 @@
 #include "inferencing/model_load_manager.h"
 #include "items/item.h"
 #include "items/text_item.h"
+#include "util/string_utils.h"
 #include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 
 namespace fl {
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Model priority sort — ports C# AzureFoundryService.CompareModelsForSort.
+// ---------------------------------------------------------------------------
+
+bool ContainsCaseInsensitive(const std::string& text, const std::string& pattern) {
+  auto it = std::search(text.begin(), text.end(),
+                        pattern.begin(), pattern.end(),
+                        [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) ==
+                                                    std::tolower(static_cast<unsigned char>(b)); });
+  return it != text.end();
+}
+
+/// Extract device-type priority from model_id.
+/// Format: <model_name>-<device>:<version>
+/// Returns: 0(NPU) < 1(vendor-GPU) < 2(CUDA-GPU) < 3(generic-GPU)
+///        < 4(vendor-CPU) < 5(generic-CPU) < 6(unknown)
+int GetModelDevicePriority(const std::string& model_id) {
+  if (ContainsCaseInsensitive(model_id, "-npu:")) {
+    return 0;
+  }
+
+  // Check generic-gpu before -gpu: so "-generic-gpu:" isn't caught by the broader "-gpu:" check.
+  if (ContainsCaseInsensitive(model_id, "-generic-gpu:")) {
+    return 3;
+  }
+
+  if (ContainsCaseInsensitive(model_id, "-cuda-gpu:")) {
+    return 2;
+  }
+
+  if (ContainsCaseInsensitive(model_id, "-gpu:")) {
+    return 1;
+  }
+
+  if (ContainsCaseInsensitive(model_id, "-generic-cpu:")) {
+    return 5;
+  }
+
+  if (ContainsCaseInsensitive(model_id, "-cpu:")) {
+    return 4;
+  }
+
+  return 6;
+}
+
+/// Comparator for sorting variants by priority within a container.
+/// Criteria (matching C# CompareModelsForSort):
+///   1. Device-type priority (ascending — lower number = better)
+///   2. Version number (descending — higher version first)
+///   3. CreatedAtUnix timestamp (descending — newer first)
+///   4. model_id (ascending) as final tie-break
+bool CompareModelsForSort(const Model& m1, const Model& m2) {
+  const auto& info1 = m1.Info();
+  const auto& info2 = m2.Info();
+
+  int p1 = GetModelDevicePriority(info1.model_id);
+  int p2 = GetModelDevicePriority(info2.model_id);
+
+  if (p1 != p2) {
+    return p1 < p2;
+  }
+
+  if (info1.version != info2.version) {
+    return info1.version > info2.version;
+  }
+
+  int64_t created1 = info1.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
+  int64_t created2 = info2.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
+
+  if (created1 != created2) {
+    return created1 > created2;
+  }
+
+  return info1.model_id < info2.model_id;
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -80,8 +162,8 @@ Model Model::FromModelInfo(ModelInfo info,
 
 Model Model::MakeContainer(Model first_variant) {
   Model container;
-  container.variants_.push_back(std::move(first_variant));
-  container.selected_variant_ = &container.variants_.back();
+  container.variants_.push_back(std::make_unique<Model>(std::move(first_variant)));
+  container.selected_variant_ = container.variants_.back().get();
   return container;
 }
 
@@ -92,43 +174,34 @@ void Model::AddVariant(Model variant) {
 
   std::lock_guard<std::mutex> lock(state_mutex_);
 
-  // Prefer a cached variant over a non-cached selection (matches C# behavior).
-  bool prefer_new = variant.IsCached() && !selected_variant_->IsCached();
+  auto pos = std::upper_bound(variants_.begin(), variants_.end(), variant,
+                              [](const Model& value, const std::unique_ptr<Model>& element) {
+                                return CompareModelsForSort(value, *element);
+                              });
 
-  // Save selected variant's index before push_back (which may reallocate the vector,
-  // invalidating the old selected_variant_ pointer).
-  size_t selected_idx = static_cast<size_t>(selected_variant_ - variants_.data());
-
-  variants_.push_back(std::move(variant));
-
-  if (prefer_new) {
-    selected_variant_ = &variants_.back();
-  } else {
-    selected_variant_ = &variants_[selected_idx];  // Restore after potential reallocation
-  }
+  variants_.insert(pos, std::make_unique<Model>(std::move(variant)));
 }
 
-void Model::SortVariants(const std::function<bool(const Model&, const Model&)>& comparator) {
+bool Model::CompareBestFirst(const Model& a, const Model& b) {
+  return CompareModelsForSort(a, b);
+}
+
+void Model::SelectDefaultVariant() {
   if (!IsContainer()) {
-    return;
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "SelectDefaultVariant called on a non-container Model; use MakeContainer first");
   }
 
   std::lock_guard<std::mutex> lock(state_mutex_);
 
-  if (variants_.size() < 2) {
-    return;
+  for (auto& v : variants_) {
+    if (v->IsCached()) {
+      selected_variant_ = v.get();
+      return;
+    }
   }
 
-  const std::string selected_id = selected_variant_->Info().model_id;
-  std::stable_sort(variants_.begin(), variants_.end(), comparator);
-
-  auto selected_it = std::find_if(variants_.begin(), variants_.end(),
-                                  [&](const Model& m) { return m.Info().model_id == selected_id; });
-  if (selected_it != variants_.end()) {
-    selected_variant_ = &(*selected_it);
-  } else {
-    selected_variant_ = &variants_.front();
-  }
+  selected_variant_ = variants_.front().get();
 }
 
 // ---------------------------------------------------------------------------
@@ -168,7 +241,7 @@ std::vector<Model*> Model::Variants() const {
     for (auto& v : variants_) {
       // const_cast: the *set* of variants is fixed (this method is const), but each
       // variant is independently mutable. See header.
-      result.push_back(const_cast<Model*>(&v));
+      result.push_back(const_cast<Model*>(v.get()));
     }
   } else {
     result.push_back(const_cast<Model*>(this));
@@ -285,8 +358,8 @@ void Model::SelectVariant(const Model& variant) {
   }
 
   for (auto& v : variants_) {
-    if (&v == &variant) {
-      selected_variant_ = &v;
+    if (v.get() == &variant) {
+      selected_variant_ = v.get();
       return;
     }
   }

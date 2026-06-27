@@ -5,11 +5,9 @@
 #include <foundry_local/foundry_local_c.h>
 
 #include "exception.h"
-#include "util/string_utils.h"
 
 #include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <fmt/format.h>
 #include <map>
 #include <unordered_map>
@@ -17,114 +15,11 @@
 
 namespace fl {
 
-namespace {
-
-// ---------------------------------------------------------------------------
-// Model priority sort — ports C# AzureFoundryService.CompareModelsForSort
-// ---------------------------------------------------------------------------
-
-/// Case-insensitive substring search.
-bool ContainsCaseInsensitive(const std::string& text, const std::string& pattern) {
-  auto it = std::search(text.begin(), text.end(),
-                        pattern.begin(), pattern.end(),
-                        [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) ==
-                                                    std::tolower(static_cast<unsigned char>(b)); });
-  return it != text.end();
-}
-
-/// Extract device-type priority from model_id.
-/// Format: <model_name>-<device>:<version>
-/// Returns: 0(NPU) < 1(vendor-GPU) < 2(CUDA-GPU) < 3(generic-GPU)
-///        < 4(vendor-CPU) < 5(generic-CPU) < 6(unknown)
-int GetModelDevicePriority(const std::string& model_id) {
-  if (ContainsCaseInsensitive(model_id, "-npu:")) {
-    return 0;
-  }
-
-  // Check generic-gpu before -gpu: so "-generic-gpu:" isn't caught by the broader "-gpu:" check.
-  if (ContainsCaseInsensitive(model_id, "-generic-gpu:")) {
-    return 3;
-  }
-
-  if (ContainsCaseInsensitive(model_id, "-cuda-gpu:")) {
-    return 2;
-  }
-
-  if (ContainsCaseInsensitive(model_id, "-gpu:")) {
-    return 1;
-  }
-
-  if (ContainsCaseInsensitive(model_id, "-generic-cpu:")) {
-    return 5;
-  }
-
-  if (ContainsCaseInsensitive(model_id, "-cpu:")) {
-    return 4;
-  }
-
-  return 6;
-}
-
-/// Comparator for sorting variants by priority within the catalog.
-/// Criteria (matching C# CompareModelsForSort):
-///   1. Device-type priority (ascending — lower number = better)
-///   2. Version number (descending — higher version first)
-///   3. CreatedAtUnix timestamp (descending — newer first)
-bool CompareModelsForSort(const Model& m1, const Model& m2) {
-  const auto& info1 = m1.Info();
-  const auto& info2 = m2.Info();
-
-  int p1 = GetModelDevicePriority(info1.model_id);
-  int p2 = GetModelDevicePriority(info2.model_id);
-
-  if (p1 != p2) {
-    return p1 < p2;
-  }
-
-  if (info1.version != info2.version) {
-    return info1.version > info2.version;
-  }
-
-  int64_t created1 = info1.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
-  int64_t created2 = info2.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
-
-  return created1 > created2;
-}
-
-// Deterministic API output order: alias alpha, then name alpha, then version asc.
-bool CompareModelPointersForVersionList(const Model* lhs, const Model* rhs) {
-  const auto& l = lhs->Info();
-  const auto& r = rhs->Info();
-
-  const int alias_cmp = CompareCaseInsensitive(l.alias, r.alias);
-  if (alias_cmp != 0) {
-    return alias_cmp < 0;
-  }
-
-  const int name_cmp = CompareCaseInsensitive(l.name, r.name);
-  if (name_cmp != 0) {
-    return name_cmp < 0;
-  }
-
-  if (l.version != r.version) {
-    return l.version < r.version;
-  }
-
-  return l.model_id < r.model_id;
-}
-
-}  // anonymous namespace
-
 BaseModelCatalog::BaseModelCatalog(std::string name, ILogger& logger)
     : name_(std::move(name)), logger_(logger) {}
 BaseModelCatalog::~BaseModelCatalog() = default;
 
 void BaseModelCatalog::PopulateModels(std::vector<Model> variants) const {
-  // Sort variants by device priority (asc), version (desc), created_at (desc).
-  // This ensures the best variant ends up first in each alias group, matching the C#
-  // AzureFoundryService.SortModels() behavior.
-  std::stable_sort(variants.begin(), variants.end(), CompareModelsForSort);
-
   // Group variants by alias into Model containers.
   // Matches C# Catalog.UpdateModels() pattern:
   //   foreach (modelInfo) { find or create Model by alias, add variant }
@@ -146,6 +41,10 @@ void BaseModelCatalog::PopulateModels(std::vector<Model> variants) const {
     } else {
       alias_to_model.emplace(std::move(alias), Model::MakeContainer(std::move(v)));
     }
+  }
+
+  for (auto& [alias, model] : alias_to_model) {
+    model.SelectDefaultVariant();
   }
 
   // On refresh: merge new models into stable storage. Existing models keep their addresses.
@@ -196,10 +95,6 @@ void BaseModelCatalog::IntegrateVariants(std::vector<Model> variants) const {
     return;
   }
 
-  // Sort the incoming variants so newly-added ones land in priority order
-  // within their alias group (matches the sort applied by PopulateModels).
-  std::stable_sort(variants.begin(), variants.end(), CompareModelsForSort);
-
   // Build a lookup of existing aliases -> containers so we can merge new
   // variants in O(1) per incoming variant.
   std::unordered_map<std::string, Model*> alias_to_existing;
@@ -246,16 +141,15 @@ void BaseModelCatalog::IntegrateVariants(std::vector<Model> variants) const {
         it->second->AddVariant(std::move(v));
         ++added_variants;
       }
-
-      // Keep container variant order consistent with catalog priority after append-based inserts.
-      it->second->SortVariants(CompareModelsForSort);
     } else {
-      // New alias: build a container in priority order (best first).
+      // New alias: build a container and choose default after all variants are added.
       auto first = std::move(alias_variants.front());
       auto container = Model::MakeContainer(std::move(first));
       for (size_t i = 1; i < alias_variants.size(); ++i) {
         container.AddVariant(std::move(alias_variants[i]));
       }
+
+      container.SelectDefaultVariant();
 
       models_.push_back(std::make_unique<Model>(std::move(container)));
       ++added_aliases;
@@ -533,38 +427,14 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     }
   }
 
+  // Sort into best-first order. Within the same variant name, device priority is identical,
+  // so this also groups by name with latest version first — suitable for max_versions capping.
+  std::stable_sort(result.begin(), result.end(), [](const Model* a, const Model* b) {
+    return Model::CompareBestFirst(*a, *b);
+  });
+
   if (max_versions > 0 && !result.empty()) {
-    // Normalize order first so max_versions selection is independent of
-    // source fetch ordering. Group by variant name and place latest versions first.
-    std::stable_sort(result.begin(), result.end(), [](const Model* lhs, const Model* rhs) {
-      const auto& l = lhs->Info();
-      const auto& r = rhs->Info();
-
-      const int name_cmp = CompareCaseInsensitive(l.name, r.name);
-      if (name_cmp != 0) {
-        return name_cmp < 0;
-      }
-
-      if (l.version != r.version) {
-        return l.version > r.version;
-      }
-
-      const int lp = GetModelDevicePriority(l.model_id);
-      const int rp = GetModelDevicePriority(r.model_id);
-      if (lp != rp) {
-        return lp < rp;
-      }
-
-      int64_t l_created = l.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
-      int64_t r_created = r.GetPropertyWithDefault(FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT, int64_t{0});
-      if (l_created != r_created) {
-        return l_created > r_created;
-      }
-
-      return l.model_id < r.model_id;
-    });
-
-    // Enforce latest X per variant name from the normalized ordering.
+    // Enforce latest N per variant name from the best-first ordering.
     std::unordered_map<std::string, int> selected_per_variant;
     std::vector<Model*> limited;
     limited.reserve(result.size());
@@ -582,8 +452,6 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
 
     result = std::move(limited);
   }
-
-  std::stable_sort(result.begin(), result.end(), CompareModelPointersForVersionList);
 
   return result;
 }
