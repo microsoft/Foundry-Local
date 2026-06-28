@@ -395,27 +395,35 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     return {};
   }
 
+  if (fetched.empty()) {
+    return {};
+  }
+
   std::vector<Model*> result;
   auto idx = GetIndex();
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    auto& bucket = version_query_models_[model_alias];
-    bucket.clear();
-    bucket.reserve(fetched.size());
-
-    for (auto& model : fetched) {
-      bucket.push_back(std::make_unique<Model>(std::move(model)));
+    // Build a container Model for this alias, mirroring the structure used by
+    // PopulateModels / IntegrateVariants. AddVariant maintains best-first order.
+    auto container = Model::MakeContainer(std::move(fetched.front()));
+    for (size_t i = 1; i < fetched.size(); ++i) {
+      container.AddVariant(std::move(fetched[i]));
     }
 
-    result.reserve(bucket.size());
-    for (auto& model : bucket) {
-      if (!variant_name.empty() && model->Info().name != variant_name) {
+    container.SelectDefaultVariant();
+    version_query_models_[model_alias] = std::make_unique<Model>(std::move(container));
+
+    // Return variant pointers from the container (like Model_GetVariantsImpl).
+    auto variants = version_query_models_[model_alias]->Variants();
+    result.reserve(variants.size());
+    for (auto* v : variants) {
+      if (!variant_name.empty() && v->Info().name != variant_name) {
         continue;
       }
 
-      result.push_back(model.get());
+      result.push_back(v);
     }
   }
 

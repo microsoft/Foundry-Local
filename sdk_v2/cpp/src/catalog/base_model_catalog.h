@@ -121,7 +121,9 @@ class BaseModelCatalog : public ICatalog {
   /// Per-alias transient storage for GetModelVersions queries. Each call replaces only the
   /// entry for the queried alias, so pointers from prior queries on other aliases remain valid.
   /// These models are intentionally not integrated into the main lookup indices.
-  mutable std::unordered_map<std::string, std::vector<std::unique_ptr<Model>>> version_query_models_;
+  /// Each entry is a container Model (created via MakeContainer) whose variants are the
+  /// individual version results — mirroring the structure used by the main models_ list.
+  mutable std::unordered_map<std::string, std::unique_ptr<Model>> version_query_models_;
 
   std::string name_;
   ILogger& logger_;
