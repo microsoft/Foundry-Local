@@ -225,7 +225,6 @@ stages:
   - stage: cpp_pack_sdk_v2
     displayName: 'C++ Native: Pack SDK tgz (base)'
     dependsOn:
-    - compute_version
     - cpp_build_win_x64
     - cpp_build_win_arm64
     - cpp_build_linux_x64

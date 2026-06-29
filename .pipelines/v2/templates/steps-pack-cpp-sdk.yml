@@ -84,12 +84,14 @@ steps:
 
       New-SdkArchive -Rid 'win-x64' -NativeArtifact 'cpp-native-win-x64' -Files @(
         'foundry_local.dll',
-        'foundry_local.pdb'
+        'foundry_local.pdb',
+        'foundry_local.lib'
       )
 
       New-SdkArchive -Rid 'win-arm64' -NativeArtifact 'cpp-native-win-arm64' -Files @(
         'foundry_local.dll',
-        'foundry_local.pdb'
+        'foundry_local.pdb',
+        'foundry_local.lib'
       )
 
       New-SdkArchive -Rid 'linux-x64' -NativeArtifact 'cpp-native-linux-x64' -Files @(
