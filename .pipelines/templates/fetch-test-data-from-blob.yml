@@ -1,0 +1,42 @@
+# Download test model data from blob storage into a local directory.
+# Uses azcopy with AZCLI auth so the agent identity can read from storage.
+
+parameters:
+- name: destinationPath
+  type: string
+  default: '$(Build.SourcesDirectory)/test-data-shared'
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Fetch test data from blob'
+  inputs:
+    azureSubscription: 'FoundryLocalCore-SP'
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: |
+      $ErrorActionPreference = 'Stop'
+
+      $destination = '${{ parameters.destinationPath }}'
+      $storageAccount = 'foundrylocalmodels'
+      $container = 'models'
+      $prefix = 'foundrylocal/models'
+      $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/*"
+
+      if (Test-Path $destination) {
+        Remove-Item -Recurse -Force $destination
+      }
+      New-Item -ItemType Directory -Path $destination -Force | Out-Null
+
+      azcopy copy $source $destination --recursive
+      if ($LASTEXITCODE -ne 0) {
+        throw "azcopy failed downloading test data from $source"
+      }
+
+      $count = @(Get-ChildItem -Path $destination -Recurse -File).Count
+      if ($count -eq 0) {
+        throw "Downloaded test data is empty at $destination"
+      }
+
+      Write-Host "Downloaded $count files into $destination"
+  env:
+    AZCOPY_AUTO_LOGIN_TYPE: AZCLI

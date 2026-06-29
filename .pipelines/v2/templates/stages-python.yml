@@ -178,9 +178,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - template: ../../templates/fetch-test-data-from-blob.yml@self
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-win-x64'
@@ -204,9 +202,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - template: ../../templates/fetch-test-data-from-blob.yml@self
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-linux-x64'
@@ -232,16 +228,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - bash: |
-              set -euo pipefail
-              if ! command -v git-lfs >/dev/null 2>&1; then
-                  brew install git-lfs
-              fi
-              git lfs install
-          displayName: 'Install git-lfs (macOS)'
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - template: ../../templates/fetch-test-data-from-blob.yml@self
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-base-osx-arm64'
@@ -336,9 +323,7 @@ stages:
         steps:
         - checkout: self
           clean: true
-        - template: ../../templates/checkout-steps.yml@self
-          parameters:
-            repoName: test-data-shared
+        - template: ../../templates/fetch-test-data-from-blob.yml@self
         - template: steps-test-python.yml
           parameters:
             wheelDir: '$(Pipeline.Workspace)/python-sdk-winml-win-x64'

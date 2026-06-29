@@ -129,9 +129,7 @@ stages:
       steps:
       - checkout: self
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - template: ../../templates/fetch-test-data-from-blob.yml@self
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
@@ -159,9 +157,7 @@ stages:
       steps:
       - checkout: self
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - template: ../../templates/fetch-test-data-from-blob.yml@self
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_winml.nativeArtifact }}'
@@ -192,9 +188,7 @@ stages:
       steps:
       - checkout: self
         clean: true
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - template: ../../templates/fetch-test-data-from-blob.yml@self
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
@@ -223,16 +217,7 @@ stages:
       steps:
       - checkout: self
         clean: true
-      - bash: |
-          set -euo pipefail
-          if ! command -v git-lfs >/dev/null 2>&1; then
-            brew install git-lfs
-          fi
-          git lfs install
-        displayName: 'Install git-lfs (macOS)'
-      - template: ../../templates/checkout-steps.yml@self
-        parameters:
-          repoName: test-data-shared
+      - template: ../../templates/fetch-test-data-from-blob.yml@self
       - template: steps-test-cs.yml
         parameters:
           flNugetDir: '$(Pipeline.Workspace)/${{ parameters._config_base.nativeArtifact }}'
