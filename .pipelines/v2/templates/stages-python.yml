@@ -429,7 +429,7 @@ stages:
                 }
               }
 
-              Write-Host "Final wheel set:" 
+              Write-Host "Final wheel set:"
               Get-ChildItem -Path $outDir -Filter '*.whl' | ForEach-Object {
                 Write-Host "  $($_.Name)"
               }
