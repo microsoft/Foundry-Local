@@ -17,20 +17,24 @@ import type { EpDownloadResult, EpInfo } from "./types.js";
 // Node's environment teardown on a natural exit and crashes — a long-standing
 // ORT-on-exit issue, independent of this SDK. It is avoided only by releasing
 // the Manager and then leaving via `process.exit()`, which skips that graceful
-// teardown. So track live managers and do exactly that on the way out: dispose
+// teardown. So track the live manager and do exactly that on the way out: dispose
 // on `beforeExit` then exit explicitly; an `exit` handler covers callers who
 // invoke `process.exit()` themselves (releasing the env before the C runtime
 // tears the ORT libraries down keeps their static destructors benign).
-const liveManagers = new Set<FoundryLocalManager>();
+// The native layer permits only one live Manager at a time, so a single
+// reference is enough.
+let liveManager: FoundryLocalManager | undefined;
 let exitHandlersInstalled = false;
 
-function disposeLiveManagers(): void {
-  for (const manager of [...liveManagers]) {
-    try {
-      manager.dispose();
-    } catch {
-      // Best-effort: a dispose failure must not block process exit.
-    }
+function disposeLiveManager(): void {
+  const manager = liveManager;
+  if (manager === undefined) {
+    return;
+  }
+  try {
+    manager.dispose();
+  } catch {
+    // Best-effort: a dispose failure must not block process exit.
   }
 }
 
@@ -40,11 +44,11 @@ function installExitHandlersOnce(): void {
   }
   exitHandlersInstalled = true;
   process.on("beforeExit", () => {
-    disposeLiveManagers();
+    disposeLiveManager();
     process.exit(process.exitCode ?? 0);
   });
   process.on("exit", () => {
-    disposeLiveManagers();
+    disposeLiveManager();
   });
 }
 
@@ -93,7 +97,7 @@ export class FoundryLocalManager {
       }
     }
     this.#native = new (getAddon().Manager)(config);
-    liveManagers.add(this);
+    liveManager = this;
     installExitHandlersOnce();
   }
 
@@ -216,7 +220,9 @@ export class FoundryLocalManager {
    * (and any method on a `Catalog` or `Model` obtained through this manager) throws a `FoundryLocalError`.
    */
   dispose(): void {
-    liveManagers.delete(this);
+    if (liveManager === this) {
+      liveManager = undefined;
+    }
     this.#native.dispose();
     this.#catalog = undefined;
     this.#urls = [];
