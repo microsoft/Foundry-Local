@@ -153,7 +153,7 @@ steps:
         Copy-Item $winmlDll -Destination $dst -Force
         Write-Host "  staged Microsoft.Windows.AI.MachineLearning.dll"
       } else {
-        Write-Warning "WinML runtime DLL not found in native artifact: $winmlDll"
+        throw "WinML runtime DLL not found in native artifact: $winmlDll"
       }
 
       Get-ChildItem $dst | ForEach-Object { Write-Host "    $($_.Name)  $($_.Length) bytes" }
