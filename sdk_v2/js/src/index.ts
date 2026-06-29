@@ -18,9 +18,13 @@ export type {
   ToolChoice,
 } from "./types.js";
 
+/** @deprecated Use ChatSession instead. OpenAI types remain supported for the web-server path. */
 export { ChatClient, ChatClientSettings } from "./openai/chatClient.js";
+/** @deprecated Use AudioSession instead. OpenAI types remain supported for the web-server path. */
 export { AudioClient, AudioClientSettings } from "./openai/audioClient.js";
+/** @deprecated Use EmbeddingsSession instead. OpenAI types remain supported for the web-server path. */
 export { EmbeddingClient } from "./openai/embeddingClient.js";
+/** @deprecated Use AudioSession streaming instead. OpenAI types remain supported for the web-server path. */
 export {
   LiveAudioTranscriptionOptions,
   LiveAudioTranscriptionSession,
