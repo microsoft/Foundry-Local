@@ -57,6 +57,18 @@ steps:
 
         Copy-Item -Path (Join-Path $includeSrc '*') -Destination $includeDst -Recurse -Force
 
+        # The SDK tgz should include only public wrapper headers.
+        $pathsToPrune = @(
+          (Join-Path $includeDst 'gsl'),
+          (Join-Path $includeDst 'manifest'),
+          (Join-Path $includeDst 'manifest.json')
+        )
+        foreach ($pathToPrune in $pathsToPrune) {
+          if (Test-Path $pathToPrune) {
+            Remove-Item -Path $pathToPrune -Recurse -Force
+          }
+        }
+
         foreach ($f in $Files) {
           $src = Join-Path $nativeSrc $f
           if (-not (Test-Path $src)) {
