@@ -151,7 +151,16 @@ impl FoundryLocalConfig {
 
     /// Provide an application logger.
     ///
-    /// *Stub* — the logger is stored but not yet wired into the native core.
+    /// **Not wired to native logging.** The native core's configuration ABI
+    /// exposes only a log level and a logs directory (see [`log_level`] and
+    /// [`logs_dir`]) — there is no logger-callback hook — so a custom [`Logger`]
+    /// cannot currently receive the core's log records. The logger is stored for
+    /// forward compatibility and any SDK-side use, but setting it has no effect
+    /// on native logging today; use [`log_level`] / [`logs_dir`] to control core
+    /// logging.
+    ///
+    /// [`log_level`]: Self::log_level
+    /// [`logs_dir`]: Self::logs_dir
     pub fn logger(mut self, logger: impl Logger + 'static) -> Self {
         self.logger = Some(Box::new(logger));
         self

@@ -78,11 +78,11 @@ pub fn get_audio_file_path() -> PathBuf {
 /// Build a [`FoundryLocalConfig`] suitable for integration tests.
 ///
 /// * `modelCacheDir`  → `<repo-root>/../test-data-shared`
-/// * `logsDir`        → `<repo-root>/sdk/rust/logs`
+/// * `logsDir`        → `<repo-root>/sdk_v2/rust/logs`
 /// * `logLevel`       → `Warn`
 pub fn test_config() -> FoundryLocalConfig {
     let repo_root = get_git_repo_root();
-    let logs_dir = repo_root.join("sdk").join("rust").join("logs");
+    let logs_dir = repo_root.join("sdk_v2").join("rust").join("logs");
 
     FoundryLocalConfig::new("FoundryLocalTest")
         .model_cache_dir(get_test_data_shared_path().to_string_lossy().into_owned())

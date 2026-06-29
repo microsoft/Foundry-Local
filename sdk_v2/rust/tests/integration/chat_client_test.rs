@@ -54,8 +54,6 @@ async fn should_perform_chat_completion() {
         .unwrap_or("");
     println!("Response: {content}");
 
-    println!("REST response: {content}");
-
     assert!(
         content.contains("42"),
         "Expected response to contain '42', got: {content}"

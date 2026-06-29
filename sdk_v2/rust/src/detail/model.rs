@@ -78,14 +78,13 @@ impl<'a> DownloadBuilder<'a> {
         spawn_blocking(move || native.download(progress, cancel_flag)).await
     }
 }
-#[allow(clippy::large_enum_variant)]
 enum ModelKind {
     /// A single model variant (from `get_model_variant` or `variants()`).
-    Variant(VariantData),
+    Variant(Arc<VariantData>),
     /// A group of variants sharing the same alias (from `get_model`).
     Group {
         alias: String,
-        variants: Vec<VariantData>,
+        variants: Vec<Arc<VariantData>>,
         selected: AtomicUsize,
     },
 }
@@ -139,7 +138,7 @@ impl Model {
     pub(crate) fn from_variant(api: &Arc<Api>, native: NativeModel) -> Result<Self> {
         let info = build_model_info(api, &native)?;
         Ok(Self {
-            inner: ModelKind::Variant(VariantData { native, info }),
+            inner: ModelKind::Variant(Arc::new(VariantData { native, info })),
         })
     }
 
@@ -151,19 +150,19 @@ impl Model {
         let mut variants = Vec::new();
         for variant_native in native.get_variants()? {
             let info = build_model_info(api, &variant_native)?;
-            variants.push(VariantData {
+            variants.push(Arc::new(VariantData {
                 native: variant_native,
                 info,
-            });
+            }));
         }
 
         // A leaf masquerading as a group: fall back to a single-variant model.
         if variants.is_empty() {
             return Ok(Self {
-                inner: ModelKind::Variant(VariantData {
+                inner: ModelKind::Variant(Arc::new(VariantData {
                     native,
                     info: group_info,
-                }),
+                })),
             });
         }
 
@@ -185,10 +184,10 @@ impl Model {
 impl Model {
     fn selected_variant(&self) -> &VariantData {
         match &self.inner {
-            ModelKind::Variant(v) => v,
+            ModelKind::Variant(v) => v.as_ref(),
             ModelKind::Group {
                 variants, selected, ..
-            } => &variants[selected.load(Relaxed)],
+            } => variants[selected.load(Relaxed)].as_ref(),
         }
     }
 
@@ -295,32 +294,33 @@ impl Model {
     }
 
     /// Unload the (selected) variant from memory.
-    pub async fn unload(&self) -> Result<String> {
+    pub async fn unload(&self) -> Result<()> {
         let native = self.selected_native().clone();
-        spawn_blocking(move || native.unload()).await?;
-        Ok(String::new())
+        spawn_blocking(move || native.unload()).await
     }
 
     /// Remove the (selected) variant from the local cache.
-    pub async fn remove_from_cache(&self) -> Result<String> {
+    pub async fn remove_from_cache(&self) -> Result<()> {
         let native = self.selected_native().clone();
-        spawn_blocking(move || native.remove_from_cache()).await?;
-        Ok(String::new())
+        spawn_blocking(move || native.remove_from_cache()).await
     }
 
     /// Create a [`ChatClient`](crate::openai::ChatClient) bound to the (selected) variant.
     pub fn create_chat_client(&self) -> crate::openai::ChatClient {
-        crate::openai::ChatClient::new(self.id(), self.selected_native().clone())
+        let v = self.selected_variant();
+        crate::openai::ChatClient::new(&v.info.id, v.native.clone())
     }
 
     /// Create an [`AudioClient`](crate::openai::AudioClient) bound to the (selected) variant.
     pub fn create_audio_client(&self) -> crate::openai::AudioClient {
-        crate::openai::AudioClient::new(self.id(), self.selected_native().clone())
+        let v = self.selected_variant();
+        crate::openai::AudioClient::new(&v.info.id, v.native.clone())
     }
 
     /// Create an [`EmbeddingClient`](crate::openai::EmbeddingClient) bound to the (selected) variant.
     pub fn create_embedding_client(&self) -> crate::openai::EmbeddingClient {
-        crate::openai::EmbeddingClient::new(self.id(), self.selected_native().clone())
+        let v = self.selected_variant();
+        crate::openai::EmbeddingClient::new(&v.info.id, v.native.clone())
     }
 
     /// Available variants of this model.
@@ -376,7 +376,7 @@ impl Model {
         match &self.inner {
             ModelKind::Variant(v) => Err(FoundryLocalError::ModelOperation {
                 reason: format!(
-                    "select_variant is not supported on a single variant. \
+                    "Selecting a variant is not supported on a single-variant model. \
                      Call Catalog::get_model(\"{}\") to get a model with all variants available.",
                     v.info.alias
                 ),

@@ -37,8 +37,9 @@ impl Catalog {
 
     /// Refresh the catalog from the native core.
     ///
-    /// The native catalog manages its own caching and refresh, so this is a
-    /// no-op retained for API compatibility.
+    /// **No-op.** The native catalog manages its own caching and refresh, so
+    /// there is nothing for the SDK to do here. This method is retained only for
+    /// API compatibility with the legacy SDK and always returns `Ok(())`.
     pub async fn update_models(&self) -> Result<()> {
         Ok(())
     }

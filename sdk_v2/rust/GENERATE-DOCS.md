@@ -7,7 +7,7 @@ The Rust SDK uses `cargo doc` to generate API documentation from `///` doc comme
 To generate and open the API docs in your browser:
 
 ```bash
-cd sdk/rust
+cd sdk_v2/rust
 cargo doc --no-deps --open
 ```
 
@@ -19,11 +19,11 @@ The SDK re-exports all public types from the crate root. Key modules:
 
 | Module / Type | Description |
 |---|---|
-| `FoundryLocalManager` | Singleton entry point — SDK initialisation, web service lifecycle |
+| `FoundryLocalManager` | Entry point — SDK initialisation, web service lifecycle |
 | `FoundryLocalConfig` | Configuration (app name, log level, service endpoint) |
 | `Catalog` | Model discovery and lookup |
 | `Model` | Grouped model (alias → best variant) |
-| `ModelVariant` | Single variant — download, load, unload |
+| `DownloadBuilder` | Builder for model downloads (progress, cancellation) |
 | `ChatClient` | OpenAI-compatible chat completions (sync + streaming) |
 | `AudioClient` | OpenAI-compatible audio transcription (sync + streaming) |
 | `CreateChatCompletionResponse` | Typed chat completion response (from `async-openai`) |

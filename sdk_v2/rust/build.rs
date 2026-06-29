@@ -158,6 +158,12 @@ fn try_download(
         .read_to_end(&mut bytes)
         .map_err(|e| format!("read body {}: {e}", pkg.name))?;
 
+    // Integrity guard: reject an empty/truncated payload before we try to treat
+    // it as a nupkg archive.
+    if bytes.is_empty() {
+        return Err(format!("downloaded {} {} is empty", pkg.name, pkg.version));
+    }
+
     let ext = native_lib_extension();
     let native_prefix = format!("runtimes/{rid}/native/");
     let runtime_prefix = format!("runtimes/{rid}/");
@@ -202,7 +208,19 @@ fn download_and_extract(pkg: &NuGetPackage, rid: &str, out_dir: &Path) -> Result
     let mut last = String::new();
     for feed in FEEDS {
         match try_download(pkg, rid, out_dir, feed) {
-            Ok(_) => return Ok(()),
+            // Integrity guard: a "successful" download must actually yield the
+            // expected native binary (the archive opened as a valid zip and the
+            // expected file landed on disk). Cryptographic SHA-512 verification
+            // against the feed's published packageHash is feed-specific — the
+            // registration layout differs between nuget.org and the Azure DevOps
+            // feed — and is left as future hardening.
+            Ok(_) if out_dir.join(&pkg.expected_file).exists() => return Ok(()),
+            Ok(_) => {
+                last = format!(
+                    "{} {} downloaded but did not contain expected file {}",
+                    pkg.name, pkg.version, pkg.expected_file
+                )
+            }
             Err(e) => last = e,
         }
     }

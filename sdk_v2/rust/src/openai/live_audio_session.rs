@@ -60,15 +60,8 @@ pub struct LiveAudioTranscriptionOptions {
     pub sample_rate: u32,
     /// Number of audio channels. Default: 1 (mono).
     pub channels: u32,
-    /// Number of bits per audio sample. Default: 16.
-    pub bits_per_sample: u32,
     /// Optional BCP-47 language hint (e.g., `"en"`, `"zh"`).
     pub language: Option<String>,
-    /// Maximum number of audio chunks buffered in the internal push queue.
-    /// If the queue is full, [`LiveAudioTranscriptionSession::append`] will
-    /// wait asynchronously.
-    /// Default: 100 (~3 seconds of audio at typical chunk sizes).
-    pub push_queue_capacity: usize,
 }
 
 impl Default for LiveAudioTranscriptionOptions {
@@ -76,9 +69,7 @@ impl Default for LiveAudioTranscriptionOptions {
         Self {
             sample_rate: 16000,
             channels: 1,
-            bits_per_sample: 16,
             language: None,
-            push_queue_capacity: 100,
         }
     }
 }
@@ -376,6 +367,27 @@ impl LiveAudioTranscriptionSession {
             let _ = handle.await;
         }
         Ok(())
+    }
+}
+
+impl Drop for LiveAudioTranscriptionSession {
+    /// Best-effort cleanup if the session is dropped without calling
+    /// [`stop`](Self::stop): mark the input queue finished so the blocking
+    /// background worker drains and returns (releasing the native session),
+    /// rather than leaking the worker thread. We hold `&mut self`, so the inner
+    /// state is reachable synchronously via `get_mut` without locking.
+    fn drop(&mut self) {
+        let state = self.state.get_mut();
+        if state.started && !state.stopped {
+            state.stopped = true;
+            if let Some(queue) = &state.queue {
+                queue.mark_finished();
+            }
+            // Detach the worker: marking the queue finished lets its blocking
+            // ProcessRequest return on its own, so we don't need to (and can't)
+            // await it here.
+            state.worker.take();
+        }
     }
 }
 

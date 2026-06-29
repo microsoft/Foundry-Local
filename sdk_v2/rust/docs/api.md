@@ -1,6 +1,6 @@
 # Foundry Local Rust SDK — Public API Reference
 
-> Auto-generated from `sdk/rust/src` source files.
+> Auto-generated from `sdk_v2/rust/src` source files.
 
 ## Table of Contents
 
@@ -158,8 +158,8 @@ pub struct Model { /* private fields */ }
 | `download` | `async fn download<F>(&self, progress: Option<F>) -> Result<(), FoundryLocalError>` | Download the selected variant. `F: FnMut(f64) + Send + 'static` — receives progress as a percentage (0.0–100.0). |
 | `path` | `async fn path(&self) -> Result<PathBuf, FoundryLocalError>` | Local file-system path of the selected variant. |
 | `load` | `async fn load(&self) -> Result<(), FoundryLocalError>` | Load the selected variant into memory. |
-| `unload` | `async fn unload(&self) -> Result<String, FoundryLocalError>` | Unload the selected variant from memory. |
-| `remove_from_cache` | `async fn remove_from_cache(&self) -> Result<String, FoundryLocalError>` | Remove the selected variant from the local cache. |
+| `unload` | `async fn unload(&self) -> Result<(), FoundryLocalError>` | Unload the selected variant from memory. |
+| `remove_from_cache` | `async fn remove_from_cache(&self) -> Result<(), FoundryLocalError>` | Remove the selected variant from the local cache. |
 | `create_chat_client` | `fn create_chat_client(&self) -> ChatClient` | Create a ChatClient bound to the selected variant. |
 | `create_audio_client` | `fn create_audio_client(&self) -> AudioClient` | Create an AudioClient bound to the selected variant. |
 
