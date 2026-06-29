@@ -3,7 +3,7 @@
 #
 # The caller is responsible for:
 #   * placing the built wheel (.whl) under `wheelDir`
-#   * checking out test-data-shared at `testDataSharedDir`
+#   * populating the model cache directory at `testDataSharedDir`
 
 parameters:
 - name: wheelDir
@@ -11,7 +11,7 @@ parameters:
   displayName: 'Path to directory containing the built foundry_local_sdk wheel'
 - name: testDataSharedDir
   type: string
-  displayName: 'Absolute path to a checked-out test-data-shared working tree'
+  displayName: 'Absolute path to the model cache directory used by tests'
 - name: isWinML
   type: boolean
   default: false

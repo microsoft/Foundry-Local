@@ -20,16 +20,40 @@ steps:
       $storageAccount = 'foundrylocalmodels'
       $container = 'models'
       $prefix = 'foundrylocal/models'
-      $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/*"
-
-      if (Test-Path $destination) {
-        Remove-Item -Recurse -Force $destination
-      }
       New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
-      azcopy copy $source $destination --recursive
-      if ($LASTEXITCODE -ne 0) {
-        throw "azcopy failed downloading test data from $source"
+      function Invoke-AzCopy {
+        param(
+          [string]$Source,
+          [string]$Target
+        )
+
+        $parent = Split-Path -Path $Target -Parent
+        if (-not [string]::IsNullOrEmpty($parent)) {
+          New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        $args = @('copy', $Source, $Target, '--recursive')
+
+        & azcopy @args
+        if ($LASTEXITCODE -ne 0) {
+          throw "azcopy failed downloading test data from $Source"
+        }
+      }
+
+      $modelPaths = @(
+        'qwen2.5-0.5b-instruct-generic-cpu-4',
+        'openai-whisper-tiny-generic-cpu-4',
+        'openai-whisper-tiny-generic-cpu-2',
+        'nemotron-speech-streaming-en-0.6b-generic-cpu-3',
+        'qwen3-embedding-0.6b-generic-cpu-1',
+        'qwen3.5-0.8b-generic-cpu-2'
+      )
+
+      foreach ($relativePath in $modelPaths) {
+        $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$relativePath/*"
+        $target = Join-Path $destination $relativePath
+        Invoke-AzCopy -Source $source -Target $target
       }
 
       $count = @(Get-ChildItem -Path $destination -Recurse -File).Count

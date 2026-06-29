@@ -14,7 +14,7 @@ parameters:
   displayName: 'Path to the downloaded js-prebuild-<rid> artifact directory (root with prebuilds/ inside)'
 - name: testDataSharedDir
   type: string
-  displayName: 'Path to the checked-out test-data-shared repo'
+  displayName: 'Path to the model cache directory used by tests'
 
 steps:
 

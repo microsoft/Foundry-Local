@@ -2,7 +2,7 @@
 # (FoundryLocal.Tests). The caller is responsible for:
 #   - placing the Foundry Local Runtime nupkg in `flNugetDir`
 #   - downloading the `version-info` pipeline artifact
-#   - checking out `test-data-shared` at `testDataSharedDir`
+#   - populating the model cache directory at `testDataSharedDir`
 
 parameters:
 - name: flNugetDir
@@ -13,7 +13,7 @@ parameters:
   default: false
 - name: testDataSharedDir
   type: string
-  displayName: 'Absolute path to a checked-out test-data-shared working tree'
+  displayName: 'Absolute path to the model cache directory used by tests'
 - name: additionalTestArgs
   type: string
   default: ''
