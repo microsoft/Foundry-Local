@@ -43,6 +43,7 @@ namespace fl {
 
 namespace {
 
+std::atomic<ILogger*> s_ort_logger{nullptr};
 std::atomic<ILogger*> s_oga_logger{nullptr};
 
 bool IsTruthyConfigValue(const std::string& value) {
@@ -87,13 +88,13 @@ LogLevel MapOrtLogLevel(OrtLoggingLevel severity) {
   }
 }
 
-void ORT_API_CALL OrtLogCallback(void* logger_param,
+void ORT_API_CALL OrtLogCallback(void* /*logger_param*/,
                                  OrtLoggingLevel severity,
                                  const char* category,
                                  const char* logid,
                                  const char* code_location,
                                  const char* message) {
-  auto* logger = static_cast<ILogger*>(logger_param);
+  auto* logger = s_ort_logger.load(std::memory_order_acquire);
   if (logger == nullptr) {
     return;
   }
@@ -183,6 +184,7 @@ Manager::Manager(const Configuration& config)
   const auto logger_level = genai_verbose_logging ? LogLevel::Verbose : config_.log_level;
 
   logger_ = std::make_unique<SpdlogLogger>(logger_level, config_.logs_dir.value_or(""));
+  s_ort_logger.store(logger_.get(), std::memory_order_release);
 
   if (genai_verbose_logging) {
     SetOgaLogCallback(logger_.get());
@@ -205,7 +207,7 @@ Manager::Manager(const Configuration& config)
 
   {
     OrtStatus* status = ort_api_->CreateEnvWithCustomLogger(
-        OrtLogCallback, logger_.get(), GetDefaultOrtLoggingLevel(genai_verbose_logging), "foundry_local", &ort_env_);
+        OrtLogCallback, nullptr, GetDefaultOrtLoggingLevel(genai_verbose_logging), "foundry_local", &ort_env_);
     if (status != nullptr) {
       const char* msg = ort_api_->GetErrorMessage(status);
       std::string err = std::string("Failed to create OrtEnv: ") + (msg ? msg : "unknown");
@@ -383,6 +385,11 @@ Manager::~Manager() {
   }
 
   logger_->Log(LogLevel::Information, "Manager is being disposed.");
+
+  // ORT may still emit late teardown logs from internal static cleanup after Manager destruction
+  // due to GenAI keeping the OrtEnv alive until the process exits.
+  // Clear s_ort_logger so OrtLogCallback does not dereference a dangling pointer and ignores late logs.
+  s_ort_logger.store(nullptr, std::memory_order_release);
 }
 
 Manager& Manager::Create(const Configuration& config) {

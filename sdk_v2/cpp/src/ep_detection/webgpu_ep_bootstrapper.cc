@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "util/file_lock.h"
 #include "util/sha256.h"
+#include "utils.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
@@ -16,13 +17,9 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 
 namespace {
 
@@ -57,6 +54,7 @@ constexpr const char* kWebGpuProviderLib = "libonnxruntime_providers_webgpu.so";
 #endif
 
 constexpr const char* kRegistrationName = "Foundry.WebGPU";
+constexpr const char* kWebGpuProviderOverrideEnv = "FOUNDRY_LOCAL_WEBGPU_EP_LIBRARY";
 
 /// Parsed manifest entry for a single platform.
 struct ManifestPackageInfo {
@@ -139,6 +137,44 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
   auto parent_dir = ep_dir.parent_path();
 
   try {
+    auto override_path = Utils::GetEnv(kWebGpuProviderOverrideEnv);
+    if (override_path.has_value() && !override_path->empty()) {
+      std::filesystem::path provider_path(*override_path);
+
+      if (!std::filesystem::exists(provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("WebGPU EP: {} set but file does not exist ({})",
+                               kWebGpuProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      if (progress_cb) {
+        progress_cb(name_, 90.0f);
+      }
+
+      // Prepend the override directory to PATH so sibling dependency DLLs are discoverable,
+      // matching the normal install path. The WebGPU EP may delay-load dependencies.
+      PrependDirToProcessPath(provider_path.parent_path());
+
+      if (!register_ep_(kRegistrationName, provider_path)) {
+        logger.Log(LogLevel::Warning,
+                   fmt::format("WebGPU EP: ORT registration failed for override {}={}",
+                               kWebGpuProviderOverrideEnv, provider_path.string()));
+        return false;
+      }
+
+      registered_ = true;
+
+      if (progress_cb) {
+        progress_cb(name_, 100.0f);
+      }
+
+      logger.Log(LogLevel::Information,
+                 fmt::format("WebGPU EP: ready (override_env={} install_path={})",
+                             kWebGpuProviderOverrideEnv, provider_path.string()));
+      return true;
+    }
+
     // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
     auto manifest = FetchManifest(logger);
 
@@ -232,18 +268,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 #ifdef _WIN32
     // Prepend the EP directory to PATH for the process lifetime.
     // WebGPU EP may delay-load additional dependencies from the same directory.
-    {
-      DWORD len = GetEnvironmentVariableW(L"PATH", nullptr, 0);
-      std::wstring prev_path;
-      if (len > 0) {
-        prev_path.resize(len);
-        GetEnvironmentVariableW(L"PATH", prev_path.data(), len);
-        prev_path.resize(len - 1);  // remove trailing null
-      }
-
-      std::wstring new_path = ep_dir.wstring() + L";" + prev_path;
-      SetEnvironmentVariableW(L"PATH", new_path.c_str());
-    }
+    PrependDirToProcessPath(ep_dir);
 #endif
 
     auto provider_path = ep_dir / kWebGpuProviderLib;
