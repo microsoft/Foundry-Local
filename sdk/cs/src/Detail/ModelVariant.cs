@@ -146,28 +146,32 @@ internal class ModelVariant : IModel
         var result = await _coreInterop.ExecuteCommandAsync("get_model_path", request, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException(
-                $"Error getting path for model {Id}: {result.Error}. Has it been downloaded?");
+            throw Utils.FromNativeError("get_model_path", result.Error, ct, _logger,
+                                        context: $"Error getting path for model {Id} (has it been downloaded?)");
         }
 
         var path = result.Data!;
         return path;
     }
 
+    // Re-fire the user's progress callback every 5s when the native layer
+    // goes quiet, so spinners/UIs don't look hung during slow blob reads.
+    private static readonly TimeSpan DownloadHeartbeatInterval = TimeSpan.FromSeconds(5);
+
     private async Task DownloadImplAsync(Action<float>? downloadProgress = null,
                                          CancellationToken? ct = null)
     {
-        var request = new CoreInteropRequest
-        {
-            Params = new() { { "Model", Id } }
-        };
-
+        var request = new CoreInteropRequest { Params = new() { { "Model", Id } } };
         ICoreInterop.Response? response;
         var useCallbackPath = downloadProgress != null || (ct?.CanBeCanceled ?? false);
 
         if (useCallbackPath)
         {
-            var callback = new ICoreInterop.CallbackFn(progressString =>
+            float lastProgress = 0f;
+            var lastUtc = DateTime.UtcNow;
+            var sync = new object();
+
+            var callback = new ICoreInterop.CallbackFn(s =>
             {
                 if (ct is CancellationToken cancellationToken)
                 {
@@ -179,17 +183,52 @@ internal class ModelVariant : IModel
                     return;
                 }
 
-                if (float.TryParse(progressString,
+                if (float.TryParse(s,
                                    NumberStyles.Float,
                                    CultureInfo.InvariantCulture,
-                                   out var progress))
+                                   out var p))
                 {
-                    downloadProgress(progress);
+                    lock (sync) { lastProgress = p; lastUtc = DateTime.UtcNow; }
+                    downloadProgress(p);
                 }
             });
 
-            response = await _coreInterop.ExecuteCommandWithCallbackAsync("download_model", request,
-                                                                          callback, ct).ConfigureAwait(false);
+            // Heartbeat only matters when there's a user callback to re-fire; the
+            // callback path may also be taken purely to observe cancellation.
+            using var hbCts = new CancellationTokenSource();
+            Task? hb = downloadProgress is null ? null : Task.Run(async () =>
+            {
+                try
+                {
+                    while (!hbCts.IsCancellationRequested)
+                    {
+                        await Task.Delay(DownloadHeartbeatInterval, hbCts.Token).ConfigureAwait(false);
+                        float p; TimeSpan idle;
+                        lock (sync) { p = lastProgress; idle = DateTime.UtcNow - lastUtc; }
+                        if (idle >= DownloadHeartbeatInterval)
+                        {
+                            _logger.LogDebug("Download heartbeat {ModelId}: {Pct:F1}% (idle {Idle:F0}s)",
+                                             Id, p, idle.TotalSeconds);
+                            try { downloadProgress(p); } catch { /* don't let a buggy callback abort the download */ }
+                        }
+                    }
+                }
+                catch (OperationCanceledException) { }
+            }, hbCts.Token);
+
+            try
+            {
+                response = await _coreInterop.ExecuteCommandWithCallbackAsync("download_model", request,
+                                                                              callback, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                hbCts.Cancel();
+                if (hb != null)
+                {
+                    try { await hb.ConfigureAwait(false); } catch { }
+                }
+            }
         }
         else
         {
@@ -198,7 +237,8 @@ internal class ModelVariant : IModel
 
         if (response.Error != null)
         {
-            throw new FoundryLocalException($"Error downloading model {Id}: {response.Error}");
+            throw Utils.FromNativeError("download_model", response.Error, ct, _logger,
+                                        context: $"Error downloading model {Id}");
         }
     }
 
@@ -209,7 +249,8 @@ internal class ModelVariant : IModel
         var result = await _coreInterop.ExecuteCommandAsync("remove_cached_model", request, ct).ConfigureAwait(false);
         if (result.Error != null)
         {
-            throw new FoundryLocalException($"Error removing model {Id} from cache: {result.Error}");
+            throw Utils.FromNativeError("remove_cached_model", result.Error, ct, _logger,
+                                        context: $"Error removing model {Id} from cache");
         }
     }
 
