@@ -42,56 +42,20 @@ steps:
         }
       }
 
-      function Get-FirstBlobMatch {
-        param(
-          [string]$BlobPrefix
-        )
-
-        $match = az storage blob list `
-          --account-name $storageAccount `
-          --container-name $container `
-          --auth-mode login `
-          --prefix $BlobPrefix `
-          --num-results 1 `
-          --query "[0].name" `
-          -o tsv
-
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to probe blob prefix: $BlobPrefix"
-        }
-
-        return $match
-      }
-
       $modelPaths = @(
         'qwen2.5-0.5b-instruct',
-        'openai-whisper-tiny',
         'openai-whisper-tiny',
         'nemotron-speech-streaming-en-0.6b',
         'qwen3-embedding-0.6b',
         'qwen3.5-0.8b'
       )
 
-      $missingPaths = @()
-
       foreach ($relativePath in $modelPaths) {
-        $blobPrefix = "$prefix/$relativePath/"
-        $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$blobPrefix*"
+        $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$relativePath/*"
         Write-Host "Requested blob URL: $requestedUrl"
-
-        $match = Get-FirstBlobMatch -BlobPrefix $blobPrefix
-        if ([string]::IsNullOrWhiteSpace($match)) {
-          Write-Warning "No blobs found for $requestedUrl"
-          $missingPaths += $relativePath
-          continue
-        }
 
         $target = Join-Path $destination $relativePath
         Invoke-AzCopy -Source $requestedUrl -Target $target
-      }
-
-      if ($missingPaths.Count -gt 0) {
-        Write-Warning "Missing model paths in blob storage: $($missingPaths -join ', ')"
       }
 
       $count = @(Get-ChildItem -Path $destination -Recurse -File).Count
@@ -101,5 +65,10 @@ steps:
       }
 
       Write-Host "Downloaded $count files into $destination"
+      Write-Host "Cache directory contents for $destination:"
+      (Get-ChildItem -Path $destination -Recurse -Force |
+        Select-Object FullName, Length |
+        Format-Table -AutoSize |
+        Out-String).TrimEnd() | Write-Host
   env:
     AZCOPY_AUTO_LOGIN_TYPE: AZCLI
