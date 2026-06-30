@@ -22,8 +22,9 @@ namespace fl {
 /// These pointers are stable for the lifetime of the catalog — external code can hold
 /// raw Model* pointers safely. Indices (id_index, alias_index, name_index) are rebuilt
 /// on refresh but always point into the stable models_ storage. GetModelVersions uses
-/// separate transient storage because its results are query-only and not integrated into
-/// the main indices.
+/// separate append-only storage (version_query_models_) — its results are query-only
+/// and not integrated into the main indices, but all returned pointers remain valid
+/// for the catalog's lifetime.
 ///
 /// Maps to C# BaseModelCatalog<TModelInfo>.
 class BaseModelCatalog : public ICatalog {
@@ -53,8 +54,8 @@ class BaseModelCatalog : public ICatalog {
 
   /// Derived classes implement this to fetch all versions of a model from the
   /// underlying catalog source, bypassing the "latest only" filter.
-  /// Returns the variants (in any order; the base class sorts/indexes them)
-  /// for the given alias.
+  /// Returns the variants for the given alias. AddVariant inserts them in
+  /// priority order automatically, matching the model list output ordering.
   /// Default implementation returns `{}` (no remote source — local-only catalogs).
   /// Maps to C# `BaseModelCatalog.GetModelVersionsAsync` -> derived overrides.
   virtual std::vector<Model> FetchModelVersions(
@@ -118,12 +119,13 @@ class BaseModelCatalog : public ICatalog {
   /// Thread-safe access: ensures catalog is populated, refreshes if allowed and stale.
   void EnsurePopulated(bool allow_refresh = false) const;
 
-  /// Per-alias transient storage for GetModelVersions queries. Each call replaces only the
-  /// entry for the queried alias, so pointers from prior queries on other aliases remain valid.
+  /// Per-alias append-only storage for GetModelVersions queries. Each call appends a new
+  /// container to the vector for that alias, so all previously returned Model* pointers
+  /// remain valid for the lifetime of the catalog.
   /// These models are intentionally not integrated into the main lookup indices.
   /// Each entry is a container Model (created via MakeContainer) whose variants are the
   /// individual version results — mirroring the structure used by the main models_ list.
-  mutable std::unordered_map<std::string, std::unique_ptr<Model>> version_query_models_;
+  mutable std::unordered_map<std::string, std::vector<std::unique_ptr<Model>>> version_query_models_;
 
   std::string name_;
   ILogger& logger_;

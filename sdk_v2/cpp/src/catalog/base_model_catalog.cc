@@ -413,10 +413,10 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     }
 
     container.SelectDefaultVariant();
-    version_query_models_[model_alias] = std::make_unique<Model>(std::move(container));
+    version_query_models_[model_alias].push_back(std::make_unique<Model>(std::move(container)));
 
     // Return variant pointers from the container (like Model_GetVariantsImpl).
-    auto variants = version_query_models_[model_alias]->Variants();
+    auto variants = version_query_models_[model_alias].back()->Variants();
     result.reserve(variants.size());
     for (auto* v : variants) {
       if (!variant_name.empty() && v->Info().name != variant_name) {
@@ -435,12 +435,6 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
                   fmt::format("GetModelVersions: alias '{}' not found in catalog.", model_alias));
     }
   }
-
-  // Sort into best-first order. Within the same variant name, device priority is identical,
-  // so this also groups by name with latest version first — suitable for max_versions capping.
-  std::stable_sort(result.begin(), result.end(), [](const Model* a, const Model* b) {
-    return Model::CompareBestFirst(*a, *b);
-  });
 
   if (max_versions > 0 && !result.empty()) {
     // Enforce latest N per variant name from the best-first ordering.
