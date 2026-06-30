@@ -10,7 +10,7 @@ steps:
 - task: AzureCLI@2
   displayName: 'Fetch test data from blob'
   inputs:
-    azureSubscription: 'ortcibuild_readonly_mi2-ONNX Runtime'
+    azureSubscription: 'ortcibuild_readonly_mi2-ONNX Runtime-AIFoundryLocal'
     scriptType: pscore
     scriptLocation: inlineScript
     inlineScript: |
