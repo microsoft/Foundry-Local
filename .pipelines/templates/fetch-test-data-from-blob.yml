@@ -20,6 +20,23 @@ steps:
       $storageAccount = 'foundrylocalmodels'
       $container = 'models'
       $prefix = 'foundrylocal/models'
+
+      Write-Host '=== Fetch test data from blob: diagnostics start ==='
+      Write-Host "PowerShell version: $($PSVersionTable.PSVersion)"
+      Write-Host "OS: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription)"
+      Write-Host "Destination path: $destination"
+      Write-Host "Storage account: $storageAccount"
+      Write-Host "Container: $container"
+      Write-Host "Prefix: $prefix"
+
+      Write-Host 'Azure CLI version:'
+      az version
+      Write-Host 'AzCopy version:'
+      azcopy --version
+
+      $accountContext = az account show --query "{name:name,id:id,tenantId:tenantId,userType:user.type}" -o json
+      Write-Host "Active Azure account context: $accountContext"
+
       New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
       function Invoke-AzCopy {
@@ -42,6 +59,48 @@ steps:
         }
       }
 
+      function Get-FirstBlobMatch {
+        param(
+          [string]$BlobPrefix
+        )
+
+        $match = az storage blob list `
+          --account-name $storageAccount `
+          --container-name $container `
+          --auth-mode login `
+          --prefix $BlobPrefix `
+          --num-results 1 `
+          --query "[0].name" `
+          -o tsv
+
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to probe blob prefix: $BlobPrefix"
+        }
+
+        return $match
+      }
+
+      function Get-BlobSamples {
+        param(
+          [string]$BlobPrefix
+        )
+
+        $samples = az storage blob list `
+          --account-name $storageAccount `
+          --container-name $container `
+          --auth-mode login `
+          --prefix $BlobPrefix `
+          --num-results 5 `
+          --query "[].name" `
+          -o tsv
+
+        if ($LASTEXITCODE -ne 0) {
+          throw "Failed to list blob samples for prefix: $BlobPrefix"
+        }
+
+        return @($samples)
+      }
+
       $modelPaths = @(
         'qwen2.5-0.5b-instruct-generic-cpu-4',
         'openai-whisper-tiny-generic-cpu-4',
@@ -51,16 +110,79 @@ steps:
         'qwen3.5-0.8b-generic-cpu-2'
       )
 
+      $missingPaths = @()
+      $downloadedPaths = @()
+
       foreach ($relativePath in $modelPaths) {
+        Write-Host "---- Evaluating model path: $relativePath"
+        $blobPrefix = "$prefix/$relativePath/"
+        Write-Host "Probing prefix: $blobPrefix"
+
+        $match = Get-FirstBlobMatch -BlobPrefix $blobPrefix
+        if ([string]::IsNullOrWhiteSpace($match)) {
+          Write-Warning "No blobs found for prefix '$blobPrefix'"
+
+          $sampleRoot = "$prefix/$relativePath"
+          $samples = Get-BlobSamples -BlobPrefix $sampleRoot
+          if ($samples.Count -gt 0) {
+            Write-Warning "Sample blobs under '$sampleRoot':"
+            foreach ($sample in $samples) {
+              Write-Warning "  $sample"
+            }
+          }
+
+          $missingPaths += $relativePath
+          continue
+        }
+
+        Write-Host "First matching blob: $match"
+
         $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/*"
+        Write-Host "AzCopy source: $source"
+        Write-Host "AzCopy include-path: $relativePath"
+        Write-Host "AzCopy target: $destination"
+
         Invoke-AzCopy -Source $source -Target $destination -IncludePath $relativePath
+
+        $localPath = Join-Path $destination $relativePath
+        $localCount = if (Test-Path -Path $localPath) {
+          @(Get-ChildItem -Path $localPath -Recurse -File).Count
+        } else {
+          0
+        }
+        Write-Host "Local file count for $relativePath: $localCount"
+
+        if ($localCount -gt 0) {
+          $downloadedPaths += $relativePath
+        }
+      }
+
+      if ($missingPaths.Count -gt 0) {
+        Write-Warning "Missing model paths in blob storage: $($missingPaths -join ', ')"
+      }
+
+      if ($downloadedPaths.Count -gt 0) {
+        Write-Host "Downloaded model paths: $($downloadedPaths -join ', ')"
+      } else {
+        Write-Warning 'No model paths were downloaded successfully.'
       }
 
       $count = @(Get-ChildItem -Path $destination -Recurse -File).Count
+      Write-Host "Total downloaded file count under destination: $count"
+
+      Write-Host 'Top-level destination entries:'
+      $topLevel = Get-ChildItem -Path $destination -Force
+      if ($topLevel.Count -gt 0) {
+        ($topLevel | Select-Object Mode, Name, Length | Format-Table -AutoSize | Out-String).TrimEnd() | Write-Host
+      } else {
+        Write-Host '  <empty>'
+      }
+
       if ($count -eq 0) {
         throw "Downloaded test data is empty at $destination"
       }
 
       Write-Host "Downloaded $count files into $destination"
+      Write-Host '=== Fetch test data from blob: diagnostics end ==='
   env:
     AZCOPY_AUTO_LOGIN_TYPE: AZCLI
