@@ -102,11 +102,15 @@ if(WIN32)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/util/stacktrace_windows.cc
         src/platform/windows/path.cc
+        src/platform/windows/file_io.cc
+        src/platform/windows/cross_process_file_lock.cc
     )
 else()
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/util/stacktrace_posix.cc
         src/platform/posix/path.cc
+        src/platform/posix/file_io.cc
+        src/platform/posix/cross_process_file_lock.cc
     )
 endif()
 
