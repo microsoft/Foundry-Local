@@ -413,10 +413,10 @@ std::vector<Model*> BaseModelCatalog::GetModelVersions(const std::string& model_
     }
 
     container.SelectDefaultVariant();
-    version_query_models_[model_alias].push_back(std::make_unique<Model>(std::move(container)));
+    version_query_models_.push_back(std::make_unique<Model>(std::move(container)));
 
     // Return variant pointers from the container (like Model_GetVariantsImpl).
-    auto variants = version_query_models_[model_alias].back()->Variants();
+    auto variants = version_query_models_.back()->Variants();
     result.reserve(variants.size());
     for (auto* v : variants) {
       if (!variant_name.empty() && v->Info().name != variant_name) {

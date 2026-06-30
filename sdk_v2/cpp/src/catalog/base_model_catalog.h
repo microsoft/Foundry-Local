@@ -119,13 +119,12 @@ class BaseModelCatalog : public ICatalog {
   /// Thread-safe access: ensures catalog is populated, refreshes if allowed and stale.
   void EnsurePopulated(bool allow_refresh = false) const;
 
-  /// Per-alias append-only storage for GetModelVersions queries. Each call appends a new
-  /// container to the vector for that alias, so all previously returned Model* pointers
-  /// remain valid for the lifetime of the catalog.
-  /// These models are intentionally not integrated into the main lookup indices.
+  /// Append-only storage for GetModelVersions query results. Each call appends a new
+  /// container, so all previously returned Model* pointers remain valid for the catalog's
+  /// lifetime. These models are intentionally not integrated into the main lookup indices.
   /// Each entry is a container Model (created via MakeContainer) whose variants are the
   /// individual version results — mirroring the structure used by the main models_ list.
-  mutable std::unordered_map<std::string, std::vector<std::unique_ptr<Model>>> version_query_models_;
+  mutable std::vector<std::unique_ptr<Model>> version_query_models_;
 
   std::string name_;
   ILogger& logger_;
