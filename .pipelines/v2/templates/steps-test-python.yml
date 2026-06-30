@@ -11,10 +11,7 @@ parameters:
   displayName: 'Path to directory containing the built foundry_local_sdk wheel'
 - name: testDataSharedDir
   type: string
-  displayName: 'Absolute path to the model cache directory used by tests'
-- name: isWinML
-  type: boolean
-  default: false
+  displayName: 'Absolute path to a checked-out test-data-shared working tree'
 - name: pythonArchitecture
   type: string
   default: 'x64'
@@ -56,8 +53,8 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-        # Locate the wheel. Both variants land in their own per-job artifact
-        # so a single match is expected.
+        # Locate the wheel. Each job's wheel lands in its own artifact, so a
+        # single match is expected.
         $wheels = @(Get-ChildItem "${{ parameters.wheelDir }}" -Recurse -Filter '*.whl')
         if ($wheels.Count -eq 0) { throw "No .whl found under ${{ parameters.wheelDir }}" }
         if ($wheels.Count -gt 1) {
