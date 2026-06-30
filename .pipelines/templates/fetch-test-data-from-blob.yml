@@ -150,7 +150,7 @@ steps:
         } else {
           0
         }
-        Write-Host "Local file count for $relativePath: $localCount"
+        Write-Host "Local file count for ${relativePath}: $localCount"
 
         if ($localCount -gt 0) {
           $downloadedPaths += $relativePath
