@@ -276,12 +276,10 @@ stages:
           $ErrorActionPreference = 'Stop'
 
           $sources = @(
-            '$(Pipeline.Workspace)/python-sdk-base-win-x64',
-            '$(Pipeline.Workspace)/python-sdk-base-win-arm64',
-            '$(Pipeline.Workspace)/python-sdk-base-linux-x64',
-            '$(Pipeline.Workspace)/python-sdk-base-osx-arm64',
-            '$(Pipeline.Workspace)/python-sdk-winml-win-x64',
-            '$(Pipeline.Workspace)/python-sdk-winml-win-arm64'
+            '$(Pipeline.Workspace)/python-sdk-win-x64',
+            '$(Pipeline.Workspace)/python-sdk-win-arm64',
+            '$(Pipeline.Workspace)/python-sdk-linux-x64',
+            '$(Pipeline.Workspace)/python-sdk-osx-arm64'
           )
 
           $outDir = '$(Build.ArtifactStagingDirectory)/python-sdk-v2'
