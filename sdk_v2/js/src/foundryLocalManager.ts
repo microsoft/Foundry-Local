@@ -13,6 +13,45 @@ import {
 } from "./detail/native.js";
 import type { EpDownloadResult, EpInfo } from "./types.js";
 
+// Once a native Manager exists, ONNX Runtime's process-wide teardown races with
+// Node's environment teardown on a natural exit and crashes — a long-standing
+// ORT-on-exit issue, independent of this SDK. It is avoided only by releasing
+// the Manager and then leaving via `process.exit()`, which skips that graceful
+// teardown. So track the live manager and do exactly that on the way out: dispose
+// on `beforeExit` then exit explicitly; an `exit` handler covers callers who
+// invoke `process.exit()` themselves (releasing the env before the C runtime
+// tears the ORT libraries down keeps their static destructors benign).
+// The native layer permits only one live Manager at a time, so a single
+// reference is enough.
+let liveManager: FoundryLocalManager | undefined;
+let exitHandlersInstalled = false;
+
+function disposeLiveManager(): void {
+  const manager = liveManager;
+  if (manager === undefined) {
+    return;
+  }
+  try {
+    manager.dispose();
+  } catch {
+    // Best-effort: a dispose failure must not block process exit.
+  }
+}
+
+function installExitHandlersOnce(): void {
+  if (exitHandlersInstalled) {
+    return;
+  }
+  exitHandlersInstalled = true;
+  process.on("beforeExit", () => {
+    disposeLiveManager();
+    process.exit(process.exitCode ?? 0);
+  });
+  process.on("exit", () => {
+    disposeLiveManager();
+  });
+}
+
 export class FoundryLocalManager {
   readonly #native: NativeManager;
   #catalog: Catalog | undefined;
@@ -58,6 +97,8 @@ export class FoundryLocalManager {
       }
     }
     this.#native = new (getAddon().Manager)(config);
+    liveManager = this;
+    installExitHandlersOnce();
   }
 
   /**
@@ -179,6 +220,9 @@ export class FoundryLocalManager {
    * (and any method on a `Catalog` or `Model` obtained through this manager) throws a `FoundryLocalError`.
    */
   dispose(): void {
+    if (liveManager === this) {
+      liveManager = undefined;
+    }
     this.#native.dispose();
     this.#catalog = undefined;
     this.#urls = [];
