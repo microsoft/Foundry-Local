@@ -65,7 +65,7 @@ steps:
       }
 
       Write-Host "Downloaded $count files into $destination"
-      Write-Host "Cache directory contents for $destination:"
+      Write-Host "Cache directory contents for $destination"
       (Get-ChildItem -Path $destination -Recurse -Force |
         Select-Object FullName, Length |
         Format-Table -AutoSize |
