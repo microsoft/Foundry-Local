@@ -21,6 +21,22 @@ steps:
       $container = 'models'
       $prefix = 'foundrylocal/models'
 
+      if (-not (Get-Command azcopy -ErrorAction SilentlyContinue)) {
+        if ($IsMacOS) {
+          Write-Host 'azcopy not found on macOS agent. Installing via Homebrew...'
+          if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+            throw 'Homebrew is required to install azcopy on macOS agents, but brew was not found.'
+          }
+
+          brew update --quiet
+          brew install --quiet azcopy
+        } else {
+          throw 'azcopy is not installed on this agent.'
+        }
+      }
+
+      azcopy --version
+
       New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
       function Invoke-AzCopy {
@@ -42,19 +58,19 @@ steps:
         }
       }
 
-      $modelPaths = @(
-        'qwen2.5-0.5b-instruct',
-        'openai-whisper-tiny',
-        'nemotron-speech-streaming-en-0.6b',
-        'qwen3-embedding-0.6b',
-        'qwen3.5-0.8b'
+      $modelMappings = @(
+        @{ SourcePath = 'qwen2.5-0.5b-instruct'; TargetAlias = 'qwen2.5-0.5b-instruct-generic-cpu-4' },
+        @{ SourcePath = 'openai-whisper-tiny'; TargetAlias = 'openai-whisper-tiny-generic-cpu-4' },
+        @{ SourcePath = 'nemotron-speech-streaming-en-0.6b'; TargetAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu-3' },
+        @{ SourcePath = 'qwen3-embedding-0.6b'; TargetAlias = 'qwen3-embedding-0.6b-generic-cpu-1' },
+        @{ SourcePath = 'qwen3.5-0.8b'; TargetAlias = 'qwen3.5-0.8b-generic-cpu-2' }
       )
 
-      foreach ($relativePath in $modelPaths) {
-        $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$relativePath/*"
+      foreach ($model in $modelMappings) {
+        $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$($model.SourcePath)/onnx/cpu_and_mobile/*"
         Write-Host "Requested blob URL: $requestedUrl"
 
-        $target = Join-Path $destination $relativePath
+        $target = Join-Path $destination $model.TargetAlias
         Invoke-AzCopy -Source $requestedUrl -Target $target
       }
 
