@@ -58,12 +58,29 @@ steps:
         }
       }
 
+      # The active SDK tests resolve versioned model aliases in cache.
+      # Keep one target alias per source model to avoid duplicate copies.
       $modelMappings = @(
-        @{ SourcePath = 'qwen2.5-0.5b-instruct'; TargetAlias = 'qwen2.5-0.5b-instruct-generic-cpu-4' },
-        @{ SourcePath = 'openai-whisper-tiny'; TargetAlias = 'openai-whisper-tiny-generic-cpu-4' },
-        @{ SourcePath = 'nemotron-speech-streaming-en-0.6b'; TargetAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu-3' },
-        @{ SourcePath = 'qwen3-embedding-0.6b'; TargetAlias = 'qwen3-embedding-0.6b-generic-cpu-1' },
-        @{ SourcePath = 'qwen3.5-0.8b'; TargetAlias = 'qwen3.5-0.8b-generic-cpu-2' }
+        @{
+          SourcePath = 'qwen2.5-0.5b-instruct'
+          TargetAlias = 'qwen2.5-0.5b-instruct-generic-cpu-4'
+        },
+        @{
+          SourcePath = 'openai-whisper-tiny'
+          TargetAlias = 'openai-whisper-tiny-generic-cpu-4'
+        },
+        @{
+          SourcePath = 'nemotron-speech-streaming-en-0.6b'
+          TargetAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu-3'
+        },
+        @{
+          SourcePath = 'qwen3-embedding-0.6b'
+          TargetAlias = 'qwen3-embedding-0.6b-generic-cpu-1'
+        },
+        @{
+          SourcePath = 'qwen3.5-0.8b'
+          TargetAlias = 'qwen3.5-0.8b-generic-cpu-2'
+        }
       )
 
       foreach ($model in $modelMappings) {

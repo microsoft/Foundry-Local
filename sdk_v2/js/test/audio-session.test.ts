@@ -257,7 +257,7 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real whisper-tiny model)", (
 
   beforeAll(async () => {
     fixture = await setupRealModelManager({
-      namePreference: "whisper-tiny",
+      namePreference: "openai-whisper-tiny-generic-cpu-4",
       task: "automatic-speech-recognition",
     });
   }, 5 * 60_000);
@@ -394,7 +394,7 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real nemotron streaming mode
 
   beforeAll(async () => {
     fixture = await setupRealModelManager({
-      namePreference: "nemotron-speech-streaming-en-0.6b-generic-cpu",
+      namePreference: "nemotron-speech-streaming-en-0.6b-generic-cpu-3",
       task: "automatic-speech-recognition",
     });
   }, 5 * 60_000);

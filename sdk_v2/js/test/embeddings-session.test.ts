@@ -59,7 +59,7 @@ describe.skipIf(!haveTestModelCache)("EmbeddingsSession (real model)", () => {
   beforeAll(async () => {
     fixture = await setupRealModelManager({
       task: "embeddings",
-      namePreference: "qwen3-embedding-0.6b-generic-cpu",
+      namePreference: "qwen3-embedding-0.6b-generic-cpu-1",
     });
   }, 5 * 60_000);
 
