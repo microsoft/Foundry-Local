@@ -52,8 +52,8 @@ const std::unordered_map<std::string_view, WebGpuPackageMetadata> kPackageMetada
     },
 };
 
-// Platform-specific package metadata is baked into the binary to avoid
-// manifest fetch complexity and to keep verification inputs fixed at build time.
+// Platform-specific package metadata is baked into the binary to keep
+// verification inputs fixed at build time.
 #if defined(_WIN32) && defined(_M_ARM64)
 constexpr const char* kPlatformKey = "win-arm64";
 #elif defined(_WIN32)
