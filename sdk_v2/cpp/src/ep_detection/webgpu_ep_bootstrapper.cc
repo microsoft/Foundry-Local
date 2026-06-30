@@ -3,23 +3,21 @@
 #include "ep_detection/webgpu_ep_bootstrapper.h"
 
 #include "ep_detection/ep_utils.h"
-#include "http/http_client.h"
 #include "http/http_download.h"
 #include "logger.h"
 #include "util/file_lock.h"
-#include "util/sha256.h"
 #include "utils.h"
 #include "util/zip_extract.h"
 
 #include <fmt/format.h>
-#include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 
 namespace {
 
@@ -29,11 +27,32 @@ constexpr const char* kStagingDirName = "webgpu-ep-staging";
 constexpr const char* kUserAgent = "FoundryLocal";
 constexpr int kMaxInstallAttempts = 5;
 
-// Manifest URL — always uses prod.
-constexpr const char* kManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_prod.json";
+struct WebGpuPackageMetadata {
+  const char* download_url;
+  const char* provider_sha256;
+};
 
-// Platform key used to look up this platform's package in the manifest.
+const std::unordered_map<std::string_view, WebGpuPackageMetadata> kPackageMetadataByPlatform = {
+    {"win-arm64",
+     {"https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_0.1.0_win-arm64.zip",
+      "C4A77911BDBFC6E2870D1895DA3F5BE476CE3398D772C02AFDDD2B2C49C66659"}
+    },
+    {"win-x64",
+     {"https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_0.1.0_win-x64.zip",
+      "591E286A211B133E3C4E5C833FEBF2D594B7B548433A2490407B11B906A9271B"}
+    },
+    {"macos-arm64",
+     {"https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_0.1.0_macos-arm64.zip",
+      "A08BCEBE097B555E23938FCC71A5FAAD461F586CAB0B63DC9D21E970F6CA4C87"}
+    },
+    {"linux-x64",
+     {"https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_0.1.0_linux-x64.zip",
+      "CBDFF74E6569E3CF66B46F0D194D87CD3CF49E83B7AA46552C39B0218D58B215"}
+    },
+};
+
+// Platform-specific package metadata is baked into the binary to avoid
+// manifest fetch complexity and to keep verification inputs fixed at build time.
 #if defined(_WIN32) && defined(_M_ARM64)
 constexpr const char* kPlatformKey = "win-arm64";
 #elif defined(_WIN32)
@@ -43,6 +62,17 @@ constexpr const char* kPlatformKey = "macos-arm64";
 #else
 constexpr const char* kPlatformKey = "linux-x64";
 #endif
+
+const WebGpuPackageMetadata& GetPackageMetadata() {
+  auto it = kPackageMetadataByPlatform.find(kPlatformKey);
+
+  if (it == kPackageMetadataByPlatform.end()) {
+    throw std::runtime_error(
+        fmt::format("WebGPU EP: no package metadata configured for platform '{}'", kPlatformKey));
+  }
+
+  return it->second;
+}
 
 // Platform-specific EP library filename.
 #if defined(_WIN32)
@@ -55,51 +85,6 @@ constexpr const char* kWebGpuProviderLib = "libonnxruntime_providers_webgpu.so";
 
 constexpr const char* kRegistrationName = "Foundry.WebGPU";
 constexpr const char* kWebGpuProviderOverrideEnv = "FOUNDRY_LOCAL_WEBGPU_EP_LIBRARY";
-
-/// Parsed manifest entry for a single platform.
-struct ManifestPackageInfo {
-  std::string url;
-  std::string sha256;  // expected SHA256 hash of kWebGpuProviderLib
-};
-
-/// Fetch the manifest JSON from CDN and extract the package info for this platform.
-ManifestPackageInfo FetchManifest(fl::ILogger& logger) {
-  logger.Log(fl::LogLevel::Debug, fmt::format("WebGPU EP: fetching manifest from {}", kManifestUrl));
-
-  fl::http::HttpRequestOptions options;
-  options.user_agent = kUserAgent;
-  auto body = fl::http::HttpGetWithRetry(kManifestUrl, logger, options);
-  auto manifest = nlohmann::json::parse(body);
-
-  if (!manifest.contains("packages") || !manifest["packages"].is_object()) {
-    throw std::runtime_error(
-        fmt::format("WebGPU EP: manifest is invalid — missing 'packages' field. "
-                    "Raw content (first 200 chars): {}",
-                    body.substr(0, 200)));
-  }
-
-  const auto& packages = manifest["packages"];
-  if (!packages.contains(kPlatformKey)) {
-    std::string available;
-    for (auto it = packages.begin(); it != packages.end(); ++it) {
-      if (!available.empty()) available += ", ";
-      available += it.key();
-    }
-    throw std::runtime_error(
-        fmt::format("WebGPU EP: manifest does not contain a package for platform '{}'. "
-                    "Available platforms: {}",
-                    kPlatformKey, available));
-  }
-
-  const auto& pkg = packages[kPlatformKey];
-  ManifestPackageInfo info;
-  info.url = pkg.at("url").get<std::string>();
-  info.sha256 = pkg.at("sha256").at(kWebGpuProviderLib).get<std::string>();
-
-  logger.Log(fl::LogLevel::Information,
-             fmt::format("WebGPU EP: manifest fetched for platform '{}'", kPlatformKey));
-  return info;
-}
 
 }  // anonymous namespace
 
@@ -135,6 +120,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 
   auto ep_dir = std::filesystem::path(ep_dir_);
   auto parent_dir = ep_dir.parent_path();
+  const auto& package_metadata = GetPackageMetadata();
 
   try {
     auto override_path = Utils::GetEnv(kWebGpuProviderOverrideEnv);
@@ -175,12 +161,13 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       return true;
     }
 
-    // Fetch manifest before acquiring lock (avoid holding lock during network I/O)
-    auto manifest = FetchManifest(logger);
-
     // Check if package already exists and is valid
-    if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
-      logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match manifest, skipping download");
+    if (!force && VerifyEpPackage(
+                      ep_dir,
+                      {{kWebGpuProviderLib, package_metadata.provider_sha256}},
+                      "WebGPU EP",
+                      logger)) {
+      logger.Log(LogLevel::Debug, "WebGPU EP: local binaries match expected hashes, skipping download");
     } else {
       // Ensure parent directory exists for the lock file
       std::filesystem::create_directories(parent_dir);
@@ -190,7 +177,11 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
       FileLock lock(lock_path);
 
       // Re-check after acquiring lock (another process may have completed the update)
-      if (!force && VerifyEpPackage(ep_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+      if (!force && VerifyEpPackage(
+                        ep_dir,
+                        {{kWebGpuProviderLib, package_metadata.provider_sha256}},
+                        "WebGPU EP",
+                        logger)) {
         logger.Log(LogLevel::Debug, "WebGPU EP: another process already completed the update");
       } else {
         // Download and extract to staging directory for atomic swap
@@ -206,7 +197,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         logger.Log(LogLevel::Information,
                    fmt::format("WebGPU EP: downloading for {} from CDN", kPlatformKey));
         logger.Log(LogLevel::Debug,
-                   fmt::format("WebGPU EP: download URL is {}", manifest.url));
+                   fmt::format("WebGPU EP: download URL is {}", package_metadata.download_url));
 
         std::atomic<bool> cancel_flag{false};
         auto download_progress = [&](float pct) {
@@ -218,7 +209,7 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
           }
         };
 
-        if (!HttpDownloadFile(manifest.url, zip_path, kUserAgent,
+        if (!HttpDownloadFile(package_metadata.download_url, zip_path, kUserAgent,
                               &cancel_flag, download_progress, logger)) {
           logger.Log(LogLevel::Warning, "WebGPU EP: download failed (see prior log for details)");
           return false;
@@ -238,7 +229,11 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
         std::filesystem::remove(zip_path);
 
         // Verify staging
-        if (!VerifyEpPackage(staging_dir, {{kWebGpuProviderLib, manifest.sha256}}, "WebGPU EP", logger)) {
+        if (!VerifyEpPackage(
+          staging_dir,
+          {{kWebGpuProviderLib, package_metadata.provider_sha256}},
+          "WebGPU EP",
+          logger)) {
           logger.Log(LogLevel::Warning,
                      fmt::format("WebGPU EP: verification failed after extraction (attempt {})",
                                  attempts_));
