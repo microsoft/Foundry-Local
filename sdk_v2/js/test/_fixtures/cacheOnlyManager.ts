@@ -87,6 +87,13 @@ export interface CacheOnlyManagerFixture {
 export interface SetupOptions {
   /** Override the appName. Defaults to a fixed test id. */
   readonly appName?: string;
+  /**
+   * Override the external service endpoint. Defaults to a dead loopback port so
+   * the catalog resolves from the local cache without contacting a real backend.
+   * Pass a live stub URL (see `loadedModelsStub.ts`) to exercise the external
+   * load-state routing (`getLoadedModels` / `isLoaded`).
+   */
+  readonly serviceEndpoint?: string;
 }
 
 /**
@@ -100,7 +107,7 @@ export function setupCacheOnlyManager(opts: SetupOptions = {}): CacheOnlyManager
   const config: FoundryLocalConfig = {
     appName: opts.appName ?? "foundry-local-js-sdk-v2-tests",
     modelCacheDir: tmpDir,
-    serviceEndpoint: "http://127.0.0.1:12345",
+    serviceEndpoint: opts.serviceEndpoint ?? "http://127.0.0.1:12345",
   };
   const manager = FoundryLocalManager.create(config);
   return { manager, tmpDir };

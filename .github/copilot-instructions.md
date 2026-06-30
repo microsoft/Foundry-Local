@@ -34,6 +34,8 @@ This is a multi-language SDK monorepo. The primary SDKs live under:
 - Test binaries are in `sdk_v2/cpp/build/Windows/RelWithDebInfo/bin/RelWithDebInfo/`
 - `sdk_integration_tests.exe` — integration tests (loads models via SharedTestEnv, slow startup)
 - `foundry_local_tests.exe` — unit tests (no model loading, fast)
+- `cache_only_tests.exe` — cache-only / external-service-URL public-API tests (`test/sdk_api/`, separate binary because `Manager` is a singleton)
+- `external_mode_tests.exe` — client/server split tests; re-execs itself with `--serve` to host the web service (`test/sdk_api/`, separate binary for the same singleton reason)
 
 ## C++ Code Style
 

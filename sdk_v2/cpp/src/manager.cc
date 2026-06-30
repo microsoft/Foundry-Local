@@ -21,6 +21,7 @@
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/session/session_manager.h"
+#include "model_command_router.h"
 #include "spdlog_logger.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/telemetry_logger.h"
@@ -322,6 +323,10 @@ Manager::Manager(const Configuration& config)
       *logger_,
       disable_region_fallback);
   model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
+  // The router owns the local-vs-external decision for load/unload/list. Constructed before the
+  // catalog (which holds it by reference) and after the load manager it delegates to locally.
+  model_command_router_ = std::make_unique<ModelCommandRouter>(
+      config_.external_service_url, *model_load_manager_, config_.app_name, *logger_);
   session_manager_ = std::make_unique<SessionManager>(*logger_);
   telemetry_ = std::make_unique<TelemetryLogger>(config_.app_name, *logger_);
   catalog_ = std::make_unique<AzureModelCatalog>(
@@ -330,6 +335,7 @@ Manager::Manager(const Configuration& config)
       [this](ModelInfo info, std::string local_path) {
         return CreateModel(std::move(info), std::move(local_path));
       },
+      *model_command_router_,
       *ep_detector_, *logger_,
       config_.external_service_url.has_value(),
       config_.catalog_region.value_or("auto"),
@@ -356,6 +362,8 @@ Manager::~Manager() {
   web_service_.reset();
 #endif
   session_manager_.reset();
+  // Router references model_load_manager_, so it must be torn down first.
+  model_command_router_.reset();
   model_load_manager_.reset();
   download_manager_.reset();
   catalog_.reset();
@@ -456,7 +464,7 @@ void Manager::StartWebService() {
 #ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE
   web_service_ = std::make_unique<WebService>(*catalog_, *logger_, *config_.model_cache_dir, *model_load_manager_,
                                               *session_manager_, *telemetry_,
-                                              [this]() { Shutdown(); });
+                                              [this]() { RequestShutdown(); });
 
   auto endpoints = config_.web_service_endpoints;
   if (endpoints.empty()) {
@@ -502,12 +510,14 @@ void Manager::StopWebService() {
 }
 
 void Manager::Shutdown() {
+  shutdown_requested_.store(true);
+
   bool expected = false;
-  if (!shutdown_requested_.compare_exchange_strong(expected, true)) {
-    return;  // already shutting down
+  if (!teardown_started_.compare_exchange_strong(expected, true)) {
+    return;  // teardown already ran
   }
 
-  logger_->Log(LogLevel::Information, "Shutdown requested");
+  logger_->Log(LogLevel::Information, "Shutting down");
 
   if (web_service_running_) {
     StopWebService();
@@ -525,6 +535,13 @@ void Manager::Shutdown() {
   model_load_manager_->UnloadAll();
 }
 
+void Manager::RequestShutdown() {
+  // Only raise the flag. The host watching IsShutdownRequested() performs the actual teardown from
+  // its own thread — doing it here would self-deadlock when we're on a web service worker thread,
+  // because StopWebService() joins every worker thread (including this one).
+  shutdown_requested_.store(true);
+}
+
 bool Manager::IsShutdownRequested() const {
   return shutdown_requested_.load();
 }
@@ -537,7 +554,7 @@ Model Manager::CreateModel(ModelInfo info, std::string local_path) {
   return Model::FromModelInfo(std::move(info),
                               std::move(local_path),
                               *download_manager_,
-                              *model_load_manager_);
+                              *model_command_router_);
 }
 
 DownloadManager& Manager::GetDownloadManager() {

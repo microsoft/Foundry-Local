@@ -83,7 +83,7 @@ class SessionManagerTest : public ::testing::Test {
   static inline GenAIModelInstance* model_ = nullptr;
   static inline fl::test::FakeServiceBindings svc_;
   static inline Model catalog_model_ = Model::FromModelInfo(
-      ModelInfo{}, "", svc_.download_manager, svc_.model_load_manager);
+      ModelInfo{}, "", svc_.download_manager, svc_.router);
   fl::test::NullTelemetry null_telemetry_;
 };
 

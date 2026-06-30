@@ -29,6 +29,7 @@ class DownloadManager;
 class ITelemetry;
 class Model;
 class ModelLoadManager;
+class ModelCommandRouter;
 class SessionManager;
 struct ModelInfo;
 
@@ -86,12 +87,12 @@ class Manager {
   /// Stop the embedded web service.
   void StopWebService();
 
-  /// Begin graceful shutdown. Sets the shutdown flag and signals subsystems to drain.
-  /// Idempotent and non-blocking — safe to call from any thread including web service handlers.
-  /// Destroy() calls this internally, so direct SDK users don't need to call it explicitly.
+  /// Tear down all subsystems: stop the web service, cancel and drain sessions, and unload models.
+  /// Idempotent — the teardown body runs only once. Destroy()/~Manager() call this internally, so
+  /// direct SDK users don't need to call it explicitly.
   void Shutdown();
 
-  /// Check if Shutdown() has been called (from any source — web endpoint, signal, user code).
+  /// Check if shutdown has been requested (from any source — web endpoint, signal, user code).
   bool IsShutdownRequested() const;
 
   /// Get the logger instance.
@@ -126,8 +127,12 @@ class Manager {
   //   catalog_                 — owns all Model instances. used by download_manager, model_load_manager, and web service
   //   download_manager_        — uses ModelInfo owned by catalog
   //   model_load_manager_      — holds loaded model state referencing catalog models
+  //   model_command_router_    — routes load/unload/list to model_load_manager_ (local) or a
+  //                              remote service; destroyed before model_load_manager_, which it
+  //                              references
   //   session_manager_         — tracks all active sessions. destroyed after web service, before models
   //   shutdown_requested_      — atomic flag checked by subsystems and the host process
+  //   teardown_started_        — guards Shutdown()'s teardown body so it runs exactly once
   //   web service members      — use catalog, model_load_manager, session_manager, telemetry, logger
   //
   Configuration config_;
@@ -140,8 +145,10 @@ class Manager {
   std::unique_ptr<ICatalog> catalog_;
   std::unique_ptr<DownloadManager> download_manager_;
   std::unique_ptr<ModelLoadManager> model_load_manager_;
+  std::unique_ptr<ModelCommandRouter> model_command_router_;
   std::unique_ptr<SessionManager> session_manager_;
   std::atomic<bool> shutdown_requested_{false};
+  std::atomic<bool> teardown_started_{false};
   std::atomic<bool> web_service_running_{false};
   std::vector<std::string> bound_urls_;
 
@@ -151,6 +158,11 @@ class Manager {
 
  private:
   Model CreateModel(ModelInfo info, std::string local_path);
+
+  /// Raise the shutdown-requested flag without tearing anything down. The web service's /shutdown
+  /// endpoint calls this so a host blocked serving requests can observe IsShutdownRequested() and
+  /// wind down on its own thread (where calling Shutdown() is safe). Safe to call from any thread.
+  void RequestShutdown();
 
   static std::mutex s_mutex_;
   static std::unique_ptr<Manager> s_instance_;

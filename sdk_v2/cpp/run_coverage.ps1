@@ -37,7 +37,16 @@ if (-not (Test-Path $opencpp)) {
 $buildDir  = Join-Path $PSScriptRoot "build\Windows\$Config"
 $binDir    = Join-Path $buildDir "bin\$Config"
 $unitExe   = Join-Path $binDir "foundry_local_tests.exe"
-$integExe  = Join-Path $binDir "sdk_integration_tests.exe"
+
+# Integration coverage comes from every binary built from test/sdk_api/ sources. They all link the
+# public foundry_local_cpp surface and drive real models / a real web service. Manager being a
+# singleton forces the public-API suite to be split across several binaries (default, cache-only,
+# external-mode client/server) rather than one — so iterate over all of them.
+$integExes = @(
+    (Join-Path $binDir "sdk_integration_tests.exe")
+    (Join-Path $binDir "cache_only_tests.exe")
+    (Join-Path $binDir "external_mode_tests.exe")
+)
 $srcDir    = Join-Path $PSScriptRoot "src"
 $covDir    = Join-Path $buildDir "coverage"
 
@@ -84,13 +93,23 @@ try {
     $mergeArgs = @("--input_coverage", $unitCov)
 
     if (-not $SkipIntegration) {
-        if (-not (Test-Path $integExe)) {
-            Write-Warning "Integration test binary not found: $integExe - skipping integration coverage."
-        } else {
-            Write-Host "`n=== Collecting integration test coverage ===" -ForegroundColor Cyan
+        foreach ($integExe in $integExes) {
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($integExe)
 
-            $integCov  = Join-Path $covDir "integration.cov"
-            $integArgs = $commonArgs + @("--export_type", "binary:$integCov", "--")
+            if (-not (Test-Path $integExe)) {
+                Write-Warning "Integration test binary not found: $integExe - skipping."
+                continue
+            }
+
+            Write-Host "`n=== Collecting integration test coverage: $name ===" -ForegroundColor Cyan
+
+            $integCov  = Join-Path $covDir "$name.cov"
+
+            # --cover_children: external_mode_tests re-execs itself with `--serve` to host the web
+            # service in a child process — the src/ code under test (web_service, manager shutdown)
+            # runs there, not in the parent. Without this its coverage would be lost. Harmless for
+            # the binaries that don't spawn children.
+            $integArgs = $commonArgs + @("--cover_children", "--export_type", "binary:$integCov", "--")
             $integArgs += $integExe
 
             # Include DISABLED_ tests (e.g. download tests) for maximum coverage.
@@ -103,9 +122,9 @@ try {
             & $opencpp @integArgs
             if (Test-Path $integCov) {
                 $mergeArgs += @("--input_coverage", $integCov)
-                Write-Host "Integration coverage saved to $integCov" -ForegroundColor Green
+                Write-Host "$name coverage saved to $integCov" -ForegroundColor Green
             } else {
-                Write-Warning "Integration coverage file was not created - continuing with unit only."
+                Write-Warning "$name coverage file was not created - continuing without it."
             }
         }
     }

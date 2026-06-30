@@ -16,7 +16,7 @@ namespace fl {
 
 class DownloadManager;
 struct Item;
-class ModelLoadManager;
+class ModelCommandRouter;
 
 // -----------------------------------------------------------------------
 // Model — a single model entry or a multi-variant container.
@@ -43,13 +43,13 @@ class Model {
 
   /// Create a leaf Model from a ModelInfo (used when populating the catalog).
   /// If local_path is non-empty the model is marked as cached at that location.
-  /// The managers are non-owning bindings used by Download/Load/Unload. In production
+  /// The bindings are non-owning and used by Download/Load/Unload. In production
   /// Manager owns both via unique_ptr. Tests can use `fl::test::FakeServiceBindings`
   /// (test_helpers.h) for a one-line construction with cheap fakes.
   static Model FromModelInfo(ModelInfo info,
                              std::string local_path,
                              DownloadManager& download_manager,
-                             ModelLoadManager& model_load_manager);
+                             ModelCommandRouter& router);
 
   // --- Container construction ---
 
@@ -139,9 +139,9 @@ class Model {
  private:
   // Leaf data (default/empty for containers).
   // cached_ is atomic — flipped concurrently by the download path.
-  // Loaded state is NOT stored here; it is queried from ModelLoadManager so the load
-  // manager remains the single source of truth (Manager::Shutdown clears its map without
-  // having to walk every Model and reset a local flag).
+  // Loaded state is NOT stored here; it is queried through the router (ModelLoadManager in
+  // local mode) so the load manager remains the single source of truth (Manager::Shutdown
+  // clears its map without having to walk every Model and reset a local flag).
   // local_path_ is set once during Download() (or at construction for already-cached models)
   // and cleared by RemoveFromCache(). It is intentionally NOT mutex-protected: concurrent
   // mutation alongside reads on the same Model* is not a supported pattern.
@@ -152,7 +152,7 @@ class Model {
   // Non-owning service bindings for leaf operations. Set once at construction and never
   // reassigned; guaranteed non-null because FromModelInfo takes them by reference.
   DownloadManager* download_manager_ = nullptr;
-  ModelLoadManager* model_load_manager_ = nullptr;
+  ModelCommandRouter* router_ = nullptr;
 
   // Container data (empty/null for leaves).
   std::vector<Model> variants_;

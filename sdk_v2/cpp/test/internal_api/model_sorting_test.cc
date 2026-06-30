@@ -29,7 +29,7 @@ using namespace fl;
 
 class SortTestCatalog : public BaseModelCatalog {
  public:
-  explicit SortTestCatalog(ILogger& logger) : BaseModelCatalog("sort-test-catalog", logger) {}
+  explicit SortTestCatalog(ILogger& logger) : BaseModelCatalog("sort-test-catalog", fl::test::NullRouter(), logger) {}
 
   void AddModel(Model model) {
     models_.push_back(std::move(model));
@@ -62,7 +62,7 @@ static Model MakeModel(const std::string& base_name,
 
   static fl::test::FakeServiceBindings svc;
   return Model::FromModelInfo(std::move(info), "",
-                              svc.download_manager, svc.model_load_manager);
+                              svc.download_manager, svc.router);
 }
 
 // ========================================================================

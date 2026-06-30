@@ -12,6 +12,7 @@ import {
   setupCacheOnlyManager,
   teardownCacheOnlyManager,
 } from "./_fixtures/cacheOnlyManager.js";
+import { type LoadedModelsStub, startLoadedModelsStub } from "./_fixtures/loadedModelsStub.js";
 
 const describeIfBuilt = haveNativePrereqs ? describe : describe.skip;
 
@@ -22,15 +23,21 @@ if (!haveNativePrereqs) {
 
 describeIfBuilt("Catalog (cache-only)", () => {
   let fixture: CacheOnlyManagerFixture;
+  let stub: LoadedModelsStub;
   let catalog: Catalog;
 
-  beforeAll(() => {
-    fixture = setupCacheOnlyManager({ appName: "foundry-local-js-sdk-v2-catalog-tests" });
+  beforeAll(async () => {
+    stub = await startLoadedModelsStub();
+    fixture = setupCacheOnlyManager({
+      appName: "foundry-local-js-sdk-v2-catalog-tests",
+      serviceEndpoint: stub.url,
+    });
     catalog = fixture.manager.catalog;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     teardownCacheOnlyManager(fixture);
+    await stub.close();
   });
 
   it("name returns a non-empty string", () => {
@@ -94,7 +101,9 @@ describeIfBuilt("Catalog (cache-only)", () => {
     }
   });
 
-  it("getLoadedModels returns an empty array (nothing loaded)", async () => {
+  it("getLoadedModels routes to the external service and returns an empty array when nothing is loaded", async () => {
+    // The fixture points at a live stub service that reports no loaded models, so this exercises
+    // the external load-state routing end-to-end and resolves to an empty list.
     const loaded = await catalog.getLoadedModels();
     expect(loaded).toEqual([]);
   });

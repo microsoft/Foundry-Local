@@ -67,6 +67,10 @@ class ModelLoadManager {
   /// The returned pointer is valid until UnloadModel is called for this model_id.
   GenAIModelInstance* GetLoadedModel(std::string_view model_id);
 
+  /// Get the ids of all currently-loaded models (the keys of the loaded map).
+  /// Snapshot taken under the lock; the result is a copy, safe to use after the lock is released.
+  std::vector<std::string> GetLoadedModelIds() const;
+
   /// Reject all future LoadModel calls. Called by Manager::Shutdown().
   /// Idempotent and thread-safe.
   void RejectNewLoads();

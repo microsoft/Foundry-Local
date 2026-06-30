@@ -9,12 +9,33 @@
 #include "service/handler_utils.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
+#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>  // for FOUNDRY_LOCAL_MODEL_PROP_* constants
 
 #include <fmt/format.h>
 
 namespace fl {
+
+namespace {
+
+// Resolve a /models/{model} path segment to a model. The path segment is a model id or an alias —
+// not a model "name" (a model's name is the id minus its ":version" suffix, i.e. id == name:version).
+// The SDK's public Model API issues load / unload using the model_id (e.g.
+// "phi-4-mini-instruct-generic-cpu:2"), while the CLI and legacy callers may pass an alias (e.g.
+// "phi-4-mini-instruct"). Accept both: try the id index first, then the alias index. model_ids and
+// aliases occupy disjoint namespaces, so there is no ambiguity. This keeps every /models/* operation
+// id-addressable (matching GET /models/loaded, which reports model_ids) while preserving alias
+// backward-compatibility.
+Model* ResolveModelByIdOrAlias(ServiceContext& ctx, const std::string& model_id_or_alias) {
+  if (auto* variant = ctx.catalog.GetModelVariant(model_id_or_alias)) {
+    return variant;
+  }
+
+  return ctx.catalog.GetModel(model_id_or_alias);
+}
+
+}  // namespace
 
 // ========================================================================
 // Handler: GET /models/loaded
@@ -40,7 +61,7 @@ class ListLoadedModelsHandler : public HttpRequestHandler {
 };
 
 // ========================================================================
-// Handler: GET /models/load/{name}
+// Handler: GET /models/load/{model}
 // ========================================================================
 
 class LoadModelHandler : public HttpRequestHandler {
@@ -50,16 +71,19 @@ class LoadModelHandler : public HttpRequestHandler {
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
     ActionTracker tracker(Action::kModelLoad, ctx_.telemetry);
 
-    auto name_raw = request->getPathVariable("name");
-    if (!name_raw) {
-      return ErrorResponse(Status::CODE_400, "Missing model name");
+    auto model_path_param = request->getPathVariable("model");
+    if (!model_path_param) {
+      return ErrorResponse(Status::CODE_400, "Missing model id or alias");
     }
 
-    std::string name = name_raw->c_str();
-    auto* model = ctx_.catalog.GetModel(name);
+    // The model_id is percent-encoded on the wire by the SDK's ModelCommandRouter (e.g. ':' -> '%3A'),
+    // so decode before resolving. Without this every id-form value (the SDK's default) 404s.
+    std::string model_id_or_alias = UrlDecode(model_path_param->c_str());
+    auto* model = ResolveModelByIdOrAlias(ctx_, model_id_or_alias);
 
     if (!model) {
-      return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + name + "'");
+      return ErrorResponse(Status::CODE_404, "Model not found",
+                           "No model matching '" + model_id_or_alias + "'");
     }
 
     if (model->IsLoaded()) {
@@ -74,16 +98,18 @@ class LoadModelHandler : public HttpRequestHandler {
 
     try {
       model->Load();
-      tracker.SetModelId(name);
+      tracker.SetModelId(model_id_or_alias);
       tracker.SetStatus(ActionStatus::kSuccess);
 
-      ctx_.logger.Log(LogLevel::Information, fmt::format("Model loaded via web service: {}", name));
+      ctx_.logger.Log(LogLevel::Information,
+                      fmt::format("Model loaded via web service: {}", model_id_or_alias));
       return JsonResponse(Status::CODE_200, {{"status", "loaded"}});
     } catch (const std::exception& ex) {
-      tracker.SetModelId(name);
+      tracker.SetModelId(model_id_or_alias);
       tracker.RecordException(ex);
 
-      ctx_.logger.Log(LogLevel::Error, fmt::format("Failed to load model {}: {}", name, ex.what()));
+      ctx_.logger.Log(LogLevel::Error,
+                      fmt::format("Failed to load model {}: {}", model_id_or_alias, ex.what()));
       return ErrorResponse(Status::CODE_500, "Load failed", ex.what());
     }
   }
@@ -93,7 +119,7 @@ class LoadModelHandler : public HttpRequestHandler {
 };
 
 // ========================================================================
-// Handler: GET /models/unload/{name}
+// Handler: GET /models/unload/{model}
 // ========================================================================
 
 class UnloadModelHandler : public HttpRequestHandler {
@@ -103,16 +129,19 @@ class UnloadModelHandler : public HttpRequestHandler {
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
     ActionTracker tracker(Action::kModelUnload, ctx_.telemetry);
 
-    auto name_raw = request->getPathVariable("name");
-    if (!name_raw) {
-      return ErrorResponse(Status::CODE_400, "Missing model name");
+    auto model_path_param = request->getPathVariable("model");
+    if (!model_path_param) {
+      return ErrorResponse(Status::CODE_400, "Missing model id or alias");
     }
 
-    std::string name = name_raw->c_str();
-    auto* model = ctx_.catalog.GetModel(name);
+    // The model_id is percent-encoded on the wire by the SDK's ModelCommandRouter (e.g. ':' -> '%3A'),
+    // so decode before resolving. Without this every id-form value (the SDK's default) 404s.
+    std::string model_id_or_alias = UrlDecode(model_path_param->c_str());
+    auto* model = ResolveModelByIdOrAlias(ctx_, model_id_or_alias);
 
     if (!model) {
-      return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + name + "'");
+      return ErrorResponse(Status::CODE_404, "Model not found",
+                           "No model matching '" + model_id_or_alias + "'");
     }
 
     if (!model->IsLoaded()) {
@@ -123,16 +152,18 @@ class UnloadModelHandler : public HttpRequestHandler {
 
     try {
       model->Unload();
-      tracker.SetModelId(name);
+      tracker.SetModelId(model_id_or_alias);
       tracker.SetStatus(ActionStatus::kSuccess);
 
-      ctx_.logger.Log(LogLevel::Information, fmt::format("Model unloaded via web service: {}", name));
+      ctx_.logger.Log(LogLevel::Information,
+                      fmt::format("Model unloaded via web service: {}", model_id_or_alias));
       return JsonResponse(Status::CODE_200, {{"status", "unloaded"}});
     } catch (const std::exception& ex) {
-      tracker.SetModelId(name);
+      tracker.SetModelId(model_id_or_alias);
       tracker.RecordException(ex);
 
-      ctx_.logger.Log(LogLevel::Error, fmt::format("Failed to unload model {}: {}", name, ex.what()));
+      ctx_.logger.Log(LogLevel::Error,
+                      fmt::format("Failed to unload model {}: {}", model_id_or_alias, ex.what()));
       return ErrorResponse(Status::CODE_500, "Unload failed", ex.what());
     }
   }
@@ -195,7 +226,7 @@ class OpenAIListModelsHandler : public HttpRequestHandler {
 };
 
 // ========================================================================
-// Handler: GET /v1/models/{name} — OpenAI-compatible model retrieve
+// Handler: GET /v1/models/{model} — OpenAI-compatible model retrieve
 // ========================================================================
 
 class OpenAIRetrieveModelHandler : public HttpRequestHandler {
@@ -205,16 +236,17 @@ class OpenAIRetrieveModelHandler : public HttpRequestHandler {
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
     ActionTracker tracker(Action::kOpenAIModelRetrieve, ctx_.telemetry);
 
-    auto name_raw = request->getPathVariable("name");
-    if (!name_raw) {
-      return ErrorResponse(Status::CODE_400, "Missing model name");
+    auto model_path_param = request->getPathVariable("model");
+    if (!model_path_param) {
+      return ErrorResponse(Status::CODE_400, "Missing model id");
     }
 
-    std::string name = name_raw->c_str();
-    auto* model = ctx_.catalog.GetModelVariant(name);
+    // Percent-decode the id so encoded path segments (e.g. 'name%3A1') resolve like 'name:1'.
+    std::string model_id = UrlDecode(model_path_param->c_str());
+    auto* model = ctx_.catalog.GetModelVariant(model_id);
 
     if (!model) {
-      return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + name + "'");
+      return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_id + "'");
     }
 
     const auto& info = model->Info();

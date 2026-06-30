@@ -7,11 +7,13 @@
 #include "ep_detection/ep_detector.h"
 #include "inferencing/model_load_manager.h"
 #include "logger.h"
+#include "model_command_router.h"
 
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -70,12 +72,24 @@ inline ILogger& NullLog() {
 /// One-stop bag of cheap fakes for tests that need to construct a leaf `Model` via
 /// `FromModelInfo` but don't exercise Download/Load. Public fields by design — no invariants
 /// to protect, and the field names match the matching `FromModelInfo` parameter names so the
-/// call site reads as `FromModelInfo(info, "", svc.download_manager, svc.model_load_manager)`.
+/// call site reads as `FromModelInfo(info, "", svc.download_manager, svc.router)`.
+///
+/// `router` wraps `model_load_manager` with no external URL, so its local branch delegates to
+/// the bundled fake load manager — exactly what local-mode tests want.
 struct FakeServiceBindings {
   CpuOnlyEpDetector ep_detector;
   NullLogger logger;
   DownloadManager download_manager{/*cache_directory=*/"", /*catalog_region=*/"", /*max_concurrency=*/1, logger};
   ModelLoadManager model_load_manager{ep_detector, logger};
+  ModelCommandRouter router{/*external_service_url=*/std::nullopt, model_load_manager, /*app_name=*/"test", logger};
 };
+
+/// Returns a process-wide `ModelCommandRouter` (local mode, no external URL) for tests that need
+/// to satisfy a `ModelCommandRouter&` parameter — e.g. a `BaseModelCatalog` subclass ctor — but
+/// don't exercise load/unload routing.
+inline ModelCommandRouter& NullRouter() {
+  static FakeServiceBindings instance;
+  return instance.router;
+}
 
 }  // namespace fl::test

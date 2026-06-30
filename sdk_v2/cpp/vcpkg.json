@@ -24,6 +24,7 @@
       "description": "Build unit tests",
       "dependencies": [
         "gtest",
+        "reproc",
         {
           "name": "cpp-httplib",
           "features": ["openssl"]

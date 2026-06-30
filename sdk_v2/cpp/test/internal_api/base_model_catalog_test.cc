@@ -27,7 +27,7 @@ using namespace fl;
 
 class TestCatalog : public BaseModelCatalog {
  public:
-  explicit TestCatalog(ILogger& logger) : BaseModelCatalog("test-catalog", logger) {}
+  explicit TestCatalog(ILogger& logger) : BaseModelCatalog("test-catalog", fl::test::NullRouter(), logger) {}
 
   void AddModel(Model model) {
     models_.push_back(std::move(model));
@@ -53,7 +53,7 @@ static Model MakeModel(const std::string& model_id, const std::string& name,
   info.version = version;
   info.alias = alias;
   return Model::FromModelInfo(std::move(info), local_path,
-                              svc.download_manager, svc.model_load_manager);
+                              svc.download_manager, svc.router);
 }
 
 // ========================================================================
@@ -209,7 +209,7 @@ TEST_F(BaseModelCatalogTest, GetModel_SkipsInvalidEntries) {
   TestCatalog catalog(logger_);
   fl::test::FakeServiceBindings svc;
   catalog.AddModel(Model::FromModelInfo(invalid_info, "",
-                                        svc.download_manager, svc.model_load_manager));
+                                        svc.download_manager, svc.router));
   catalog.AddModel(MakeModel("good:1", "good", 1, "good-alias"));
 
   // Invalid model is skipped during grouping — only the valid model is listed

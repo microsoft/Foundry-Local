@@ -38,6 +38,59 @@ std::string FormatLocationMessage(const CodeLocation& location, const std::strin
 
 }  // namespace
 
+std::string UrlEncode(std::string_view value) {
+  std::string result;
+  result.reserve(value.size() * 2);
+
+  for (unsigned char c : value) {
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+        c == '-' || c == '_' || c == '.' || c == '~') {
+      result += static_cast<char>(c);
+    } else {
+      static const char hex[] = "0123456789ABCDEF";
+      result += '%';
+      result += hex[c >> 4];
+      result += hex[c & 0x0F];
+    }
+  }
+
+  return result;
+}
+
+std::string UrlDecode(std::string_view value) {
+  std::string result;
+  result.reserve(value.size());
+
+  auto hex_value = [](char c) -> int {
+    if (c >= '0' && c <= '9') {
+      return c - '0';
+    }
+    if (c >= 'A' && c <= 'F') {
+      return c - 'A' + 10;
+    }
+    if (c >= 'a' && c <= 'f') {
+      return c - 'a' + 10;
+    }
+    return -1;
+  };
+
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (value[i] == '%' && i + 2 < value.size()) {
+      int hi = hex_value(value[i + 1]);
+      int lo = hex_value(value[i + 2]);
+      if (hi >= 0 && lo >= 0) {
+        result += static_cast<char>((hi << 4) | lo);
+        i += 2;
+        continue;
+      }
+    }
+
+    result += value[i];
+  }
+
+  return result;
+}
+
 #ifdef _WIN32
 // Safe getenv wrapper for MSVC (avoids C4996).
 static std::optional<std::string> SafeGetEnv(const char* name) {

@@ -270,4 +270,16 @@ GenAIModelInstance* ModelLoadManager::GetLoadedModel(std::string_view model_id) 
   return nullptr;
 }
 
+std::vector<std::string> ModelLoadManager::GetLoadedModelIds() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  std::vector<std::string> ids;
+  ids.reserve(loaded_models_.size());
+  for (const auto& [id, instance] : loaded_models_) {
+    ids.push_back(id);
+  }
+
+  return ids;
+}
+
 }  // namespace fl

@@ -13,6 +13,7 @@ import {
   setupCacheOnlyManager,
   teardownCacheOnlyManager,
 } from "./_fixtures/cacheOnlyManager.js";
+import { type LoadedModelsStub, startLoadedModelsStub } from "./_fixtures/loadedModelsStub.js";
 
 const describeIfBuilt = haveNativePrereqs ? describe : describe.skip;
 
@@ -23,17 +24,23 @@ if (!haveNativePrereqs) {
 
 describeIfBuilt("Model (cache-only)", () => {
   let fixture: CacheOnlyManagerFixture;
+  let stub: LoadedModelsStub;
   let catalog: Catalog;
   let model: Model;
 
   beforeAll(async () => {
-    fixture = setupCacheOnlyManager({ appName: "foundry-local-js-sdk-v2-model-tests" });
+    stub = await startLoadedModelsStub();
+    fixture = setupCacheOnlyManager({
+      appName: "foundry-local-js-sdk-v2-model-tests",
+      serviceEndpoint: stub.url,
+    });
     catalog = fixture.manager.catalog;
     model = (await catalog.getModel("phi-4-mini-instruct")) as Model;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     teardownCacheOnlyManager(fixture);
+    await stub.close();
   });
 
   it("info returns a plain object with all required fields populated", () => {
@@ -76,7 +83,9 @@ describeIfBuilt("Model (cache-only)", () => {
     expect(typeof model.isCached).toBe("boolean");
   });
 
-  it("isLoaded returns false (model is not actually loaded)", async () => {
+  it("isLoaded routes to the external service and returns false when the model is not loaded", async () => {
+    // The fixture points at a live stub service that reports no loaded models, so this exercises
+    // the external load-state routing end-to-end and resolves to false.
     expect(await model.isLoaded()).toBe(false);
   });
 

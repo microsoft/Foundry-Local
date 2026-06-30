@@ -14,6 +14,7 @@
 #include "internal_api/web_service_test_helpers.h"
 #include "logger.h"
 #include "model.h"
+#include "model_command_router.h"
 #include "model_info.h"
 #include "null_telemetry.h"
 #include "service/web_service.h"
@@ -70,6 +71,10 @@ class WebServiceTest : public ::testing::Test {
     logger_ = std::make_unique<StderrLogger>();
     ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
     model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
+    // Router wraps the same load manager the web service uses, so model->IsLoaded() reflects
+    // loads driven through the HTTP routes.
+    model_command_router_ = std::make_unique<ModelCommandRouter>(
+        std::nullopt, *model_load_manager_, "test", *logger_);
     session_manager_ = std::make_unique<SessionManager>(*logger_);
     null_telemetry_ = std::make_unique<fl::test::NullTelemetry>();
     catalog_ = std::make_unique<test::MockCatalog>();
@@ -77,10 +82,10 @@ class WebServiceTest : public ::testing::Test {
     // Populate with test models
     catalog_->AddModel(Model::FromModelInfo(
         test::MakeTestModelInfo("alpha-model", "acme-corp"), "",
-        svc_.download_manager, svc_.model_load_manager));
+        svc_.download_manager, *model_command_router_));
     catalog_->AddModel(Model::FromModelInfo(
         test::MakeTestModelInfo("beta-model", "contoso"), "",
-        svc_.download_manager, svc_.model_load_manager));
+        svc_.download_manager, *model_command_router_));
 
     const auto loadable_model_path = test::GetTestDataModelPath(test::kLoadableTestModelAlias);
     ASSERT_TRUE(std::filesystem::exists(loadable_model_path))
@@ -89,7 +94,7 @@ class WebServiceTest : public ::testing::Test {
         test::MakeTestModelInfo(test::kLoadableTestModelAlias, "microsoft"),
         loadable_model_path,
         svc_.download_manager,
-        *model_load_manager_));
+        *model_command_router_));
 
     service_ = std::make_unique<WebService>(*catalog_, *logger_, "/tmp/test-cache",
                                             *model_load_manager_, *session_manager_, *null_telemetry_, []() {});
@@ -106,6 +111,8 @@ class WebServiceTest : public ::testing::Test {
     catalog_.reset();
     session_manager_.reset();
     null_telemetry_.reset();
+    // Router references model_load_manager_, so destroy it first.
+    model_command_router_.reset();
     model_load_manager_.reset();
     ep_detector_.reset();
     logger_.reset();
@@ -121,6 +128,7 @@ class WebServiceTest : public ::testing::Test {
   static std::unique_ptr<test::CpuOnlyEpDetector> ep_detector_;
   static std::unique_ptr<StderrLogger> logger_;
   static std::unique_ptr<ModelLoadManager> model_load_manager_;
+  static std::unique_ptr<ModelCommandRouter> model_command_router_;
   static std::unique_ptr<SessionManager> session_manager_;
   static std::unique_ptr<fl::test::NullTelemetry> null_telemetry_;
   static std::unique_ptr<WebService> service_;
@@ -133,6 +141,7 @@ std::unique_ptr<test::MockCatalog> WebServiceTest::catalog_;
 std::unique_ptr<test::CpuOnlyEpDetector> WebServiceTest::ep_detector_;
 std::unique_ptr<StderrLogger> WebServiceTest::logger_;
 std::unique_ptr<ModelLoadManager> WebServiceTest::model_load_manager_;
+std::unique_ptr<ModelCommandRouter> WebServiceTest::model_command_router_;
 std::unique_ptr<SessionManager> WebServiceTest::session_manager_;
 std::unique_ptr<fl::test::NullTelemetry> WebServiceTest::null_telemetry_;
 std::unique_ptr<WebService> WebServiceTest::service_;
@@ -198,7 +207,7 @@ TEST_F(WebServiceTest, LoadedModelsReturnsModelIds) {
 }
 
 // ========================================================================
-// GET /models/load/{name}
+// GET /models/load/{model}
 // ========================================================================
 
 TEST_F(WebServiceTest, LoadModelReturnsNotFoundForUnknownModel) {
@@ -216,7 +225,7 @@ TEST_F(WebServiceTest, LoadModelReturnsBadRequestWhenNotCached) {
 }
 
 // ========================================================================
-// GET /models/unload/{name}
+// GET /models/unload/{model}
 // ========================================================================
 
 TEST_F(WebServiceTest, UnloadModelReturnsNotFoundForUnknownModel) {
@@ -289,7 +298,7 @@ TEST_F(WebServiceTest, OpenAIListModelsPopulatesPublisher) {
 }
 
 // ========================================================================
-// GET /v1/models/{name} — OpenAI-compatible retrieve
+// GET /v1/models/{model} — OpenAI-compatible retrieve
 // ========================================================================
 
 TEST_F(WebServiceTest, OpenAIRetrieveModelReturnsModelInfo) {

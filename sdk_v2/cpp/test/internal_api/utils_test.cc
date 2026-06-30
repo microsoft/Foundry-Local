@@ -179,3 +179,42 @@ TEST(UtilsTest, LogAndThrowWithLocationLogsAndThrowsFormattedMessage) {
   }
   EXPECT_TRUE(caught) << "expected fl::Exception";
 }
+
+// ========================================================================
+// UrlEncode / UrlDecode tests
+// ========================================================================
+
+TEST(UrlEncodeTest, UnreservedCharactersPassThrough) {
+  EXPECT_EQ(UrlEncode("abcXYZ0189-_.~"), "abcXYZ0189-_.~");
+}
+
+TEST(UrlEncodeTest, EncodesModelIdColon) {
+  // ModelCommandRouter percent-encodes model_ids before placing them in a URL path.
+  EXPECT_EQ(UrlEncode("tiny-random-gpt2-fp32:1"), "tiny-random-gpt2-fp32%3A1");
+}
+
+TEST(UrlDecodeTest, DecodesPercentEscapes) {
+  EXPECT_EQ(UrlDecode("tiny-random-gpt2-fp32%3A1"), "tiny-random-gpt2-fp32:1");
+}
+
+TEST(UrlDecodeTest, IsCaseInsensitiveForHexDigits) {
+  EXPECT_EQ(UrlDecode("a%3ab"), "a:b");
+  EXPECT_EQ(UrlDecode("a%3Ab"), "a:b");
+}
+
+TEST(UrlDecodeTest, PlainStringIsUnchanged) {
+  EXPECT_EQ(UrlDecode("phi-4-mini-instruct"), "phi-4-mini-instruct");
+}
+
+TEST(UrlDecodeTest, MalformedTrailingPercentIsPassedThrough) {
+  EXPECT_EQ(UrlDecode("abc%"), "abc%");
+  EXPECT_EQ(UrlDecode("abc%3"), "abc%3");
+  EXPECT_EQ(UrlDecode("bad%zztail"), "bad%zztail");
+}
+
+TEST(UrlEncodeDecodeTest, RoundTripsModelId) {
+  // The server must recover exactly what the SDK router encoded — this is the contract that the
+  // external-mode /models/{load,unload}/{model} handlers depend on.
+  const std::string model_id = "qwen2.5-0.5b-instruct-generic-cpu:4";
+  EXPECT_EQ(UrlDecode(UrlEncode(model_id)), model_id);
+}
