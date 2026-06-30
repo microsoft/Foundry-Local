@@ -25,7 +25,8 @@ steps:
       function Invoke-AzCopy {
         param(
           [string]$Source,
-          [string]$Target
+          [string]$Target,
+          [string]$IncludePath
         )
 
         $parent = Split-Path -Path $Target -Parent
@@ -33,7 +34,7 @@ steps:
           New-Item -ItemType Directory -Path $parent -Force | Out-Null
         }
 
-        $args = @('copy', $Source, $Target, '--recursive')
+        $args = @('copy', $Source, $Target, '--include-path', $IncludePath, '--recursive')
 
         & azcopy @args
         if ($LASTEXITCODE -ne 0) {
@@ -51,9 +52,8 @@ steps:
       )
 
       foreach ($relativePath in $modelPaths) {
-        $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$relativePath/*"
-        $target = Join-Path $destination $relativePath
-        Invoke-AzCopy -Source $source -Target $target
+        $source = "https://$storageAccount.blob.core.windows.net/$container/$prefix/*"
+        Invoke-AzCopy -Source $source -Target $destination -IncludePath $relativePath
       }
 
       $count = @(Get-ChildItem -Path $destination -Recurse -File).Count
