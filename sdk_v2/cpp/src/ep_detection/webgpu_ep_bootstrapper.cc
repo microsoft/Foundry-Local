@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -120,9 +121,9 @@ bool WebGpuEpBootstrapper::DownloadAndRegister(bool force,
 
   auto ep_dir = std::filesystem::path(ep_dir_);
   auto parent_dir = ep_dir.parent_path();
-  const auto& package_metadata = GetPackageMetadata();
 
   try {
+    const auto& package_metadata = GetPackageMetadata();
     auto override_path = Utils::GetEnv(kWebGpuProviderOverrideEnv);
     if (override_path.has_value() && !override_path->empty()) {
       std::filesystem::path provider_path(*override_path);
