@@ -216,6 +216,20 @@ print(sys.executable)
 
                 $env:FL_PYTHON_PACKAGE_NAME =
                     if ($UseWinml) { 'foundry-local-sdk-winml' } else { 'foundry-local-sdk' }
+
+                # Pin the native lib to THIS run's C++ output. FOUNDRY_LOCAL_LIB_DIR is the
+                # loader's highest-priority source, so it overrides any stale wheel-bundled
+                # copy under src/foundry_local_sdk/_native/<platform>/ that a sample build may
+                # have dropped — making the dll used by the tests deterministic.
+                $platformDir = if ($IsWindows) { 'Windows' } elseif ($IsMacOS) { 'macOS' } else { 'Linux' }
+                $nativeDir = if ($IsWindows) {
+                    Join-Path $cppDir "build/$platformDir/$Config/bin/$Config"
+                } else {
+                    Join-Path $cppDir "build/$platformDir/$Config/bin"
+                }
+                $restoreLibDir = $env:FOUNDRY_LOCAL_LIB_DIR
+                $env:FOUNDRY_LOCAL_LIB_DIR = $nativeDir
+                Write-Host "FOUNDRY_LOCAL_LIB_DIR=$nativeDir" -ForegroundColor DarkGray
                 try {
                     python -m pip install -e '.[dev]'
                     if ($LASTEXITCODE -ne 0) { throw "pip install exit $LASTEXITCODE" }
@@ -224,6 +238,7 @@ print(sys.executable)
                     if ($LASTEXITCODE -ne 0) { throw "pytest exit $LASTEXITCODE" }
                 } finally {
                     Remove-Item Env:FL_PYTHON_PACKAGE_NAME -ErrorAction SilentlyContinue
+                    if ($null -eq $restoreLibDir) { Remove-Item Env:FOUNDRY_LOCAL_LIB_DIR -ErrorAction SilentlyContinue } else { $env:FOUNDRY_LOCAL_LIB_DIR = $restoreLibDir }
                     if ($null -eq $restoreTgt)  { Remove-Item Env:VSCMD_ARG_TGT_ARCH  -ErrorAction SilentlyContinue } else { $env:VSCMD_ARG_TGT_ARCH  = $restoreTgt }
                     if ($null -eq $restoreHost) { Remove-Item Env:VSCMD_ARG_HOST_ARCH -ErrorAction SilentlyContinue } else { $env:VSCMD_ARG_HOST_ARCH = $restoreHost }
                     if ($null -eq $restorePlat) { Remove-Item Env:Platform            -ErrorAction SilentlyContinue } else { $env:Platform            = $restorePlat }

@@ -27,6 +27,38 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
+# Native library pinning (must run before foundry_local_sdk is imported)
+# ---------------------------------------------------------------------------
+#
+# The loader ranks a wheel-bundled native (e.g. src/foundry_local_sdk/_native/
+# win-x64/) ABOVE the dev C++ output, so a stale bundled dll dropped by a sample
+# build would silently override a fresh build. When running tests from the
+# source tree and FOUNDRY_LOCAL_LIB_DIR is unset, pin it to the local C++ build
+# output so the just-built native is used deterministically. CI is unaffected
+# (no dev build present → bundled wheel wins as intended).
+
+def _pin_dev_native() -> None:
+    if os.environ.get("FOUNDRY_LOCAL_LIB_DIR"):
+        return
+    from foundry_local_sdk._native.lib_loader import _dev_build_candidates, _lib_name  # noqa: E402
+
+    import pathlib
+
+    name = _lib_name()
+    for parent in pathlib.Path(__file__).resolve().parents:
+        sdk_v2 = parent / "sdk_v2"
+        if sdk_v2.is_dir():
+            for candidate in _dev_build_candidates(sdk_v2, name):
+                if candidate.exists():
+                    os.environ["FOUNDRY_LOCAL_LIB_DIR"] = str(candidate.parent)
+                    return
+            return
+
+
+_pin_dev_native()
+
+
+# ---------------------------------------------------------------------------
 # CI detection
 # ---------------------------------------------------------------------------
 
