@@ -5,16 +5,14 @@
 // execution-provider bootstrappers (WebGPU / CUDA). These are DISABLED by default because they
 // require network access; the coverage run enables them via --gtest_also_run_disabled_tests.
 //
-// The positive case downloads the small WebGPU EP manifest JSON (a few hundred bytes) from the
-// same CDN that serves the EP packages, rather than a multi-hundred-MB EP zip. That keeps the
-// test fast while still exercising the full curl transport + Content-Length + progress + success
-// path. The negative case targets an unresolvable host so the failure path is deterministic and
-// independent of any server's error-page behavior.
+// The positive case downloads the real WebGPU EP zip from the production CDN and validates the
+// full binary download path (curl transport + Content-Length + progress + success). The negative
+// case targets an unresolvable host so the failure path is deterministic and independent of any
+// server's error-page behavior.
 #include "http/http_download.h"
 
 #include "logger.h"
 
-#include <nlohmann/json.hpp>
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -30,11 +28,9 @@ using namespace fl;
 
 namespace {
 
-// Mirrors kManifestUrl in src/ep_detection/webgpu_ep_bootstrapper.cc. The manifest is a small
-// JSON document served from the same CDN as the EP packages, so it validates the real download
-// path without pulling a large binary.
-constexpr const char* kWebGpuManifestUrl =
-    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_prod.json";
+// Production WebGPU EP package URL used for exercising large binary downloads.
+constexpr const char* kWebGpuZipUrl =
+    "https://foundrypackages-ffhrdhbxb7gpdreh.b02.azurefd.net/webgpu_ep_0.1.0_win-x64.zip";
 
 constexpr const char* kUserAgent = "FoundryLocal";
 
@@ -76,29 +72,23 @@ class TempFile {
   fs::path path_;
 };
 
-std::string ReadFile(const fs::path& path) {
-  std::ifstream in(path, std::ios::binary);
-  return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-}
-
 }  // namespace
 
-// Downloads the real WebGPU EP manifest and validates the success path end-to-end: returns
-// true, writes a non-empty file, reports a terminal 100% progress callback, and the payload is
-// the expected JSON shape.
-TEST(DISABLED_HttpDownload, DownloadsWebGpuManifest) {
+// Downloads the real WebGPU EP zip and validates the success path end-to-end: returns
+// true, writes a non-empty file, and reports a terminal 100% progress callback.
+TEST(DISABLED_HttpDownload, DownloadsWebGpuZip) {
   RecordingLogger logger;
-  TempFile dest("fl_webgpu_manifest_test.json");
+  TempFile dest("fl_webgpu_ep_test.zip");
 
   std::vector<float> progress;
   std::atomic<bool> cancel{false};
 
   bool ok = HttpDownloadFile(
-      kWebGpuManifestUrl, dest.path(), kUserAgent, &cancel,
+      kWebGpuZipUrl, dest.path(), kUserAgent, &cancel,
       [&progress](float pct) { progress.push_back(pct); },
       logger);
 
-  ASSERT_TRUE(ok) << "WebGPU manifest download failed. Logger output:\n"
+  ASSERT_TRUE(ok) << "WebGPU zip download failed. Logger output:\n"
                   << logger.Dump();
 
   ASSERT_TRUE(fs::exists(dest.path()));
@@ -107,10 +97,6 @@ TEST(DISABLED_HttpDownload, DownloadsWebGpuManifest) {
   // The final progress callback is always 100% on success.
   ASSERT_FALSE(progress.empty());
   EXPECT_FLOAT_EQ(progress.back(), 100.0f);
-
-  // The payload is the EP manifest — parses as JSON and carries a 'packages' object.
-  auto manifest = nlohmann::json::parse(ReadFile(dest.path()));
-  EXPECT_TRUE(manifest.contains("packages"));
 }
 
 // A transport failure (unresolvable host) returns false and leaves no output file behind.
@@ -118,9 +104,9 @@ TEST(DISABLED_HttpDownload, DownloadsWebGpuManifest) {
 // fast regardless of network conditions to real hosts.
 TEST(DISABLED_HttpDownload, ReturnsFalseAndWritesNoFileOnUnresolvableHost) {
   RecordingLogger logger;
-  TempFile dest("fl_webgpu_manifest_unresolvable.json");
+  TempFile dest("fl_webgpu_zip_unresolvable.zip");
 
-  bool ok = HttpDownloadFile("https://foundry-local-test.invalid/webgpu_ep_prod.json", dest.path(),
+  bool ok = HttpDownloadFile("https://foundry-local-test.invalid/webgpu_ep_0.1.0_win-x64.zip", dest.path(),
                              kUserAgent, /*cancel_flag=*/nullptr, /*progress_cb=*/{}, logger);
 
   EXPECT_FALSE(ok);
