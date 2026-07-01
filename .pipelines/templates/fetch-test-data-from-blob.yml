@@ -38,6 +38,8 @@ steps:
       azcopy --version
 
       New-Item -ItemType Directory -Path $destination -Force | Out-Null
+      $publisherRoot = Join-Path $destination 'Microsoft'
+      New-Item -ItemType Directory -Path $publisherRoot -Force | Out-Null
 
       function Invoke-AzCopy {
         param(
@@ -80,6 +82,14 @@ steps:
         @{
           SourcePath = 'qwen3.5-0.8b'
           TargetAlias = 'qwen3.5-0.8b-generic-cpu-2'
+        },
+        @{
+          SourcePath = 'nemotron-3.5-asr-streaming-0.6b'
+          TargetAlias = 'nemotron-3.5-asr-streaming-0.6b-generic-cpu-3'
+        },
+        @{
+          SourcePath = 'deepseek-r1-distill-qwen-14b'
+          TargetAlias = 'deepseek-r1-distill-qwen-14b-generic-cpu-4'
         }
       )
 
@@ -87,7 +97,7 @@ steps:
         $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$($model.SourcePath)/onnx/cpu_and_mobile/*"
         Write-Host "Requested blob URL: $requestedUrl"
 
-        $target = Join-Path $destination $model.TargetAlias
+        $target = Join-Path $publisherRoot $model.TargetAlias
         Invoke-AzCopy -Source $requestedUrl -Target $target
       }
 

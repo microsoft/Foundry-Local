@@ -11,14 +11,16 @@
 // a multi-gigabyte download. Local devs implicitly opt into downloads simply
 // by setting FOUNDRY_TEST_DATA_DIR.
 import { existsSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 import type { Catalog } from "../../src/catalog.js";
 import { FoundryLocalManager } from "../../src/foundryLocalManager.js";
 import type { IModel } from "../../src/imodel.js";
 
 const envCache = process.env.FOUNDRY_TEST_DATA_DIR;
+const publisherCache = envCache !== undefined && envCache.length > 0 ? join(envCache, "Microsoft") : undefined;
 const cacheDirExists =
-  envCache !== undefined && envCache.length > 0 && existsSync(envCache) && statSync(envCache).isDirectory();
+  publisherCache !== undefined && existsSync(publisherCache) && statSync(publisherCache).isDirectory();
 
 /**
  * True iff `FOUNDRY_TEST_DATA_DIR` is set and points at a real directory.
@@ -27,8 +29,8 @@ const cacheDirExists =
 export const haveTestModelCache: boolean = cacheDirExists;
 
 export const testModelCacheDiagnostic = haveTestModelCache
-  ? `[v2 SDK real-model tests] using cache dir ${envCache}`
-  : "[v2 SDK real-model tests] SKIPPED — FOUNDRY_TEST_DATA_DIR is not set or does not exist";
+  ? `[v2 SDK real-model tests] using cache dir ${publisherCache}`
+  : "[v2 SDK real-model tests] SKIPPED — FOUNDRY_TEST_DATA_DIR/Microsoft is not set or does not exist";
 
 const isCi: boolean = process.env.CI !== undefined || process.env.TF_BUILD !== undefined;
 
@@ -63,15 +65,15 @@ export interface RealModelManagerFixture {
  * must gate the `describe` block themselves.
  */
 export async function setupRealModelManager(opts: RealModelManagerOptions = {}): Promise<RealModelManagerFixture> {
-  if (!haveTestModelCache || envCache === undefined) {
+  if (!haveTestModelCache || publisherCache === undefined) {
     throw new Error(
-      "setupRealModelManager called without FOUNDRY_TEST_DATA_DIR — gate the describe with `skipIf(!haveTestModelCache)`",
+      "setupRealModelManager called without FOUNDRY_TEST_DATA_DIR/Microsoft — gate the describe with `skipIf(!haveTestModelCache)`",
     );
   }
 
   const manager = FoundryLocalManager.create({
     appName: opts.appName ?? "foundry-local-js-sdk-v2-real-tests",
-    modelCacheDir: envCache,
+    modelCacheDir: publisherCache,
   });
   const catalog = manager.catalog;
   const namePref = opts.namePreference ?? "qwen2.5-0.5b-instruct-generic-cpu-4";
@@ -85,7 +87,7 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
   }
 
   // Preference 1b: catalog entries often carry a `-N` version suffix
-  // (e.g. `nemotron-speech-streaming-en-0.6b-generic-cpu-3`). If the exact
+  // (e.g. `nemotron-3.5-asr-streaming-0.6b-generic-cpu-3`). If the exact
   // hit missed, try matching by prefix before falling back to the task
   // filter — caller-specified names should win over "smallest by task".
   if (model === undefined && opts.namePreference !== undefined) {

@@ -29,7 +29,13 @@ inline fs::path GetTestModelCacheDir() {
     throw std::runtime_error("FOUNDRY_TEST_DATA_DIR does not exist: " + env_path.string());
   }
 
-  return fs::canonical(env_path);
+  fs::path publisher_path = env_path / "Microsoft";
+  if (!fs::exists(publisher_path)) {
+    throw std::runtime_error("FOUNDRY_TEST_DATA_DIR/Microsoft does not exist: " +
+                             publisher_path.string());
+  }
+
+  return fs::canonical(publisher_path);
 }
 
 /// Returns true when running under a known CI provider.

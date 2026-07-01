@@ -394,7 +394,7 @@ describe.skipIf(!haveTestModelCache)("AudioSession (real nemotron streaming mode
 
   beforeAll(async () => {
     fixture = await setupRealModelManager({
-      namePreference: "nemotron-speech-streaming-en-0.6b-generic-cpu-3",
+      namePreference: "nemotron-3.5-asr-streaming-0.6b-generic-cpu-3",
       task: "automatic-speech-recognition",
     });
   }, 5 * 60_000);
