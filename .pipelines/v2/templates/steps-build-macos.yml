@@ -101,4 +101,13 @@ steps:
     fi
     cp -P "$primary" "$dst/"
     echo "  staged libfoundry_local.dylib"
+
+    # Stage the .dSYM bundle produced by SplitDebugSymbols.cmake for
+    # RelWithDebInfo builds. LLDB/Xcode find it automatically when it sits
+    # alongside the .dylib. The bundle is a directory; use cp -r to copy it.
+    dsym="$src/libfoundry_local.dylib.dSYM"
+    if [ -d "$dsym" ]; then
+      cp -r "$dsym" "$dst/"
+      echo "  staged libfoundry_local.dylib.dSYM"
+    fi
   displayName: 'Stage native artifacts'
