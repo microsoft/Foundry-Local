@@ -84,7 +84,37 @@ std::string OnnxChatGenerator::Decode() {
 
   int32_t token_id = next_tokens[0];
 
-  // Decode through the normal tokenizer stream
+  // Fast path: use tag token IDs for efficient special-token detection.
+  // When tag IDs are configured (>= 0), we detect tool-call and reasoning tokens
+  // with a simple integer comparison, avoiding the expensive double-decode + string search.
+  const auto& tag_info = model_.GetTagInfo();
+  bool has_tag_ids = (tag_info.tool_call_start_id >= 0 || tag_info.tool_call_end_id >= 0 ||
+                      tag_info.reasoning_start_id >= 0 || tag_info.reasoning_end_id >= 0);
+
+  if (has_tag_ids) {
+    if (token_id == tag_info.tool_call_start_id) {
+      stream_->Decode(token_id);  // keep normal stream in sync
+      return tag_info.tool_call_start_str;
+    }
+    if (token_id == tag_info.tool_call_end_id) {
+      stream_->Decode(token_id);
+      return tag_info.tool_call_end_str;
+    }
+    if (token_id == tag_info.reasoning_start_id) {
+      stream_->Decode(token_id);
+      return tag_info.reasoning_start_str;
+    }
+    if (token_id == tag_info.reasoning_end_id) {
+      stream_->Decode(token_id);
+      return tag_info.reasoning_end_str;
+    }
+
+    // Not a tag token — decode normally (no special stream needed)
+    const char* token_text = stream_->Decode(token_id);
+    return token_text ? std::string(token_text) : "";
+  }
+
+  // Slow path: no tag IDs configured — fall back to double-decode + string matching.
   const char* token_text = stream_->Decode(token_id);
 
   // Also decode through the special-token stream to detect tool call and think tokens.
