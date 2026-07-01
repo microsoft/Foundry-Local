@@ -10,11 +10,19 @@
 #include <azure/core/http/raw_response.hpp>
 #include <azure/core/io/body_stream.hpp>
 
-// On Windows we use the WinHTTP transport (OS SChannel TLS, no background threads)
-// and drop libcurl entirely to shrink the binary and avoid curl's process-lifetime
-// connection-pool cleanup thread, which races with host-runtime teardown (Node/V8).
-// Other platforms keep the libcurl transport.
 #if defined(_WIN32)
+#include <winapifamily.h>
+
+#if !defined(WINAPI_FAMILY) || WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#define FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT 1
+#endif
+#endif
+
+// Desktop Windows uses the WinHTTP transport (OS SChannel TLS, no background threads)
+// and drops libcurl entirely to shrink the binary and avoid curl's process-lifetime
+// connection-pool cleanup thread, which races with host-runtime teardown (Node/V8).
+// UWP and non-Windows builds keep the libcurl transport to match the vcpkg feature selection.
+#if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
 #include <azure/core/http/win_http_transport.hpp>
 #else
 #include <azure/core/http/curl_transport.hpp>
@@ -44,7 +52,7 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
   using namespace Azure::Core;
   using namespace Azure::Core::Http;
 
-#if defined(_WIN32)
+#if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
   WinHttpTransport transport;
 #else
   CurlTransport transport;

@@ -9,8 +9,16 @@
 #include <azure/core/http/http.hpp>
 #include <azure/core/io/body_stream.hpp>
 
-// See http_client.cc: WinHTTP on Windows (no libcurl), libcurl elsewhere.
 #if defined(_WIN32)
+#include <winapifamily.h>
+
+#if !defined(WINAPI_FAMILY) || WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#define FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT 1
+#endif
+#endif
+
+// See http_client.cc: desktop Windows uses WinHTTP; UWP and non-Windows builds use libcurl.
+#if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
 #include <azure/core/http/win_http_transport.hpp>
 #else
 #include <azure/core/http/curl_transport.hpp>
@@ -36,7 +44,7 @@ bool HttpDownloadFile(const std::string& url,
     std::filesystem::create_directories(parent);
   }
 
-#if defined(_WIN32)
+#if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
   WinHttpTransport transport;
 #else
   CurlTransport transport;
