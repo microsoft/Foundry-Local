@@ -47,38 +47,7 @@ using namespace fl;
 
 namespace {
 
-/// Create a temporary directory for test isolation. The name comes from MakeUniqueTempPath, so it is
-/// unique both across the separate processes CTest launches per test and across multiple TempDirs
-/// within one test. create_directory must succeed — the directory must not already exist — so a
-/// residual collision (e.g. a directory leaked by an earlier process that reused this pid) advances
-/// to the next name and retries instead of silently sharing an existing directory.
-class TempDir {
- public:
-  TempDir() {
-    while (true) {
-      auto candidate = fl::test::MakeUniqueTempPath("fl_test_");
-      std::error_code ec;
-      if (fs::create_directory(candidate, ec)) {
-        path_ = std::move(candidate);
-        return;
-      }
-      if (ec) {
-        throw std::runtime_error("TempDir: failed to create '" + candidate.string() + "': " +
-                                 ec.message());
-      }
-      // candidate already existed — try the next name.
-    }
-  }
-  ~TempDir() {
-    std::error_code ec;
-    fs::remove_all(path_, ec);
-  }
-  const fs::path& path() const { return path_; }
-  std::string string() const { return path_.string(); }
-
- private:
-  fs::path path_;
-};
+using fl::test::TempDir;
 
 /// Read entire file contents.
 std::string ReadFile(const fs::path& path) {

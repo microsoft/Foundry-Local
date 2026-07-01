@@ -17,23 +17,7 @@ using namespace fl;
 
 namespace {
 
-class TempDir {
- public:
-  TempDir() {
-    path_ = fl::test::MakeUniqueTempPath("fl_dlstate_test_");
-    fs::create_directories(path_);
-  }
-
-  ~TempDir() {
-    std::error_code ec;
-    fs::remove_all(path_, ec);
-  }
-
-  const fs::path& path() const { return path_; }
-
- private:
-  fs::path path_;
-};
+using fl::test::TempDir;
 
 constexpr int64_t kBlobSize = 20 * 1024 * 1024;  // 20 MiB
 constexpr int32_t kChunkSize = 2 * 1024 * 1024;  // 2 MiB

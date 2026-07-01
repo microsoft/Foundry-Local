@@ -27,25 +27,7 @@ using namespace fl;
 
 namespace {
 
-/// Per-test temp directory. Auto-cleans on destruction so a flaky test never
-/// leaks lock files into the system temp dir.
-class TempDir {
- public:
-  TempDir() {
-    path_ = fl::test::MakeUniqueTempPath("fl_lock_test_");
-    fs::create_directories(path_);
-  }
-
-  ~TempDir() {
-    std::error_code ec;
-    fs::remove_all(path_, ec);
-  }
-
-  const fs::path& path() const { return path_; }
-
- private:
-  fs::path path_;
-};
+using fl::test::TempDir;
 
 }  // namespace
 

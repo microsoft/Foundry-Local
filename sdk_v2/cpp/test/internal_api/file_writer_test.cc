@@ -24,21 +24,7 @@ using namespace fl;
 
 namespace {
 
-class TempPath {
- public:
-  TempPath() {
-    path_ = fl::test::MakeUniqueTempPath("file_writer_test_");
-    path_ += ".bin";
-  }
-  ~TempPath() {
-    std::error_code ec;
-    fs::remove(path_, ec);
-  }
-  const fs::path& path() const { return path_; }
-
- private:
-  fs::path path_;
-};
+using fl::test::TempPath;
 
 }  // namespace
 
