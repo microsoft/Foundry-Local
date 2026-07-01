@@ -54,7 +54,7 @@ describe.skipIf(!haveTestModelCache)("LiveAudioTranscriptionSession (V1, real ne
 
   beforeAll(async () => {
     fixture = await setupRealModelManager({
-      namePreference: "nemotron-3.5-asr-streaming-0.6b-generic-cpu",
+      namePreference: "nemotron-speech-streaming-en-0.6b-generic-cpu",
       task: "automatic-speech-recognition",
     });
     if (fixture !== undefined) {

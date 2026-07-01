@@ -84,10 +84,6 @@ steps:
           TargetAlias = 'qwen3.5-0.8b-generic-cpu-2'
         },
         @{
-          SourcePath = 'nemotron-3.5-asr-streaming-0.6b'
-          TargetAlias = 'nemotron-3.5-asr-streaming-0.6b-generic-cpu-3'
-        },
-        @{
           SourcePath = 'deepseek-r1-distill-qwen-14b'
           TargetAlias = 'deepseek-r1-distill-qwen-14b-generic-cpu-4'
         }
