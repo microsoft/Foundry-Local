@@ -87,6 +87,24 @@ pwsh ./build_and_test_all.ps1 -ContinueOnError
 
 See `pwsh ./build_and_test_all.ps1 -?` for the full parameter list.
 
+## Model cache for tests
+
+Model-dependent sdk_v2 tests require `FOUNDRY_TEST_DATA_DIR` to point to a
+local model cache directory.
+
+In CI, sdk_v2 pipelines download model data from blob storage into this path.
+For local runs, set it explicitly before invoking test commands.
+
+Example:
+
+```powershell
+$env:FOUNDRY_TEST_DATA_DIR = 'C:\path\to\model-cache'
+pwsh ./build_and_test_all.ps1
+```
+
+The directory can have any name. What matters is that it already contains the
+model files expected by the tests you are running.
+
 ## Troubleshooting
 
 * **`cl.exe ... HostX86\x86\cl.exe` during pip install** — your shell has

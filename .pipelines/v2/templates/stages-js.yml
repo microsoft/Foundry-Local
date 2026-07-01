@@ -198,14 +198,12 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - template: ../../templates/fetch-test-data-from-blob.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'win-x64'
         prebuildArtifactDir: '$(Pipeline.Workspace)/js-prebuild-win-x64'
-        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
+        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared/Microsoft'
 
 - stage: js_test_linux_x64
   displayName: 'JS SDK: Test Linux x64'
@@ -224,14 +222,12 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - template: ../../templates/fetch-test-data-from-blob.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'linux-x64'
         prebuildArtifactDir: '$(Pipeline.Workspace)/js-prebuild-linux-x64'
-        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
+        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared/Microsoft'
 
 - stage: js_test_osx_arm64
   displayName: 'JS SDK: Test macOS ARM64'
@@ -252,21 +248,12 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - bash: |
-          set -euo pipefail
-          if ! command -v git-lfs >/dev/null 2>&1; then
-              brew install git-lfs
-          fi
-          git lfs install
-      displayName: 'Install git-lfs (macOS)'
-    - template: ../../templates/checkout-steps.yml@self
-      parameters:
-        repoName: test-data-shared
+    - template: ../../templates/fetch-test-data-from-blob.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'osx-arm64'
         prebuildArtifactDir: '$(Pipeline.Workspace)/js-prebuild-osx-arm64'
-        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
+        testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared/Microsoft'
 
 # =====================================================================
 # Pack stage — runs after all four builds. Pure packaging on Windows.

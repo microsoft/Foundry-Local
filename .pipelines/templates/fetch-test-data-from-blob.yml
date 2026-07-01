@@ -1,0 +1,113 @@
+# Download test model data from blob storage into a local directory.
+# Uses azcopy with AZCLI auth so the agent identity can read from storage.
+
+parameters:
+- name: destinationPath
+  type: string
+  default: '$(Build.SourcesDirectory)/test-data-shared'
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Fetch test data from blob'
+  inputs:
+    azureSubscription: 'ortcibuild_readonly_mi2-ONNX Runtime-AIFoundryLocal'
+    scriptType: pscore
+    scriptLocation: inlineScript
+    inlineScript: |
+      $ErrorActionPreference = 'Stop'
+
+      $destination = '${{ parameters.destinationPath }}'
+      $storageAccount = 'foundrylocalmodels'
+      $container = 'models'
+      $prefix = 'foundrylocal/models'
+
+      if (-not (Get-Command azcopy -ErrorAction SilentlyContinue)) {
+        if ($IsMacOS) {
+          Write-Host 'azcopy not found on macOS agent. Installing via Homebrew...'
+          if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
+            throw 'Homebrew is required to install azcopy on macOS agents, but brew was not found.'
+          }
+
+          brew update --quiet
+          brew install --quiet azcopy
+        } else {
+          throw 'azcopy is not installed on this agent.'
+        }
+      }
+
+      azcopy --version
+
+      New-Item -ItemType Directory -Path $destination -Force | Out-Null
+      $publisherRoot = Join-Path $destination 'Microsoft'
+      New-Item -ItemType Directory -Path $publisherRoot -Force | Out-Null
+
+      function Invoke-AzCopy {
+        param(
+          [string]$Source,
+          [string]$Target
+        )
+
+        $parent = Split-Path -Path $Target -Parent
+        if (-not [string]::IsNullOrEmpty($parent)) {
+          New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        $args = @('copy', $Source, $Target, '--recursive')
+
+        & azcopy @args
+        if ($LASTEXITCODE -ne 0) {
+          throw "azcopy failed downloading test data from $Source"
+        }
+      }
+
+      # The active SDK tests resolve versioned model aliases in cache.
+      # Keep one target alias per source model to avoid duplicate copies.
+      $modelMappings = @(
+        @{
+          SourcePath = 'qwen2.5-0.5b-instruct'
+          TargetAlias = 'qwen2.5-0.5b-instruct-generic-cpu-4'
+        },
+        @{
+          SourcePath = 'openai-whisper-tiny'
+          TargetAlias = 'openai-whisper-tiny-generic-cpu-4'
+        },
+        @{
+          SourcePath = 'nemotron-speech-streaming-en-0.6b'
+          TargetAlias = 'nemotron-speech-streaming-en-0.6b-generic-cpu-3'
+        },
+        @{
+          SourcePath = 'qwen3-embedding-0.6b'
+          TargetAlias = 'qwen3-embedding-0.6b-generic-cpu-1'
+        },
+        @{
+          SourcePath = 'qwen3.5-0.8b'
+          TargetAlias = 'qwen3.5-0.8b-generic-cpu-2'
+        },
+        @{
+          SourcePath = 'deepseek-r1-distill-qwen-14b'
+          TargetAlias = 'deepseek-r1-distill-qwen-14b-generic-cpu-4'
+        }
+      )
+
+      foreach ($model in $modelMappings) {
+        $requestedUrl = "https://$storageAccount.blob.core.windows.net/$container/$prefix/$($model.SourcePath)/onnx/cpu_and_mobile/*"
+        Write-Host "Requested blob URL: $requestedUrl"
+
+        $target = Join-Path $publisherRoot $model.TargetAlias
+        Invoke-AzCopy -Source $requestedUrl -Target $target
+      }
+
+      $count = @(Get-ChildItem -Path $destination -Recurse -File).Count
+
+      if ($count -eq 0) {
+        throw "Downloaded test data is empty at $destination"
+      }
+
+      Write-Host "Downloaded $count files into $destination"
+      Write-Host "Cache directory contents for $destination"
+      (Get-ChildItem -Path $destination -Recurse -Force |
+        Select-Object FullName, Length |
+        Format-Table -AutoSize |
+        Out-String).TrimEnd() | Write-Host
+  env:
+    AZCOPY_AUTO_LOGIN_TYPE: AZCLI
