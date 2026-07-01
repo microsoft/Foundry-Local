@@ -75,31 +75,58 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
   });
   const catalog = manager.catalog;
   const namePref = opts.namePreference ?? "qwen2.5-0.5b";
+  const task = opts.task ?? "chat-completion";
+  const all = await catalog.getModels();
+
+  const normalizeVersionSuffix = (value: string): string => value.replace(/-\d+$/, "");
+  const nameMatchesPreference = (candidateName: string, preference: string): boolean => {
+    if (candidateName === preference) {
+      return true;
+    }
+
+    const candidateBase = normalizeVersionSuffix(candidateName);
+    const prefBase = normalizeVersionSuffix(preference);
+
+    // Handles versioned/unversioned pairs in either direction, e.g.
+    //  - preference: openai-whisper-tiny-generic-cpu
+    //  - candidate : openai-whisper-tiny-generic-cpu-4
+    return candidateBase === prefBase;
+  };
+
+  const bySize = (a: IModel, b: IModel): number =>
+    (a.info.fileSizeMb ?? Number.POSITIVE_INFINITY) - (b.info.fileSizeMb ?? Number.POSITIVE_INFINITY);
+
+  const preferCachedThenSize = (models: IModel[]): IModel | undefined => {
+    const cached = models.filter((m) => m.isCached);
+    if (cached.length > 0) {
+      return cached.sort(bySize)[0];
+    }
+    return models.sort(bySize)[0];
+  };
 
   // Preference 1: exact name / alias hit (V1 throws on miss, so swallow).
   let model: IModel | undefined;
   try {
-    model = await catalog.getModel(namePref);
+    const exact = await catalog.getModel(namePref);
+    if (exact.info.deviceType === "CPU") {
+      model = exact;
+    }
   } catch {
     model = undefined;
   }
 
-  // Preference 1b: catalog entries often carry a `-N` version suffix
-  // (e.g. `nemotron-speech-streaming-en-0.6b-generic-cpu-3`). If the exact
-  // hit missed, try matching by prefix before falling back to the task
-  // filter — caller-specified names should win over "smallest by task".
-  if (model === undefined && opts.namePreference !== undefined) {
-    const all = await catalog.getModels();
-    const prefixed = all.find((m) => m.info.name.startsWith(namePref));
-    if (prefixed !== undefined) {
-      model = prefixed;
-    }
+  // Preference 1b: robust preference matching with CPU + cache-first behavior.
+  // Handles versioned/unversioned names in either direction.
+  if (model === undefined) {
+    const preferredMatches = all.filter((m) => {
+      const info = m.info;
+      return info.deviceType === "CPU" && nameMatchesPreference(info.name, namePref);
+    });
+    model = preferCachedThenSize(preferredMatches);
   }
 
   // Preference 2: smallest model matching the task filter.
   if (model === undefined) {
-    const task = opts.task ?? "chat-completion";
-    const all = await catalog.getModels();
     const matching = all.filter((m) => {
       const info = m.info;
       return info.task === task && info.deviceType === "CPU";
@@ -110,11 +137,7 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
         `No catalog model matches task='${task}' deviceType='CPU' (and preference '${namePref}' missing)`,
       );
     }
-    matching.sort(
-      (a, b) =>
-        (a.info.filesizeMb ?? Number.POSITIVE_INFINITY) - (b.info.filesizeMb ?? Number.POSITIVE_INFINITY),
-    );
-    model = matching[0];
+    model = preferCachedThenSize(matching);
   }
   if (model === undefined) {
     manager.dispose();
