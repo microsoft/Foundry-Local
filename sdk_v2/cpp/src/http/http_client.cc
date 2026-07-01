@@ -6,10 +6,19 @@
 
 #include <azure/core/context.hpp>
 #include <azure/core/datetime.hpp>
-#include <azure/core/http/curl_transport.hpp>
 #include <azure/core/http/http.hpp>
 #include <azure/core/http/raw_response.hpp>
 #include <azure/core/io/body_stream.hpp>
+
+// On Windows we use the WinHTTP transport (OS SChannel TLS, no background threads)
+// and drop libcurl entirely to shrink the binary and avoid curl's process-lifetime
+// connection-pool cleanup thread, which races with host-runtime teardown (Node/V8).
+// Other platforms keep the libcurl transport.
+#if defined(_WIN32)
+#include <azure/core/http/win_http_transport.hpp>
+#else
+#include <azure/core/http/curl_transport.hpp>
+#endif
 
 #include <chrono>
 #include <random>
@@ -35,7 +44,11 @@ HttpRawResult HttpRequestRaw(const Azure::Core::Http::HttpMethod& method,
   using namespace Azure::Core;
   using namespace Azure::Core::Http;
 
+#if defined(_WIN32)
+  WinHttpTransport transport;
+#else
   CurlTransport transport;
+#endif
 
   // Build the request. For methods with a body (POST), attach a MemoryBodyStream.
   std::vector<uint8_t> body_bytes(body.begin(), body.end());

@@ -6,9 +6,15 @@
 #include "util/string_utils.h"
 
 #include <azure/core/context.hpp>
-#include <azure/core/http/curl_transport.hpp>
 #include <azure/core/http/http.hpp>
 #include <azure/core/io/body_stream.hpp>
+
+// See http_client.cc: WinHTTP on Windows (no libcurl), libcurl elsewhere.
+#if defined(_WIN32)
+#include <azure/core/http/win_http_transport.hpp>
+#else
+#include <azure/core/http/curl_transport.hpp>
+#endif
 
 #include <filesystem>
 #include <fstream>
@@ -30,7 +36,11 @@ bool HttpDownloadFile(const std::string& url,
     std::filesystem::create_directories(parent);
   }
 
+#if defined(_WIN32)
+  WinHttpTransport transport;
+#else
   CurlTransport transport;
+#endif
   Request request(HttpMethod::Get, Url(url));
   request.SetHeader("User-Agent", user_agent);
 
