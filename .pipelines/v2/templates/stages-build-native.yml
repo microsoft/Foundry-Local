@@ -108,6 +108,9 @@ stages:
         - output: pipelineArtifact
           artifactName: 'cpp-native-linux-x64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        - output: pipelineArtifact
+          artifactName: 'cpp-native-symbols-linux-x64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/symbols'
       steps:
       - template: steps-build-linux.yml
         parameters:
@@ -139,6 +142,9 @@ stages:
         - output: pipelineArtifact
           artifactName: 'cpp-native-osx-arm64'
           targetPath: '$(Build.ArtifactStagingDirectory)/native'
+        - output: pipelineArtifact
+          artifactName: 'cpp-native-symbols-osx-arm64'
+          targetPath: '$(Build.ArtifactStagingDirectory)/symbols'
       steps:
       - template: steps-build-macos.yml
         parameters:
