@@ -223,28 +223,27 @@ void Model::Load(ExecutionProvider ep) {
   // This makes tool/reasoning tags available via ModelInfo regardless of whether they came from
   // catalog metadata, so downstream code doesn't need to know about multiple metadata sources.
   if (result.model && result.status == ModelLoadManager::LoadStatus::kSuccess) {
-    auto enrich = [&](const char* tag_name, const char* prop_key) {
-      std::string val = result.model->GetTag(tag_name);
+    const auto& tag_info = result.model->GetTagInfo();
+
+    auto enrich = [&](const std::string& val, const char* prop_key) {
       if (!val.empty() && !info_.GetPropertyStr(prop_key)) {
-        info_.string_properties[prop_key] = std::move(val);
+        info_.string_properties[prop_key] = val;
       }
     };
 
-    enrich("tool_call_start", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
-    enrich("tool_call_end", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
-    enrich("reasoning_start", FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
-    enrich("reasoning_end", FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
+    enrich(tag_info.tool_call_start_str, FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
+    enrich(tag_info.tool_call_end_str, FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
+    enrich(tag_info.reasoning_start_str, FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
+    enrich(tag_info.reasoning_end_str, FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
 
-    // Infer support flags from the presence of start tokens
+    // Infer support flags from the presence of valid tag IDs
     if (!info_.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT)) {
-      const auto* tc = info_.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
-      if (tc && !tc->empty()) {
+      if (tag_info.tool_call_start_id >= 0) {
         info_.int_properties[FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT] = 1;
       }
     }
     if (!info_.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT)) {
-      const auto* rs = info_.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
-      if (rs && !rs->empty()) {
+      if (tag_info.reasoning_start_id >= 0) {
         info_.int_properties[FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT] = 1;
       }
     }

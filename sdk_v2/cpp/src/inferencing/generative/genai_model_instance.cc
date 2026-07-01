@@ -111,15 +111,6 @@ OgaModel& GenAIModelInstance::GetOgaModel() {
   return *oga_model_;
 }
 
-std::string GenAIModelInstance::GetTag(const char* tag_name) const {
-  if (!oga_model_) {
-    return {};
-  }
-  OgaString tag = oga_model_->GetTag(tag_name);
-  const char* p = tag;
-  return p ? std::string(p) : std::string();
-}
-
 OgaTokenizer& GenAIModelInstance::GetOgaTokenizer() {
   if (!tokenizer_) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "OGA tokenizer is null");
@@ -147,6 +138,34 @@ const std::vector<int32_t>& GenAIModelInstance::GetEosTokenIds() {
   });
 
   return eos_token_ids_;
+}
+
+const GenAIModelInstance::TagInfo& GenAIModelInstance::GetTagInfo() {
+  std::call_once(tag_info_init_flag_, [this]() {
+    if (!oga_model_) return;
+
+    // Get tag IDs from GenAI (config first, then fallback-encoded via tokenizer vocab lookup)
+    tag_info_.tool_call_start_id = oga_model_->GetTagId("tool_call_start");
+    tag_info_.tool_call_end_id = oga_model_->GetTagId("tool_call_end");
+    tag_info_.reasoning_start_id = oga_model_->GetTagId("reasoning_start");
+    tag_info_.reasoning_end_id = oga_model_->GetTagId("reasoning_end");
+
+    // Decode each valid ID once through the special tokenizer to get the string.
+    // Uses tokenizer_with_special_ so that special token text (e.g., "<tool_call>") is produced.
+    auto decode_id = [this](int32_t id) -> std::string {
+      if (id < 0 || !tokenizer_with_special_) return {};
+      OgaString text = tokenizer_with_special_->Decode(&id, 1);
+      const char* p = text;
+      return p ? std::string(p) : std::string();
+    };
+
+    tag_info_.tool_call_start_str = decode_id(tag_info_.tool_call_start_id);
+    tag_info_.tool_call_end_str = decode_id(tag_info_.tool_call_end_id);
+    tag_info_.reasoning_start_str = decode_id(tag_info_.reasoning_start_id);
+    tag_info_.reasoning_end_str = decode_id(tag_info_.reasoning_end_id);
+  });
+
+  return tag_info_;
 }
 
 }  // namespace fl

@@ -36,10 +36,21 @@ class GenAIModelInstance {
   ExecutionProvider EP() const { return ep_; }
   bool IsMultiModal() const;
 
-  /// Query a tag from the GenAI model (reads genai_config.json with model-family fallback).
-  /// Returns the tag value or empty string if not found.  Supported keys:
-  /// "tool_call_start", "tool_call_end", "reasoning_start", "reasoning_end".
-  std::string GetTag(const char* tag_name) const;
+  /// Cached tag token IDs and their decoded strings for efficient detection.
+  /// IDs are used for integer comparison in the decode loop (fast path).
+  /// Strings are used by ToolCallContext/Accumulator for text-based processing.
+  /// Populated once at first access via OgaModel::GetTagId + tokenizer decode.
+  struct TagInfo {
+    int32_t tool_call_start_id{-1};
+    int32_t tool_call_end_id{-1};
+    int32_t reasoning_start_id{-1};
+    int32_t reasoning_end_id{-1};
+    std::string tool_call_start_str;
+    std::string tool_call_end_str;
+    std::string reasoning_start_str;
+    std::string reasoning_end_str;
+  };
+  const TagInfo& GetTagInfo();
 
   /// Access the underlying OGA objects (for future chat generation work).
   OgaModel& GetOgaModel();
@@ -81,6 +92,8 @@ class GenAIModelInstance {
   std::unique_ptr<OgaMultiModalProcessor> processor_;  // nullptr if not multimodal
   std::vector<int32_t> eos_token_ids_;                 // cached; populated on first GetEosTokenIds() call
   std::once_flag eos_token_ids_init_flag_;
+  TagInfo tag_info_;                                    // cached; populated on first GetTagInfo() call
+  std::once_flag tag_info_init_flag_;
   std::chrono::steady_clock::time_point last_activity_;
   mutable std::atomic<int> session_ref_count_{0};
 };
