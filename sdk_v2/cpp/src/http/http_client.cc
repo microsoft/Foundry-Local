@@ -10,18 +10,11 @@
 #include <azure/core/http/raw_response.hpp>
 #include <azure/core/io/body_stream.hpp>
 
-#if defined(_WIN32)
-#include <winapifamily.h>
-
-#if !defined(WINAPI_FAMILY) || WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#define FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT 1
-#endif
-#endif
-
 // Desktop Windows uses the WinHTTP transport (OS SChannel TLS, no background threads)
 // and drops libcurl entirely to shrink the binary and avoid curl's process-lifetime
 // connection-pool cleanup thread, which races with host-runtime teardown (Node/V8).
 // UWP and non-Windows builds keep the libcurl transport to match the vcpkg feature selection.
+// FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT is set by CMake for non-UWP Windows builds.
 #if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
 #include <azure/core/http/win_http_transport.hpp>
 #else

@@ -9,15 +9,8 @@
 #include <azure/core/http/http.hpp>
 #include <azure/core/io/body_stream.hpp>
 
-#if defined(_WIN32)
-#include <winapifamily.h>
-
-#if !defined(WINAPI_FAMILY) || WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#define FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT 1
-#endif
-#endif
-
 // See http_client.cc: desktop Windows uses WinHTTP; UWP and non-Windows builds use libcurl.
+// FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT is set by CMake for non-UWP Windows builds.
 #if defined(FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT)
 #include <azure/core/http/win_http_transport.hpp>
 #else
