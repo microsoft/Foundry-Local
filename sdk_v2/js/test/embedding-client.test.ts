@@ -48,7 +48,7 @@ describe.skipIf(!haveTestModelCache)("EmbeddingClient (real model, V1 OpenAI-JSO
   beforeAll(async () => {
     fixture = await setupRealModelManager({
       task: "embeddings",
-      namePreference: "qwen3-embedding-0.6b-generic-cpu-1",
+      namePreference: "qwen3-embedding-0.6b-generic-cpu",
     });
     if (fixture !== undefined) {
       client = fixture.model.createEmbeddingClient();

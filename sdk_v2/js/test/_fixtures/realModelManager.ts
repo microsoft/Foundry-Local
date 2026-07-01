@@ -19,8 +19,7 @@ import type { IModel } from "../../src/imodel.js";
 
 const envCache = process.env.FOUNDRY_TEST_DATA_DIR;
 const publisherCache = envCache !== undefined && envCache.length > 0 ? join(envCache, "Microsoft") : undefined;
-const cacheDirExists =
-  publisherCache !== undefined && existsSync(publisherCache) && statSync(publisherCache).isDirectory();
+const cacheDirExists = publisherCache !== undefined && existsSync(publisherCache) && statSync(publisherCache).isDirectory();
 
 /**
  * True iff `FOUNDRY_TEST_DATA_DIR` is set and points at a real directory.
@@ -33,6 +32,31 @@ export const testModelCacheDiagnostic = haveTestModelCache
   : "[v2 SDK real-model tests] SKIPPED — FOUNDRY_TEST_DATA_DIR/Microsoft is not set or does not exist";
 
 const isCi: boolean = process.env.CI !== undefined || process.env.TF_BUILD !== undefined;
+
+function normalizeModelLabel(value: string): string {
+  return value.trim().toLowerCase().replace(/-\d+$/, "");
+}
+
+function pickBestModel(candidates: readonly IModel[]): IModel | undefined {
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  const sorted = [...candidates];
+  sorted.sort((a, b) => {
+    if (a.isCached !== b.isCached) {
+      return a.isCached ? -1 : 1;
+    }
+    const aSize = a.info.fileSizeMb ?? Number.POSITIVE_INFINITY;
+    const bSize = b.info.fileSizeMb ?? Number.POSITIVE_INFINITY;
+    if (aSize !== bSize) {
+      return aSize - bSize;
+    }
+    return a.info.name.localeCompare(b.info.name);
+  });
+
+  return sorted[0];
+}
 
 export interface RealModelManagerOptions {
   /** Override the appName. Defaults to a fixed test id. */
@@ -76,33 +100,47 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
     modelCacheDir: publisherCache,
   });
   const catalog = manager.catalog;
-  const namePref = opts.namePreference ?? "qwen2.5-0.5b-instruct-generic-cpu-4";
+  const cachedModels = await catalog.getCachedModels();
+  const allModels = await catalog.getModels();
+  const namePref = opts.namePreference ?? "qwen2.5-0.5b-instruct-generic-cpu";
 
-  // Preference 1: exact name / alias hit (V1 throws on miss, so swallow).
-  let model: IModel | undefined;
-  try {
-    model = await catalog.getModel(namePref);
-  } catch {
-    model = undefined;
-  }
+  // Normalize catalog labels from cache by stripping trailing version suffix.
+  const normalizedPref = normalizeModelLabel(namePref);
+  let model = pickBestModel(
+    cachedModels.filter((m) => {
+      const normalizedName = normalizeModelLabel(m.info.name);
+      const normalizedAlias = normalizeModelLabel(m.info.alias);
+      return normalizedName === normalizedPref || normalizedAlias === normalizedPref;
+    }),
+  );
 
-  // Preference 1b: catalog entries often carry a `-N` version suffix
-  // (e.g. `nemotron-3.5-asr-streaming-0.6b-generic-cpu-3`). If the exact
-  // hit missed, try matching by prefix before falling back to the task
-  // filter — caller-specified names should win over "smallest by task".
-  if (model === undefined && opts.namePreference !== undefined) {
-    const all = await catalog.getModels();
-    const prefixed = all.find((m) => m.info.name.startsWith(namePref));
-    if (prefixed !== undefined) {
-      model = prefixed;
-    }
+  // Fallback for local runs where cache may be empty/incomplete.
+  if (model === undefined) {
+    model = pickBestModel(
+      allModels.filter((m) => {
+        const normalizedName = normalizeModelLabel(m.info.name);
+        const normalizedAlias = normalizeModelLabel(m.info.alias);
+        return normalizedName === normalizedPref || normalizedAlias === normalizedPref;
+      }),
+    );
   }
 
   // Preference 2: smallest model matching the task filter.
   if (model === undefined) {
     const task = opts.task ?? "chat-completion";
-    const all = await catalog.getModels();
-    const matching = all.filter((m) => {
+    const matching = cachedModels.filter((m) => {
+      const info = m.info;
+      return info.task === task && info.deviceType === "CPU";
+    });
+    const fromCache = pickBestModel(matching);
+    if (fromCache !== undefined) {
+      model = fromCache;
+    }
+  }
+
+  if (model === undefined) {
+    const task = opts.task ?? "chat-completion";
+    const matching = allModels.filter((m) => {
       const info = m.info;
       return info.task === task && info.deviceType === "CPU";
     });
@@ -112,11 +150,7 @@ export async function setupRealModelManager(opts: RealModelManagerOptions = {}):
         `No catalog model matches task='${task}' deviceType='CPU' (and preference '${namePref}' missing)`,
       );
     }
-    matching.sort(
-      (a, b) =>
-        (a.info.filesizeMb ?? Number.POSITIVE_INFINITY) - (b.info.filesizeMb ?? Number.POSITIVE_INFINITY),
-    );
-    model = matching[0];
+    model = pickBestModel(matching);
   }
   if (model === undefined) {
     manager.dispose();
