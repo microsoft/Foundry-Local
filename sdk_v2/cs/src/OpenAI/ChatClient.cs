@@ -24,6 +24,7 @@ using OpenAIToolChoice = Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ToolCho
 /// Chat Client that uses the OpenAI API.
 /// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
+[System.Obsolete("OpenAIChatClient is deprecated. Use ChatSession instead. OpenAI types remain supported for the web-server path.", error: false)]
 public class OpenAIChatClient
 {
     private readonly string _modelId;

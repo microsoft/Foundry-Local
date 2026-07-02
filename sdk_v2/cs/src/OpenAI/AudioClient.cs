@@ -20,6 +20,7 @@ using NativeModel = Microsoft.AI.Foundry.Local.Detail.Native.Model;
 /// Audio Client that uses the OpenAI API.
 /// Implemented using Betalgo.Ranul.OpenAI SDK types.
 /// </summary>
+[System.Obsolete("OpenAIAudioClient is deprecated. Use AudioSession instead. OpenAI types remain supported for the web-server path.", error: false)]
 public class OpenAIAudioClient
 {
     private readonly string _modelId;
