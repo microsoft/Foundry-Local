@@ -238,6 +238,7 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
 
   tool_ctx.tool_call_start = get_param(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
   tool_ctx.tool_call_end = get_param(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
+  tool_ctx.template_kwargs_json = get_param("chat_template_kwargs");
 
   // Fall back to model info properties if not specified in the request
   const auto& info = CatalogModel().Info();
@@ -525,7 +526,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         cached_tool_ctx_.supports_reasoning != turn_tool_ctx.supports_reasoning ||
         cached_tool_ctx_.reasoning_start != turn_tool_ctx.reasoning_start ||
         cached_tool_ctx_.reasoning_end != turn_tool_ctx.reasoning_end ||
-        cached_tool_ctx_.tools_json != turn_tool_ctx.tools_json;
+        cached_tool_ctx_.tools_json != turn_tool_ctx.tools_json ||
+        cached_tool_ctx_.template_kwargs_json != turn_tool_ctx.template_kwargs_json;
 
     // Classic Generator guidance and search settings are fixed at creation. Dynamic Engine options are supplied on
     // each BeginTurn, while the static Engine always rebuilds below because it cannot safely retain shared state.
