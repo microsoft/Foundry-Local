@@ -261,6 +261,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/telemetry/telemetry_action_tracker.cc
     src/telemetry/device_id.cc
     src/telemetry/invocation_context.cc
+    src/telemetry/telemetry_event_properties_sanitizer.cc
     src/telemetry/telemetry_environment.cc
     src/telemetry/telemetry_logger.cc
     src/telemetry/telemetry_metadata.cc

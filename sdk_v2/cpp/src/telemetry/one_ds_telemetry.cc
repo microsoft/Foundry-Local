@@ -4,6 +4,7 @@
 #include "telemetry/one_ds_telemetry.h"
 
 #include "telemetry/device_id.h"
+#include "telemetry/telemetry_event_properties_sanitizer.h"
 #include "telemetry/telemetry_environment.h"
 #include "telemetry/telemetry_redaction.h"
 #include "telemetry/telemetry_sampling.h"
@@ -93,13 +94,13 @@ std::string GetToken() {
 }
 
 void SetCommonContext(MatILogger* mat_logger, const TelemetryMetadata& m) {
-  mat_logger->SetContext("AppName", m.app_name);
-  mat_logger->SetContext("AppVersion", m.app_version);
-  mat_logger->SetContext("FoundryLocalVersion", m.version);
-  mat_logger->SetContext("AppSessionGuid", m.app_session_guid);
-  mat_logger->SetContext("OsName", m.os_name);
-  mat_logger->SetContext("OsVersion", m.os_version);
-  mat_logger->SetContext("CpuArch", m.cpu_arch);
+  mat_logger->SetContext("AppName", ScrubStringForTelemetry(m.app_name));
+  mat_logger->SetContext("AppVersion", ScrubStringForTelemetry(m.app_version));
+  mat_logger->SetContext("FoundryLocalVersion", ScrubStringForTelemetry(m.version));
+  mat_logger->SetContext("AppSessionGuid", ScrubStringForTelemetry(m.app_session_guid));
+  mat_logger->SetContext("OsName", ScrubStringForTelemetry(m.os_name));
+  mat_logger->SetContext("OsVersion", ScrubStringForTelemetry(m.os_version));
+  mat_logger->SetContext("CpuArch", ScrubStringForTelemetry(m.cpu_arch));
 }
 
 EventProperties MakeEvent(
@@ -140,6 +141,7 @@ bool ShouldSampleEvent(std::string_view app_session_guid, std::string_view corre
 
 void SafeLog(MatILogger* mat_logger, EventProperties& ev) {
   if (mat_logger != nullptr) {
+    TelemetryInternal::SanitizeEventProperties(ev);
     mat_logger->LogEvent(ev);
   }
 }
@@ -514,6 +516,7 @@ void OneDsTelemetry::StartSession() {
   // LogSession(Started) opens an app-usage session; the SDK stamps ext.app.sesId
   // on subsequent events and records session duration on End.
   auto ev = MakeEvent("Session");
+  TelemetryInternal::SanitizeEventProperties(ev);
   impl_->logger->LogSession(SessionState::Session_Started, ev);
 }
 
@@ -524,6 +527,7 @@ void OneDsTelemetry::EndSession() {
     return;
   }
   auto ev = MakeEvent("Session");
+  TelemetryInternal::SanitizeEventProperties(ev);
   impl_->logger->LogSession(SessionState::Session_Ended, ev);
 }
 
