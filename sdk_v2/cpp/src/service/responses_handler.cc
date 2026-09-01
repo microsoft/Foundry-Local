@@ -26,6 +26,35 @@ namespace fl {
 
 using namespace fl::responses;
 
+namespace {
+
+std::string NormalizeResponseToolName(std::string name,
+                                      const std::optional<std::vector<responses::ToolDefinition>>& tools) {
+  const size_t start = name.find_first_not_of(" \t\r\n\"'");
+  if (start == std::string::npos) {
+    return {};
+  }
+  const size_t end = name.find_last_not_of(" \t\r\n\"'");
+  name = name.substr(start, end - start + 1);
+
+  if (name != "exec_command") {
+    return name;
+  }
+
+  bool has_shell = false;
+  bool has_exec_command = false;
+  if (tools.has_value()) {
+    for (const auto& tool : *tools) {
+      has_shell = has_shell || tool.function.name == "shell";
+      has_exec_command = has_exec_command || tool.function.name == "exec_command";
+    }
+  }
+  const bool has_tool_metadata = tools.has_value() && !tools->empty();
+  return !has_exec_command && (has_shell || !has_tool_metadata) ? "shell" : name;
+}
+
+}  // namespace
+
 // ========================================================================
 // ResponsesHandler — POST /v1/responses
 // ========================================================================
@@ -80,13 +109,13 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveModel(
-  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
   }
 
-  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id(), model->GetPath());
+  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id());
   if (!loaded) {
     return ErrorResponse(Status::CODE_400, "Model not loaded",
                          "Model '" + model_name + "' must be loaded before inference");
@@ -249,6 +278,13 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleNo
 
   fl::Response session_response;
   session->ProcessRequest(session_request, session_response);
+
+  for (auto& item : session_response.items) {
+    if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+      auto* tool_call = static_cast<fl::ToolCallItem*>(item.get());
+      tool_call->name = NormalizeResponseToolName(std::move(tool_call->name), params.tools);
+    }
+  }
 
   auto [output, output_text] = ResponseConverter::FromSessionResponse(session_response);
 
@@ -475,17 +511,6 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       push_event("response.content_part.added", part_added);
     };
 
-    auto emit_tool_call = [&](const fl::ToolCallItem& call) {
-      close_current();
-
-      const int output_index = next_output_index++;
-      auto output = ResponseConverter::BuildFunctionCallStreamOutput(call, output_index, seq);
-      for (const auto& event : output.events) {
-        push_event(StreamEventTypeToString(event.type), event);
-      }
-      closed_items.push_back(std::move(output.completed_item));
-    };
-
     try {
       // Register inside the try so a shutdown rejection (Register throws) is reported as a stream failure
       // instead of escaping this raw std::thread and calling std::terminate.
@@ -502,17 +527,57 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
         }
 
         if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
-          emit_tool_call(static_cast<const fl::ToolCallItem&>(*item));
+          close_current();
+
+          auto* tool_call = static_cast<fl::ToolCallItem*>(item.get());
+          FunctionCallOutputItem function_call;
+          function_call.id = ResponseConverter::GenerateId("fc");
+          function_call.call_id = tool_call->call_id.empty() ? ResponseConverter::GenerateId("call")
+                                                             : tool_call->call_id;
+          function_call.name = NormalizeResponseToolName(tool_call->name, params_copy.tools);
+          function_call.arguments = tool_call->arguments;
+          function_call.status = ResponseStatus::kInProgress;
+          int output_index = next_output_index++;
+
+          StreamEvent item_added;
+          item_added.type = StreamEventType::kOutputItemAdded;
+          item_added.sequence_number = seq++;
+          item_added.output_index = output_index;
+          item_added.item = function_call;
+          push_event("response.output_item.added", item_added);
+
+          StreamEvent arguments_delta;
+          arguments_delta.type = StreamEventType::kFunctionCallArgumentsDelta;
+          arguments_delta.sequence_number = seq++;
+          arguments_delta.output_index = output_index;
+          arguments_delta.item_id = function_call.id;
+          arguments_delta.function_call_id = function_call.call_id;
+          arguments_delta.delta = function_call.arguments;
+          push_event("response.function_call_arguments.delta", arguments_delta);
+
+          StreamEvent arguments_done;
+          arguments_done.type = StreamEventType::kFunctionCallArgumentsDone;
+          arguments_done.sequence_number = seq++;
+          arguments_done.output_index = output_index;
+          arguments_done.item_id = function_call.id;
+          arguments_done.function_name = function_call.name;
+          arguments_done.function_call_id = function_call.call_id;
+          arguments_done.function_arguments = function_call.arguments;
+          push_event("response.function_call_arguments.done", arguments_done);
+
+          function_call.status = ResponseStatus::kCompleted;
+          StreamEvent item_done;
+          item_done.type = StreamEventType::kOutputItemDone;
+          item_done.sequence_number = seq++;
+          item_done.output_index = output_index;
+          item_done.item = function_call;
+          push_event("response.output_item.done", item_done);
+
+          closed_items.push_back(std::move(function_call));
           return 0;
         }
 
-        if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
-          logger.Log(LogLevel::Debug,
-                     fmt::format("Responses streaming: skipping non-text item type {}",
-                                 static_cast<int>(item->type)));
-          return 0;
-        }
-
+        assert(item->type == FOUNDRY_LOCAL_ITEM_TEXT);
         auto* text_item = static_cast<fl::TextItem*>(item.get());
 
         ItemKind incoming = (text_item->text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING)

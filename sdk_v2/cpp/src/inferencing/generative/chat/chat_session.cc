@@ -48,54 +48,6 @@ void ApplyToolChoiceToContext(std::optional<flToolChoice> tool_choice, ToolCallC
   }
 }
 
-using TextSegment = ReasoningStreamSplitter::Segment;
-
-ReasoningStreamSplitter CreateReasoningSplitter(const ToolCallContext& tool_ctx,
-                                                GenAIModelInstance& model) {
-  if (!tool_ctx.supports_reasoning) {
-    return {"", ""};
-  }
-
-  const auto& tag_info = model.GetTagInfo();
-  auto start = tool_ctx.reasoning_start.empty() ? tag_info.bor_str : tool_ctx.reasoning_start;
-  auto end = tool_ctx.reasoning_end.empty() ? tag_info.eor_str : tool_ctx.reasoning_end;
-  auto start_token_ids =
-      tag_info.bor_id.has_value() ? std::vector<int32_t>{*tag_info.bor_id} : std::vector<int32_t>{};
-  auto end_token_ids =
-      tag_info.eor_id.has_value() ? std::vector<int32_t>{*tag_info.eor_id} : std::vector<int32_t>{};
-  auto ignored_token_ids = model.GetPreprocessor().GetEosTokenIds();
-  return {std::move(start), std::move(end), std::move(start_token_ids), std::move(end_token_ids),
-          std::move(ignored_token_ids)};
-}
-
-void AppendSegment(std::vector<TextSegment>& destination, std::string text, flTextItemType type) {
-  if (text.empty()) {
-    return;
-  }
-
-  if (!destination.empty() && destination.back().type == type) {
-    destination.back().text += text;
-  } else {
-    destination.push_back({std::move(text), type});
-  }
-}
-
-void AppendGeneratedSegment(std::vector<GeneratedOutputEvent>& destination, std::string text, flTextItemType type) {
-  if (text.empty()) {
-    return;
-  }
-
-  if (!destination.empty()) {
-    auto* previous = std::get_if<TextSegment>(&destination.back());
-    if (previous && previous->type == type) {
-      previous->text += text;
-      return;
-    }
-  }
-
-  destination.push_back(TextSegment{std::move(text), type});
-}
-
 }  // namespace
 
 ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry)
@@ -193,17 +145,6 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
     }
   }
 
-  // Catalog metadata is immutable and may not contain markers for models whose
-  // tokenizer defines them dynamically. Read those markers from the loaded GenAI
-  // model without mutating the published ModelInfo.
-  const auto& tag_info = model_.GetTagInfo();
-  if (tool_ctx.tool_call_start.empty()) {
-    tool_ctx.tool_call_start = tag_info.bot_str;
-  }
-  if (tool_ctx.tool_call_end.empty()) {
-    tool_ctx.tool_call_end = tag_info.eot_str;
-  }
-
   // Check if the model supports chain-of-thought reasoning
   const auto* reasoning_val = info.GetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT);
   if (reasoning_val && *reasoning_val == 1) {
@@ -226,12 +167,6 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
     if (val) {
       tool_ctx.reasoning_end = *val;
     }
-  }
-  if (tool_ctx.reasoning_start.empty()) {
-    tool_ctx.reasoning_start = tag_info.bor_str;
-  }
-  if (tool_ctx.reasoning_end.empty()) {
-    tool_ctx.reasoning_end = tag_info.eor_str;
   }
 
   // Accumulate tool definitions from the session.
@@ -268,6 +203,14 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
     tool_ctx.tools_json.clear();
   }
 
+  // Locally imported models may not have catalog metadata even when their
+  // chat template uses the standard Qwen tool-call markers.
+  if (tool_ctx.HasTools() && tool_ctx.tool_call_start.empty() && tool_ctx.tool_call_end.empty()) {
+    tool_ctx.supports_tool_calling = true;
+    tool_ctx.tool_call_start = "<tool_call>";
+    tool_ctx.tool_call_end = "</tool_call>";
+  }
+
   // Determine text_output / tool_output from tool_choice parameter.
   // ParseToolChoice rejects unknown values with FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT.
   auto tool_choice = SearchOptions::ParseToolChoice(request.options);
@@ -286,19 +229,128 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const 
   return tool_ctx;
 }
 
-void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,
-                                         const SearchOptions& effective_options, bool canceled,
-                                         Response& response, int prompt_tokens, int total_tokens,
-                                         int reasoning_tokens) {
-  int completion_tokens = total_tokens - prompt_tokens;
-  bool has_tool_calls = false;
+// A segment of generated assistant text, tagged with whether it is ordinary visible text or reasoning content.
+struct TextSegment {
+  std::string text;
+  flTextItemType type;
+};
+
+// Split assistant output around <think>...</think> (or equivalent reasoning markers) into typed segments.
+//
+// - Text outside the markers is emitted as DEFAULT (visible) segments.
+// - Text inside the markers is emitted as REASONING segments. The markers themselves are stripped.
+// - Truncated reasoning (no closing marker) is treated as a REASONING segment running to end of input.
+// - Empty segments are skipped.
+// - When start_marker is empty, the entire input is returned as a single DEFAULT segment.
+//
+// Leading whitespace/newlines on visible segments that immediately follow a closed reasoning block are trimmed —
+// matches the prior strip behavior, which dropped a trailing newline after </think> plus any leading whitespace.
+static std::vector<TextSegment> SplitReasoningContent(const std::string& text,
+                                                      const std::string& start_marker,
+                                                      const std::string& end_marker) {
   std::vector<TextSegment> segments;
 
-  auto flush_segments = [&]() {
-    if (segments.empty()) {
+  if (start_marker.empty() || text.empty()) {
+    if (!text.empty()) {
+      segments.push_back({text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT});
+    }
+    return segments;
+  }
+
+  auto push_default = [&](std::string s) {
+    // Trim leading whitespace from visible segments (prior strip logic dropped these).
+    size_t first = s.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) {
       return;
     }
+    s.erase(0, first);
+    if (!s.empty()) {
+      segments.push_back({std::move(s), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT});
+    }
+  };
 
+  auto push_reasoning = [&](std::string s) {
+    if (!s.empty()) {
+      segments.push_back({std::move(s), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING});
+    }
+  };
+
+  size_t pos = 0;
+  while (pos < text.size()) {
+    size_t start_pos = text.find(start_marker, pos);
+
+    if (start_pos == std::string::npos) {
+      push_default(text.substr(pos));
+      break;
+    }
+
+    // Visible text before the reasoning block.
+    push_default(text.substr(pos, start_pos - pos));
+
+    size_t reasoning_begin = start_pos + start_marker.size();
+    size_t end_pos = text.find(end_marker, reasoning_begin);
+
+    if (end_pos == std::string::npos) {
+      // Truncated — reasoning runs to end of string. Drop nothing; expose what we have.
+      push_reasoning(text.substr(reasoning_begin));
+      break;
+    }
+
+    push_reasoning(text.substr(reasoning_begin, end_pos - reasoning_begin));
+    pos = end_pos + end_marker.size();
+
+    // Drop a single trailing newline after </think> (matches prior strip behavior).
+    if (pos < text.size() && text[pos] == '\n') {
+      ++pos;
+    }
+  }
+
+  return segments;
+}
+
+void ChatSession::ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
+                                         const SearchOptions& effective_options, bool canceled,
+                                         Response& response, int prompt_tokens, int total_tokens,
+                                         std::vector<ParsedToolCall> pre_parsed_calls) {
+  int completion_tokens = total_tokens - prompt_tokens;
+
+  // Check if the generated text contains tool calls. If the caller has already parsed them (streaming path), reuse
+  // those so call_ids stay stable across stream deltas and the final response — OpenAI Chat Completions semantics.
+  bool has_tool_calls = false;
+  std::vector<ParsedToolCall> parsed_calls;
+
+  if (!pre_parsed_calls.empty()) {
+    parsed_calls = std::move(pre_parsed_calls);
+    has_tool_calls = true;
+  } else if (tool_ctx.HasTools() && tool_ctx.tool_output && tool_ctx.HasToolCallTokens()) {
+    parsed_calls = ParseToolCalls(text, tool_ctx.tool_call_start, tool_ctx.tool_call_end, tool_ctx.tools_json);
+    has_tool_calls = !parsed_calls.empty();
+  }
+
+  if (has_tool_calls) {
+    // Add structured tool call items to the response
+    auto tool_items = ToolCallsToItems(parsed_calls);
+    for (auto& ti : tool_items) {
+      response.items.push_back(std::move(ti));
+    }
+  }
+
+  // Split assistant output around reasoning markers so reasoning content can be returned to the caller as a typed
+  // TextItem alongside the visible response text. RenderContent in chat_template.cc skips REASONING parts when
+  // re-applying the template to history, so storing reasoning here doesn't contaminate subsequent prompts.
+  std::vector<TextSegment> segments;
+
+  if (tool_ctx.supports_reasoning) {
+    std::string start = tool_ctx.reasoning_start.empty() ? "<think>" : tool_ctx.reasoning_start;
+    std::string end = tool_ctx.reasoning_end.empty() ? "</think>" : tool_ctx.reasoning_end;
+    segments = SplitReasoningContent(text, start, end);
+  } else if (!text.empty()) {
+    segments.push_back({std::move(text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT});
+  }
+
+  // Build the assistant message from the segments. Tool-call-only outputs may produce zero segments — emit no
+  // message in that case, since MessageItem requires non-empty content.
+  if (!segments.empty()) {
     std::unique_ptr<MessageItem> output_item;
 
     if (segments.size() == 1 && segments.front().type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
@@ -315,22 +367,7 @@ void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> event
     }
 
     response.items.push_back(std::move(output_item));
-    segments.clear();
-  };
-
-  for (auto& event : events) {
-    if (auto* segment = std::get_if<TextSegment>(&event)) {
-      AppendSegment(segments, std::move(segment->text), segment->type);
-      continue;
-    }
-
-    flush_segments();
-    auto& call = std::get<ParsedToolCall>(event);
-    response.items.push_back(std::make_unique<ToolCallItem>(std::move(call.id), std::move(call.name),
-                                                            std::move(call.arguments)));
-    has_tool_calls = true;
   }
-  flush_segments();
 
   if (canceled) {
     response.finish_reason = FOUNDRY_LOCAL_FINISH_NONE;
@@ -349,12 +386,10 @@ void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> event
   response.usage.prompt_tokens = prompt_tokens;
   response.usage.completion_tokens = completion_tokens;
   response.usage.total_tokens = total_tokens;
-  response.usage.reasoning_tokens = reasoning_tokens;
 
   logger_.Log(LogLevel::Verbose,
-              fmt::format(
-                  "Completion stats: Total Tokens: {}, Prompt Tokens: {}, Completion Tokens: {}, Reasoning Tokens: {}",
-                  total_tokens, prompt_tokens, completion_tokens, reasoning_tokens));
+              fmt::format("Completion stats: Total Tokens: {}, Prompt Tokens: {}, Completion Tokens: {}",
+                          total_tokens, prompt_tokens, completion_tokens));
 }
 
 void ChatSession::ProcessRequestImpl(const Request& request, Response& response) {
@@ -432,28 +467,25 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   if (cached_generator_) {
     // Check if guidance requirements changed since the generator was created. Guidance (LARK grammar) is baked into
-    // the OGA generator at creation time and cannot be changed. If tool_choice went from "required" to "auto" (or
-    // vice versa), we must recreate the generator from full history.
+    // the OGA generator at creation time and cannot be changed.
     auto turn_tool_ctx = cached_tool_ctx_;
     UpdateToolContextForTurn(request, turn_tool_ctx);
 
-    bool prev_has_user_guidance = !cached_tool_ctx_.guidance_type.empty() && !cached_tool_ctx_.guidance_data.empty();
-    bool curr_has_user_guidance = !turn_tool_ctx.guidance_type.empty() && !turn_tool_ctx.guidance_data.empty();
-    bool prev_needs_guidance = prev_has_user_guidance || (cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output);
-    bool curr_needs_guidance = curr_has_user_guidance || (turn_tool_ctx.tool_output && !turn_tool_ctx.text_output);
+    bool prev_needs_guidance = cached_tool_ctx_.tool_output && cached_tool_ctx_.HasTools();
+    bool curr_needs_guidance = turn_tool_ctx.tool_output && turn_tool_ctx.HasTools();
 
-    // Guidance (grammar) is baked into the OGA generator at creation time and cannot be changed.
-    // Rebuild when: guidance requirements changed OR the previous turn had user-specified guidance
-    // (the finite grammar may have completed, causing IsDone() to return true on the next turn,
-    // and switching schemas requires a fresh grammar).
-    if (prev_needs_guidance != curr_needs_guidance || prev_has_user_guidance) {
+    if (prev_needs_guidance != curr_needs_guidance) {
       // Guidance requirements changed — invalidate. The branch below will rebuild from full history.
       cached_generator_.reset();
       cached_tool_ctx_ = {};
     } else {
       // Continuous decoding: append only the new messages to the existing generator.
       pre_turn_token_count = cached_generator_->TokenCount();
-      prompt_tokens = cached_generator_->AppendMessages(new_messages, Model(), cached_tool_ctx_.tools_json);
+      const std::string reasoning_start_marker =
+          cached_tool_ctx_.reasoning_start.empty() ? std::string("<think>") : cached_tool_ctx_.reasoning_start;
+      prompt_tokens = cached_generator_->AppendMessages(
+          new_messages, Model(), cached_tool_ctx_.tools_json,
+          cached_tool_ctx_.supports_reasoning ? reasoning_start_marker : std::string{});
 
       // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
       UpdateToolContextForTurn(request, cached_tool_ctx_);
@@ -491,18 +523,24 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   }
 
   int max_output = effective_options.max_output_tokens.value_or(0);
-  const auto committed_tool_ctx = cached_tool_ctx_;
 
   // Generate token-by-token with optional streaming.
   // Check request.canceled each iteration — a streaming callback returning
   // non-zero sets this flag asynchronously via CallbackHandler.
+  std::string text;
   auto streaming_callback = CreateCallbackHandler(request);
   int output_tokens = 0;
-  std::vector<GeneratedOutputEvent> generated_events;
 
-  // Marker IDs are derived from the configured strings with the model tokenizer. This detects special markers even
-  // when their decoded chunks are empty, while non-reasoning models retain the DEFAULT passthrough.
-  auto splitter = CreateReasoningSplitter(cached_tool_ctx_, Model());
+  // Splitter: only active for reasoning models. For non-reasoning models start_marker is empty and the splitter
+  // degrades to a passthrough (every token becomes one DEFAULT segment), so the streaming path stays uniform.
+  ReasoningStreamSplitter splitter(
+      cached_tool_ctx_.supports_reasoning ? (cached_tool_ctx_.reasoning_start.empty() ? std::string("<think>")
+                                                                                      : cached_tool_ctx_.reasoning_start)
+                                          : std::string(),
+      cached_tool_ctx_.supports_reasoning ? (cached_tool_ctx_.reasoning_end.empty() ? std::string("</think>")
+                                                                                    : cached_tool_ctx_.reasoning_end)
+                                          : std::string(),
+      cached_generator_ && cached_generator_->PromptEndsInReasoning());
 
   // Accumulator: separates visible text from tool-call blocks in the DEFAULT-segment stream. For models without
   // tool-call markers configured, both marker strings are empty and the accumulator degrades to passthrough.
@@ -510,77 +548,63 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // model's scratchpad and is not a real tool call.
   ToolCallStreamAccumulator tool_accumulator(
       cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_start : std::string{},
-      cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_end : std::string{});
+      cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_end : std::string{}, cached_tool_ctx_.tools_json);
 
-  std::string assistant_history_text;
-
-  auto append_history_call = [&](const ParsedToolCall& call) {
-    nlohmann::ordered_json rendered;
-    rendered["name"] = call.name;
-    auto arguments = nlohmann::json::parse(call.arguments, nullptr, /*allow_exceptions=*/false);
-    rendered["arguments"] = arguments.is_discarded() ? nlohmann::json(call.arguments) : std::move(arguments);
-    if (!assistant_history_text.empty() && assistant_history_text.back() != '\n') {
-      assistant_history_text.push_back('\n');
-    }
-    if (committed_tool_ctx.HasToolCallTokens()) {
-      assistant_history_text += committed_tool_ctx.tool_call_start + "\n" + rendered.dump() + "\n" +
-                                committed_tool_ctx.tool_call_end;
-    } else {
-      assistant_history_text += rendered.dump();
-    }
-  };
-
-  auto emit_tool_output = [&](ToolCallStreamAccumulator::Output out) {
-    for (auto& event : out.events) {
-      if (auto* text = std::get_if<std::string>(&event)) {
-        assistant_history_text += *text;
-        AppendGeneratedSegment(generated_events, *text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
-        if (streaming_callback) {
-          streaming_callback->PushItem(
-              std::make_unique<TextItem>(*text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
-        }
-        continue;
-      }
-
-      auto call = std::move(std::get<ParsedToolCall>(event));
-      append_history_call(call);
-      if (streaming_callback) {
-        streaming_callback->PushItem(std::make_unique<ToolCallItem>(call.id, call.name, call.arguments));
-      }
-      generated_events.push_back(std::move(call));
-    }
-  };
+  // Tool calls parsed during streaming. Reused by ProcessGeneratedOutput so call_ids stay stable across stream
+  // deltas and the final response (OpenAI Chat Completions contract). Populated even when there is no streaming
+  // callback — the accumulator still parses on close — but in that case the final-response path re-parses anyway,
+  // which is fine because the IDs only need to be stable when a client is observing the stream.
+  std::vector<ParsedToolCall> streamed_tool_calls;
 
   auto emit_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
-      if (seg.type != FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
-        // Release a visible prefix held as a potential tool marker before appending later reasoning.
-        if (!tool_accumulator.InsideToolCall()) {
-          emit_tool_output(tool_accumulator.Flush());
-        }
+      if (seg.type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING) {
         // REASONING goes straight through — never feed it to the tool-call accumulator.
-        AppendGeneratedSegment(generated_events, seg.text, seg.type);
         if (streaming_callback) {
           streaming_callback->PushItem(std::make_unique<TextItem>(seg.text, seg.type));
         }
         continue;
       }
 
-      emit_tool_output(tool_accumulator.Push(seg.text));
+      auto out = tool_accumulator.Push(seg.text);
+
+      if (streaming_callback && !out.visible_text.empty()) {
+        streaming_callback->PushItem(
+            std::make_unique<TextItem>(std::move(out.visible_text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+      }
+
+      for (auto& pc : out.ready_calls) {
+        if (streaming_callback) {
+          streaming_callback->PushItem(std::make_unique<ToolCallItem>(pc.id, pc.name, pc.arguments));
+        }
+        streamed_tool_calls.push_back(std::move(pc));
+      }
     }
   };
 
-  auto flush_accumulator = [&]() { emit_tool_output(tool_accumulator.Flush()); };
+  auto flush_accumulator = [&]() {
+    auto out = tool_accumulator.Flush();
+
+    if (streaming_callback && !out.visible_text.empty()) {
+      streaming_callback->PushItem(
+          std::make_unique<TextItem>(std::move(out.visible_text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+    }
+
+    for (auto& pc : out.ready_calls) {
+      if (streaming_callback) {
+        streaming_callback->PushItem(std::make_unique<ToolCallItem>(pc.id, pc.name, pc.arguments));
+      }
+      streamed_tool_calls.push_back(std::move(pc));
+    }
+  };
 
   while (!cached_generator_->IsDone() && !request.canceled) {
     cached_generator_->GenerateNextToken();
-    const auto token_id = cached_generator_->CurrentTokenId();
     std::string token = cached_generator_->Decode();
     ++output_tokens;
 
-    if (token_id.has_value()) {
-      emit_segments(splitter.Push(*token_id, std::move(token)));
-    } else if (!token.empty()) {
+    if (!token.empty()) {
+      text += token;
       emit_segments(splitter.Push(token));
     }
 
@@ -604,12 +628,12 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     cached_generator_->RewindTo(pre_turn_token_count);
   }
 
-  ProcessGeneratedOutput(std::move(generated_events), effective_options, request.canceled, response,
-                         prompt_tokens, total_tokens, splitter.ReasoningTokenCount());
+  ProcessGeneratedOutput(std::move(text), cached_tool_ctx_, effective_options, request.canceled,
+                         response, prompt_tokens, total_tokens, std::move(streamed_tool_calls));
 
   // Commit input messages + assistant reply to history only on success (not cancelled)
   if (!request.canceled) {
-    // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
+    // LARK tool grammar is a single-shot finite parse. If generation was truncated while grammar was
     // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
     // return true on the next turn. Invalidate after any grammar-guided generation so the next turn rebuilds.
     //
@@ -617,7 +641,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     // cache and the model fails to close subsequent reasoning blocks. The chat template strips prior </think> content
     // when re-applied to history, so a rebuild restores correct behavior. This matches C#, which always applies the
     // full template per turn.
-    bool grammar_was_active = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
+    bool grammar_was_active = cached_tool_ctx_.tool_output && cached_tool_ctx_.HasTools();
     bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
 
     if (grammar_was_active || reasoning_was_active) {
@@ -625,7 +649,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       cached_tool_ctx_ = {};
     }
 
-    CommitTurn(std::move(new_messages), std::move(assistant_history_text), pre_turn_token_count, total_tokens);
+    CommitTurn(std::move(new_messages), response, pre_turn_token_count, total_tokens);
 
     // After a media turn, drop the cached generator so any text follow-up
     // rebuilds from history. AppendMessages cannot extend a media-decoded
@@ -720,13 +744,26 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   // multiple tokens (or chat templates that produce marker-shaped text gradually) would silently fail. The shared
   // accumulator buffers across tokens and is verified by unit tests.
   ToolCallStreamAccumulator tool_accumulator(tool_ctx.tool_output ? tool_ctx.tool_call_start : std::string{},
-                                             tool_ctx.tool_output ? tool_ctx.tool_call_end : std::string{});
+                                             tool_ctx.tool_output ? tool_ctx.tool_call_end : std::string{},
+                                             tool_ctx.tools_json);
 
-  int next_tool_call_index = 0;
-  std::vector<GeneratedOutputEvent> generated_events;
+  // Tool calls parsed during streaming. Reused by ProcessGeneratedOutput so call_ids stay stable across stream
+  // deltas and the final ChatCompletionResponse (OpenAI Chat Completions contract).
+  std::vector<ParsedToolCall> streamed_tool_calls;
 
-  // Use the same typed segments for streaming and final response construction.
-  auto splitter = CreateReasoningSplitter(tool_ctx, Model());
+  // Reasoning-aware token splitter. For non-reasoning models the splitter is a passthrough (every token becomes one
+  // DEFAULT segment) so the loop body is uniform. For reasoning models, REASONING segments are suppressed from the
+  // Chat Completions stream — the OpenAI Chat Completions spec has no reasoning-delta concept; reasoning is exposed
+  // via the Responses API path in Stage 4. The non-streaming response already excludes reasoning text from
+  // `delta.content` via the typed-MessageItem build in ProcessGeneratedOutput.
+  ReasoningStreamSplitter splitter(
+      tool_ctx.supports_reasoning ? (tool_ctx.reasoning_start.empty() ? std::string("<think>")
+                                                                      : tool_ctx.reasoning_start)
+                                  : std::string(),
+      tool_ctx.supports_reasoning ? (tool_ctx.reasoning_end.empty() ? std::string("</think>")
+                                                                    : tool_ctx.reasoning_end)
+                                  : std::string(),
+      generator->PromptEndsInReasoning());
 
   auto emit_visible_text = [&](std::string visible) {
     if (visible.empty() || !is_streaming) {
@@ -738,63 +775,58 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
                                                             FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
   };
 
-  auto process_tool_output = [&](ToolCallStreamAccumulator::Output out) {
-    for (auto& event : out.events) {
-      if (auto* text = std::get_if<std::string>(&event)) {
-        AppendGeneratedSegment(generated_events, *text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
-        emit_visible_text(*text);
-        continue;
+  auto emit_ready_calls = [&](std::vector<ParsedToolCall>& ready) {
+    if (ready.empty()) {
+      return;
+    }
+
+    if (is_streaming) {
+      std::vector<ChatCompletionToolCall> tc_list;
+      tc_list.reserve(ready.size());
+      int tc_index = 0;
+
+      for (const auto& pc : ready) {
+        ChatCompletionToolCall tc;
+        tc.index = tc_index++;
+        tc.id = pc.id;
+        tc.type = "function";
+        tc.function.name = pc.name;
+        tc.function.arguments = pc.arguments;
+        tc_list.push_back(std::move(tc));
       }
 
-      auto call = std::move(std::get<ParsedToolCall>(event));
-      if (is_streaming) {
-        ChatCompletionToolCall streamed;
-        streamed.index = next_tool_call_index++;
-        streamed.id = call.id;
-        streamed.type = "function";
-        streamed.function.name = call.name;
-        streamed.function.arguments = call.arguments;
-        auto chunk_json = chat_completions::FormatToolCallStreamingChunk(
-            {streamed}, completion_id, created, model_name);
-        streaming_callback->PushItem(std::make_unique<TextItem>(
-            std::move(chunk_json), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
-      }
-      generated_events.push_back(std::move(call));
+      auto chunk_json = chat_completions::FormatToolCallStreamingChunk(tc_list, completion_id, created, model_name);
+      streaming_callback->PushItem(std::make_unique<TextItem>(std::move(chunk_json),
+                                                              FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
+    }
+
+    for (auto& pc : ready) {
+      streamed_tool_calls.push_back(std::move(pc));
     }
   };
 
   auto process_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
-      // REASONING segments: never feed reasoning text to the tool-call accumulator — tool-call-shaped text inside
-      // <think>...</think> is scratchpad, not a real call. Emit via reasoning_content, not content.
+      // REASONING segments: intentionally dropped from the Chat Completions stream. Never feed reasoning text to
+      // the tool-call accumulator — tool-call-shaped text inside <think>...</think> is scratchpad, not a real call.
       if (seg.type != FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
-        if (!tool_accumulator.InsideToolCall()) {
-          process_tool_output(tool_accumulator.Flush());
-        }
-        AppendGeneratedSegment(generated_events, seg.text, seg.type);
-
-        if (is_streaming && !seg.text.empty()) {
-          auto chunk_json = chat_completions::FormatReasoningStreamingChunk(
-              seg.text, completion_id, created, model_name);
-          streaming_callback->PushItem(std::make_unique<TextItem>(
-              std::move(chunk_json), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
-        }
         continue;
       }
 
-      process_tool_output(tool_accumulator.Push(seg.text));
+      auto out = tool_accumulator.Push(seg.text);
+      emit_visible_text(std::move(out.visible_text));
+      emit_ready_calls(out.ready_calls);
     }
   };
 
-  // Generate token-by-token.
+  // Generate token-by-token
+  std::string text;
   while (!generator->IsDone() && !original_request.canceled) {
     generator->GenerateNextToken();
-    const auto token_id = generator->CurrentTokenId();
     std::string token = generator->Decode();
 
-    if (token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, std::move(token)));
-    } else if (!token.empty()) {
+    if (!token.empty()) {
+      text += token;
       process_segments(splitter.Push(token));
     }
   }
@@ -802,12 +834,19 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   // Drain any buffered partial-marker bytes at end-of-stream. Reasoning splitter first so any final DEFAULT bytes
   // feed into the tool accumulator; then drain the tool accumulator.
   process_segments(splitter.Flush());
-  process_tool_output(tool_accumulator.Flush());
+  {
+    auto out = tool_accumulator.Flush();
+    emit_visible_text(std::move(out.visible_text));
+    emit_ready_calls(out.ready_calls);
+  }
 
   int total_tokens = generator->TokenCount();
 
-  ProcessGeneratedOutput(std::move(generated_events), options, original_request.canceled, response,
-                         prompt_tokens, total_tokens, splitter.ReasoningTokenCount());
+  // Process the generated output into response items (MessageItem, ToolCallItem, etc.)
+  // This also updates finish_reason, and usage on the response. Streamed-parsed tool calls are reused so call_ids
+  // stay stable across stream deltas and the final ChatCompletionResponse.
+  ProcessGeneratedOutput(std::move(text), tool_ctx, options, original_request.canceled,
+                         response, prompt_tokens, total_tokens, std::move(streamed_tool_calls));
 
   // Emit final streaming chunk with finish_reason
   if (is_streaming) {
@@ -833,7 +872,7 @@ const std::vector<MessageItem>& ChatSession::GetHistory() const {
   return history_;
 }
 
-void ChatSession::CommitTurn(std::vector<MessageItem>&& new_messages, std::string assistant_history,
+void ChatSession::CommitTurn(std::vector<MessageItem>&& new_messages, const Response& response,
                              int pre_turn_token_count, int post_turn_token_count) {
   size_t history_start = history_.size();
   size_t input_count = new_messages.size();
@@ -843,14 +882,29 @@ void ChatSession::CommitTurn(std::vector<MessageItem>&& new_messages, std::strin
     history_.push_back(std::move(msg));
   }
 
-  if (assistant_history.empty()) {
-    // A successful turn still owns an assistant role when all generated content was hidden reasoning. Preserve the
-    // role boundary so rebuilding the next turn never produces consecutive user messages.
-    MessageItem assistant;
-    assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-    history_.push_back(std::move(assistant));
-  } else {
-    history_.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(assistant_history));
+  // Commit the assistant reply and its tool calls as one template message. A
+  // reused Responses session does not replay previous_output, so history must
+  // retain the assistant call that precedes the next tool result.
+  std::optional<MessageItem> assistant_reply;
+  for (const auto& item : response.items) {
+    if (item->type == FOUNDRY_LOCAL_ITEM_MESSAGE) {
+      const auto& msg = static_cast<const MessageItem&>(*item);
+      if (msg.role == FOUNDRY_LOCAL_ROLE_ASSISTANT && !msg.content.empty()) {
+        auto tool_calls = assistant_reply ? std::move(assistant_reply->tool_calls)
+                                          : std::vector<ToolCallItem>{};
+        assistant_reply = msg;
+        assistant_reply->tool_calls = std::move(tool_calls);
+      }
+    } else if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+      if (!assistant_reply) {
+        assistant_reply.emplace();
+        assistant_reply->role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+      }
+      assistant_reply->tool_calls.push_back(static_cast<const ToolCallItem&>(*item));
+    }
+  }
+  if (assistant_reply) {
+    history_.push_back(std::move(*assistant_reply));
   }
 
   turns_.push_back({history_start, input_count, pre_turn_token_count, post_turn_token_count});
