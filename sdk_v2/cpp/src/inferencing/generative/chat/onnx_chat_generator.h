@@ -60,6 +60,7 @@ class OnnxChatGenerator : public ChatGenerator {
   int AppendMessages(const std::vector<MessageItem>& new_messages,
                      GenAIModelInstance& model,
                      const std::string& tools_json,
+                     const SearchOptions& options,
                      const std::string& reasoning_start = {});
 
   /// Recompute whether the appended prompt ends in an open reasoning block.
@@ -70,7 +71,8 @@ class OnnxChatGenerator : public ChatGenerator {
 
   /// Rewind the generator to a previous token position.
   /// Used for error recovery — restores the KV cache to the state before the last turn.
-  void RewindTo(int token_count);
+  bool CanRewind() const override { return true; }
+  void RewindTo(int token_count) override;
 
   /// Factory: create a text-only chat generator.
   ///

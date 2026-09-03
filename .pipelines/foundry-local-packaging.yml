@@ -60,7 +60,7 @@ variables:
   value: '1.28.0'
 - ${{ if eq(parameters.isRelease, true) }}:
   - name: cppGenaiVersion
-    value: '0.15.2'
+    value: '0.15.3'
 - ${{ else }}:
   - name: cppGenaiVersion
     value: '0.16.0-dev1001400138'

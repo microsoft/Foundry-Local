@@ -167,6 +167,7 @@ void OnnxChatGenerator::Cancel() {
 int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
                                       GenAIModelInstance& model,
                                       const std::string& tools_json,
+                                      const SearchOptions& /*options*/,
                                       const std::string& reasoning_start) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
@@ -399,42 +400,8 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
   ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, model.EP(),
                      use_full_context, default_max_output);
 
-  // 5. Compute guidance for constrained decoding.
-  // Priority: user-specified guidance (from response_format) > auto-generated LARK grammar.
-  // Matches C# GetGuidance() — always compute, then guard application.
-  std::string guidance_type;
-  std::string guidance_data;
-
-  if (!tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty()) {
-    // User specified guidance via response_format
-    guidance_type = tool_ctx.guidance_type;
-    guidance_data = tool_ctx.guidance_data;
-  } else {
-    // Auto-generate LARK grammar from tool definitions and reasoning state
-    std::string json_schema;
-    if (tool_ctx.HasTools()) {
-      json_schema = BuildToolJsonSchema(tool_ctx);
-    }
-
-    guidance_data = BuildLarkGrammar(tool_ctx, json_schema);
-    if (!guidance_data.empty()) {
-      guidance_type = "lark_grammar";
-    }
-  }
-
-  // Apply auto-generated tool guidance for both auto and required tool choice. The grammar itself permits text when
-  // text_output is true. ChatSession invalidates the generator after guided turns because a completed finite grammar
-  // signals EOS and cannot be reused safely for continuous decoding.
-  bool tool_guidance_enabled = tool_ctx.tool_output && tool_ctx.HasTools();
-
-  if (!guidance_type.empty() && !guidance_data.empty() && tool_guidance_enabled) {
-    try {
-      gen_params->SetGuidance(guidance_type.c_str(), guidance_data.c_str());
-    } catch (const std::runtime_error& e) {
-      // SetGuidance may not be supported by all models; continue without guidance
-      (void)e;
-    }
-  }
+  // 5. Apply constrained decoding for tool output when supported.
+  ApplyGuidanceOptions(tool_ctx, *gen_params);
 
   // 6. Create the Generator and feed it the prompt.
   //    Text path: append the encoded token sequences.
