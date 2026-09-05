@@ -12,6 +12,27 @@
 
 namespace fl {
 
+namespace {
+
+std::optional<flFinishReason> MapFinishReason(OgaFinishReason reason) {
+  switch (reason) {
+    case OgaFinishReason_Eos:
+    case OgaFinishReason_StopSequence:
+      return FOUNDRY_LOCAL_FINISH_STOP;
+    case OgaFinishReason_MaxGeneratedTokens:
+    case OgaFinishReason_MaxSessionTokens:
+      return FOUNDRY_LOCAL_FINISH_LENGTH;
+    case OgaFinishReason_Cancelled:
+      return FOUNDRY_LOCAL_FINISH_NONE;
+    case OgaFinishReason_Failed:
+      return FOUNDRY_LOCAL_FINISH_ERROR;
+    default:
+      return std::nullopt;
+  }
+}
+
+}  // namespace
+
 OnnxEngineChatGenerator::OnnxEngineChatGenerator(
     OnnxChatEngine& engine,
     std::shared_ptr<OnnxChatEngine::Conversation> conversation,
