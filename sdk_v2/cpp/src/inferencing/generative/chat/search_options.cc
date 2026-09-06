@@ -74,14 +74,14 @@ int ApplySearchOptions(const SearchOptions& options,
     gen_params.SetSearchOption("top_k", static_cast<double>(*options.top_k));
   }
 
-  // Frequency penalty → repetition_penalty in ORT GenAI
-  if (options.frequency_penalty.has_value()) {
-    gen_params.SetSearchOption("repetition_penalty", static_cast<double>(*options.frequency_penalty));
+  if (options.frequency_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero frequency_penalty is not supported; ORT repetition_penalty has different semantics");
   }
 
-  // Presence penalty → diversity_penalty in ORT GenAI
-  if (options.presence_penalty.has_value()) {
-    gen_params.SetSearchOption("diversity_penalty", static_cast<double>(*options.presence_penalty));
+  if (options.presence_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero presence_penalty is not supported; ORT diversity_penalty has different semantics");
   }
 
   // Random seed

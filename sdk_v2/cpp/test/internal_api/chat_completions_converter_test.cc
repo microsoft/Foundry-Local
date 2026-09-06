@@ -69,11 +69,8 @@ TEST(ChatCompletionsConverterTest, ApplyCatalogDefaults_AppliesFloatsWhenNotSet)
   ASSERT_TRUE(req.top_p.has_value());
   EXPECT_FLOAT_EQ(*req.top_p, 0.9f);
 
-  ASSERT_TRUE(req.presence_penalty.has_value());
-  EXPECT_FLOAT_EQ(*req.presence_penalty, 0.1f);
-
-  ASSERT_TRUE(req.frequency_penalty.has_value());
-  EXPECT_FLOAT_EQ(*req.frequency_penalty, 0.2f);
+  EXPECT_FALSE(req.presence_penalty.has_value());
+  EXPECT_FALSE(req.frequency_penalty.has_value());
 }
 
 TEST(ChatCompletionsConverterTest, ApplyCatalogDefaults_DoesNotOverrideExisting) {
@@ -343,20 +340,40 @@ TEST(ChatCompletionsConverterTest, ExtractToolDefinitions_ToolChoiceObject_NoMat
 // MapRequestParameters
 // ========================================================================
 
-TEST(ChatCompletionsConverterTest, MapRequestParameters_AllFloatParams) {
+TEST(ChatCompletionsConverterTest, MapRequestParameters_TemperatureAndTopP) {
   ChatCompletionRequest req;
   req.temperature = 0.7f;
   req.top_p = 0.9f;
-  req.frequency_penalty = 0.5f;
-  req.presence_penalty = 0.3f;
 
   Request session_request;
   MapRequestParameters(req, session_request);
 
   EXPECT_NE(session_request.options.Find("temperature"), nullptr);
   EXPECT_NE(session_request.options.Find("top_p"), nullptr);
-  EXPECT_NE(session_request.options.Find("frequency_penalty"), nullptr);
-  EXPECT_NE(session_request.options.Find("presence_penalty"), nullptr);
+}
+
+TEST(ChatCompletionsConverterTest, MapRequestParameters_RejectsNonzeroPenalties) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f}, std::pair{0.0f, -0.3f}}) {
+    ChatCompletionRequest req;
+    req.frequency_penalty = frequency;
+    req.presence_penalty = presence;
+
+    Request session_request;
+    EXPECT_THROW(MapRequestParameters(req, session_request), fl::Exception);
+  }
+}
+
+TEST(ChatCompletionsConverterTest, MapRequestParameters_ZeroPenaltiesAreNoOps) {
+  ChatCompletionRequest req;
+  req.frequency_penalty = 0.0f;
+  req.presence_penalty = 0.0f;
+
+  Request session_request;
+  MapRequestParameters(req, session_request);
+
+  EXPECT_EQ(session_request.options.Find("frequency_penalty"), nullptr);
+  EXPECT_EQ(session_request.options.Find("presence_penalty"), nullptr);
 }
 
 TEST(ChatCompletionsConverterTest, MapRequestParameters_Seed) {

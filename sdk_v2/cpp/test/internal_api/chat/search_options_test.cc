@@ -153,14 +153,38 @@ TEST_F(SearchOptionsTest, AllOptionsSetSimultaneously) {
   opts.top_p = 0.9f;
   opts.top_k = 50;
   opts.max_output_tokens = 256;
-  opts.frequency_penalty = 1.1f;
-  opts.presence_penalty = 0.5f;
   opts.seed = 42;
   opts.do_sample = true;
   auto params = MakeParams();
 
   int max_length = ApplySearchOptions(opts, 20, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_EQ(max_length, 276);  // 20 + 256
+}
+
+TEST_F(SearchOptionsTest, ZeroPenaltiesDoNotOverrideModelDefaults) {
+  SearchOptions opts;
+  opts.frequency_penalty = 0.0f;
+  opts.presence_penalty = 0.0f;
+  auto params = MakeParams();
+  const auto repetition_penalty = params->GetSearchNumber("repetition_penalty");
+  const auto diversity_penalty = params->GetSearchNumber("diversity_penalty");
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_EQ(params->GetSearchNumber("repetition_penalty"), repetition_penalty);
+  EXPECT_EQ(params->GetSearchNumber("diversity_penalty"), diversity_penalty);
+}
+
+TEST_F(SearchOptionsTest, NonzeroPenaltiesAreRejected) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f}, std::pair{0.0f, -0.3f}}) {
+    SearchOptions opts;
+    opts.frequency_penalty = frequency;
+    opts.presence_penalty = presence;
+    auto params = MakeParams();
+
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault), fl::Exception);
+  }
 }
 
 TEST_F(SearchOptionsTest, ZeroMaxOutputTokensThrows) {

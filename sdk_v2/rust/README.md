@@ -264,7 +264,7 @@ let client = model.create_chat_client()
     .temperature(0.7)
     .max_tokens(256)
     .top_p(0.9)
-    .frequency_penalty(0.5);
+    .frequency_penalty(0.0);
 
 // Non-streaming completion
 let response = client.complete_chat(
@@ -473,8 +473,8 @@ All settings are configured via chainable builder methods on `ChatClient`:
 | `max_tokens(v)` | `u32` | Maximum number of tokens to generate |
 | `top_p(v)` | `f64` | Nucleus sampling probability (0.0–1.0) |
 | `top_k(v)` | `u32` | Top-k sampling parameter (Foundry extension) |
-| `frequency_penalty(v)` | `f64` | Frequency penalty |
-| `presence_penalty(v)` | `f64` | Presence penalty |
+| `frequency_penalty(v)` | `f64` | OpenAI frequency penalty; currently only `0` is supported |
+| `presence_penalty(v)` | `f64` | OpenAI presence penalty; currently only `0` is supported |
 | `n(v)` | `u32` | Number of completions to generate |
 | `random_seed(v)` | `u64` | Random seed for reproducible results (Foundry extension) |
 | `response_format(v)` | `ChatResponseFormat` | Output format (Text, JsonObject, JsonSchema, LarkGrammar) |

@@ -137,8 +137,8 @@ struct ResponseCreateParams {
   std::optional<float> temperature;
   std::optional<int> max_output_tokens;
   std::optional<float> top_p;
-  std::optional<float> presence_penalty;
-  std::optional<float> frequency_penalty;
+  std::optional<float> presence_penalty;   // OpenAI semantics; only the neutral value 0 is currently supported.
+  std::optional<float> frequency_penalty;  // OpenAI semantics; only the neutral value 0 is currently supported.
   std::optional<int> seed;
   bool stream = false;
   bool store = false;
@@ -257,8 +257,8 @@ struct ResponseObject {
   std::optional<ToolChoice> tool_choice;
   std::optional<float> temperature;
   std::optional<float> top_p;
-  std::optional<float> presence_penalty;
-  std::optional<float> frequency_penalty;
+  std::optional<float> presence_penalty;   // OpenAI semantics; only the neutral value 0 is currently supported.
+  std::optional<float> frequency_penalty;  // OpenAI semantics; only the neutral value 0 is currently supported.
   std::optional<int> max_output_tokens;
   bool parallel_tool_calls = true;
   bool store = false;

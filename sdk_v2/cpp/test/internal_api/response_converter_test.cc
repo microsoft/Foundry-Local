@@ -833,8 +833,6 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   params.temperature = 0.5f;
   params.top_p = 0.95f;
   params.max_output_tokens = 256;
-  params.presence_penalty = 0.25f;
-  params.frequency_penalty = 0.75f;
   params.seed = 42;
 
   ResponseTextConfig text_cfg;
@@ -857,12 +855,36 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   expect_opt("temperature", std::to_string(0.5f));
   expect_opt("top_p", std::to_string(0.95f));
   expect_opt("max_output_tokens", "256");
-  expect_opt("presence_penalty", std::to_string(0.25f));
-  expect_opt("frequency_penalty", std::to_string(0.75f));
   expect_opt("seed", "42");
   expect_opt("guidance_type", "json_schema");
   expect_opt("guidance_data", R"({"type":"object"})");
   expect_opt("tool_choice", "required");
 
   EXPECT_FALSE(tools_json.empty());
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_RejectsNonzeroPenalties) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.75f, 0.0f}, std::pair{0.0f, 0.25f}, std::pair{-0.75f, 0.0f}, std::pair{0.0f, -0.25f}}) {
+    ResponseCreateParams params;
+    params.model = "test-model";
+    params.input = std::string("hello");
+    params.frequency_penalty = frequency;
+    params.presence_penalty = presence;
+
+    EXPECT_THROW(ToSessionRequest(params), fl::Exception);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_ZeroPenaltiesAreNoOps) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("hello");
+  params.presence_penalty = 0.0f;
+  params.frequency_penalty = 0.0f;
+
+  Request req = ToSessionRequest(params);
+
+  EXPECT_EQ(req.options.Find("presence_penalty"), nullptr);
+  EXPECT_EQ(req.options.Find("frequency_penalty"), nullptr);
 }

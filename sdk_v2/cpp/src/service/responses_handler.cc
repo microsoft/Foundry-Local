@@ -76,6 +76,12 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
     return ErrorResponse(Status::CODE_400, "Invalid request parameters", ex.what());
   }
 
+  if (params.frequency_penalty.value_or(0.0f) != 0.0f ||
+      params.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
+  }
+
   return nullptr;
 }
 
