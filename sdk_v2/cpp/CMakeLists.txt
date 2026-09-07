@@ -246,6 +246,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/generative/openresponses/response_store.cc
     src/contracts/responses_json.cc
     src/inferencing/generative/toolcalling/tool_call_utils.cc
+    src/inferencing/generative/toolcalling/raw_envelope_encoding.cc
     src/inferencing/generative/toolcalling/grammar.cc
     src/inferencing/generative/chat/search_options.cc
     src/inferencing/predictive/inference_session.cc

@@ -195,6 +195,7 @@ TEST(AzureCatalogClientTest, ParsesModelResponseCorrectly) {
               "license": "MIT",
               "licenseDescription": "MIT License",
               "supportsToolCalling": "true",
+              "toolOutputEncoding": "{\"type\":\"raw_envelope\",\"tool_name\":\"submit_change\",\"start_marker\":\"<<<CHANGE\",\"end_marker\":\"CHANGE>>>\"}",
               "promptTemplate": "{\"system\":\"<|system|>\\n{Content}<|end|>\",\"user\":\"<|user|>\\n{Content}<|end|>\",\"assistant\":\"<|assistant|>\\n{Content}<|end|>\",\"prompt\":\"<|user|>\\n{Content}<|end|>\\n<|assistant|>\"}"
             },
             "systemCatalogData": {
@@ -256,6 +257,8 @@ TEST(AzureCatalogClientTest, ParsesModelResponseCorrectly) {
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
   EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MIN_FL_VERSION_STR), "0.3.0");
   EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "FoundryLocal");
+  EXPECT_EQ(info.string_properties.at("tool_output_encoding"),
+            R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})");
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT), 4096);
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT), 4096);  // 4GB → 4096 MB
 }

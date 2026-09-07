@@ -76,15 +76,18 @@ TranscriptToolCall MakeSuppliedToolCall(std::string call_id, std::string name, s
              "tool call '" + name + "' has arguments that are not a JSON object: " + arguments);
   }
 
-  return {std::move(call_id), std::move(name), std::move(arguments), std::move(*normalized), kind};
+  // A caller-supplied call is structured by construction: the caller wrote it as a structured call, so it carries no
+  // raw provenance and replays as a `tool_calls` entry.
+  return {std::move(call_id), std::move(name), std::move(arguments), std::move(*normalized), kind, std::nullopt};
 }
 
-GeneratedToolCall MakeGeneratedToolCall(std::string call_id, std::string name, std::string arguments, ToolKind kind) {
+GeneratedToolCall MakeGeneratedToolCall(std::string call_id, std::string name, std::string arguments, ToolKind kind,
+                                        std::optional<RawEnvelopeEncoding> raw_encoding) {
   auto normalized = NormalizeToolCallArguments(kind, arguments);
   const bool usable = normalized.has_value();
 
   return {{std::move(call_id), std::move(name), std::move(arguments),
-           usable ? std::move(*normalized) : nlohmann::ordered_json::object(), kind},
+           usable ? std::move(*normalized) : nlohmann::ordered_json::object(), kind, std::move(raw_encoding)},
           usable};
 }
 
@@ -145,15 +148,29 @@ bool TranscriptMessage::HasToolCalls() const {
   return false;
 }
 
+bool TranscriptMessage::HasStructuredToolCalls() const {
+  for (const auto& entry : entries) {
+    if (entry.kind == TranscriptEntry::Kind::kToolCall && !entry.tool_call.IsRawEnvelope()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool TranscriptMessage::HasVisibleTextAfterToolCall() const {
-  bool seen_call = false;
+  bool seen_structured_call = false;
   for (const auto& entry : entries) {
     if (entry.kind == TranscriptEntry::Kind::kToolCall) {
-      seen_call = true;
+      if (seen_structured_call && entry.tool_call.IsRawEnvelope()) {
+        return true;
+      }
+
+      seen_structured_call = !entry.tool_call.IsRawEnvelope();
       continue;
     }
 
-    if (seen_call && entry.kind == TranscriptEntry::Kind::kText && !IsWhitespaceOnly(entry.text)) {
+    if (seen_structured_call && entry.kind == TranscriptEntry::Kind::kText && !IsWhitespaceOnly(entry.text)) {
       return true;
     }
   }
@@ -212,7 +229,7 @@ void MergeAssistantTurn(TranscriptMessage& open, TranscriptMessage&& next) {
   for (auto& entry : next.entries) {
     switch (entry.kind) {
       case TranscriptEntry::Kind::kText:
-        if (open.HasToolCalls() && IsWhitespaceOnly(entry.text)) {
+        if (open.HasStructuredToolCalls() && IsWhitespaceOnly(entry.text)) {
           break;
         }
         open.AppendText(std::move(entry.text));
@@ -309,7 +326,14 @@ TranscriptIngest IngestRequestItems(const std::vector<Item*>& items, const std::
 
       TranscriptMessage message;
       message.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-      message.AppendToolCall(MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments, kind));
+
+      auto call = MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments, kind);
+
+      // Provenance survives replay only when the item carries it, and only internal reconstruction of a
+      // conversation this runtime recorded ever does. A call a client supplied across the API is structured — it
+      // was written as a structured call — so it replays as one, even for the same tool and payload.
+      call.raw_encoding = call_item.raw_encoding;
+      message.AppendToolCall(std::move(call));
 
       // The same rule folds the call into the open assistant turn, so replayed content and its calls stay in one
       // message — and a call that opens a segment starts its own.
@@ -386,7 +410,7 @@ const TranscriptMessage* AssistantPrefillForReply(const std::vector<TranscriptMe
 
 AssistantTurnGuard AssistantTurnGuard::ForReplyTo(const std::vector<TranscriptMessage>& inputs, size_t merge_floor) {
   const auto* prefill = AssistantPrefillForReply(inputs, merge_floor);
-  return AssistantTurnGuard(prefill != nullptr && prefill->HasToolCalls());
+  return AssistantTurnGuard(prefill != nullptr && prefill->HasStructuredToolCalls());
 }
 
 void ValidateRenderableTurn(const TranscriptMessage& message) {

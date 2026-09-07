@@ -6,6 +6,7 @@
 
 #include "inferencing/generative/chat/chat_session.h"
 #include "exception.h"
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/session/request.h"
@@ -68,6 +69,13 @@ class ChatSessionTest : public ::testing::Test {
   GenAIModelInstance& GetModel() { return *model_; }
   const Model& GetCatalogModel() { return catalog_model_; }
 
+  Model MakeCatalogModelWithToolOutputEncoding(std::string encoding) {
+    ModelInfo info;
+    info.task = "chat-completion";
+    info.SetPropertyStr(kToolOutputEncodingKey, std::move(encoding));
+    return Model::FromModelInfo(std::move(info), "", svc_.download_manager, svc_.model_load_manager);
+  }
+
   static inline std::unique_ptr<StderrLogger> logger_;
   static inline std::unique_ptr<test::CpuOnlyEpDetector> ep_detector_;
   static inline std::unique_ptr<ModelLoadManager> load_manager_;
@@ -91,6 +99,101 @@ TEST_F(ChatSessionTest, ConstructWithModelOnly) {
   EXPECT_EQ(session.MessageCount(), 0u);
   EXPECT_TRUE(session.Transcript().Empty());
   EXPECT_EQ(session.TurnCount(), 0u);
+}
+
+TEST_F(ChatSessionTest, InvalidModelRawEnvelopeDescriptorIsRejected) {
+  auto catalog_model = MakeCatalogModelWithToolOutputEncoding("not-json");
+  ChatSession session(catalog_model, GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "hello"));
+
+  try {
+    Response response;
+    session.ProcessRequest(request, response);
+    FAIL() << "Expected malformed model tool_output_encoding to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(e.what()).find("model property"), std::string::npos);
+  }
+}
+
+TEST_F(ChatSessionTest, BlankRequestRawEnvelopeDescriptorDoesNotFallBackToModel) {
+  auto catalog_model = MakeCatalogModelWithToolOutputEncoding(
+      R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})");
+  ChatSession session(catalog_model, GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "hello"));
+  request.options.Add(kToolOutputEncodingKey, "   ");
+
+  try {
+    Response response;
+    session.ProcessRequest(request, response);
+    FAIL() << "Expected blank request descriptor to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(e.what()).find("request option"), std::string::npos);
+  }
+}
+
+TEST_F(ChatSessionTest, ValidRequestRawEnvelopeDescriptorOverridesInvalidModelProperty) {
+  auto catalog_model = MakeCatalogModelWithToolOutputEncoding("not-json");
+  ChatSession session(catalog_model, GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Reply with one word."));
+  request.options.Add(
+      kToolOutputEncodingKey,
+      R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})");
+  request.options.Add("max_output_tokens", "1");
+
+  Response response;
+  EXPECT_NO_THROW(session.ProcessRequest(request, response));
+}
+
+TEST_F(ChatSessionTest, InvalidRequestRawEnvelopeDescriptorDoesNotFallBackToValidModelProperty) {
+  auto catalog_model = MakeCatalogModelWithToolOutputEncoding(
+      R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})");
+  ChatSession session(catalog_model, GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "hello"));
+  request.options.Add(kToolOutputEncodingKey, "not-json");
+
+  try {
+    Response response;
+    session.ProcessRequest(request, response);
+    FAIL() << "Expected malformed request tool_output_encoding to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(e.what()).find("request option"), std::string::npos);
+  }
+}
+
+TEST_F(ChatSessionTest, ForcedRawEnvelopeRejectsExplicitResponseGuidance) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  session.AddToolDefinition({"submit_change", "Submit a change.", {}, ToolKind::kCustom});
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "make a change"));
+  request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "required");
+  request.options.Add(
+      kToolOutputEncodingKey,
+      R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})");
+  request.options.Add("guidance_type", "json_schema");
+  request.options.Add("guidance_data", R"({"type":"object"})");
+  request.forced_tool_choice = ForcedToolChoice{"submit_change", ToolKind::kCustom};
+
+  try {
+    Response response;
+    session.ProcessRequest(request, response);
+    FAIL() << "Expected explicit response guidance with forced raw output to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(e.what()).find("guidance"), std::string::npos);
+    EXPECT_NE(std::string(e.what()).find("raw-envelope"), std::string::npos);
+  }
 }
 
 // ===========================================================================

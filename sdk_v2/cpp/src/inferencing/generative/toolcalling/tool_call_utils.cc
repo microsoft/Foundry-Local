@@ -138,7 +138,9 @@ std::vector<std::unique_ptr<Item>> ToolCallsToItems(const std::vector<ParsedTool
   items.reserve(calls.size());
 
   for (const auto& call : calls) {
-    items.push_back(std::make_unique<ToolCallItem>(call.id, call.name, call.arguments));
+    // Provenance travels with the item; it is internal and never reaches flToolCallData.
+    items.push_back(std::make_unique<ToolCallItem>(call.id, call.name, call.arguments, std::nullopt,
+                                                   call.raw_encoding));
   }
 
   return items;

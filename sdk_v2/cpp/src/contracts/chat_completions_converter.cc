@@ -3,6 +3,7 @@
 #include "contracts/chat_completions_converter.h"
 
 #include "contracts/tool_definitions.h"
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
 #include "items/tool_call_item.h"
@@ -169,7 +170,12 @@ std::vector<ToolDefinition> ExtractToolDefinitions(const ChatCompletionRequest& 
     session_request.options["tool_choice"] = choice.ModeString();
 
     if (choice.IsForced()) {
-      tools::NarrowToForcedTool(definitions, choice.name, ForcedChoiceKind(choice));
+      const auto kind = ForcedChoiceKind(choice);
+
+      // Recorded before the set is narrowed: afterwards a forced turn is indistinguishable from one that simply
+      // declared a single tool, and reading bare output as a call must stay tied to the caller's explicit request.
+      tools::RecordForcedToolChoice(session_request, choice.name, kind);
+      tools::NarrowToForcedTool(definitions, choice.name, kind);
     }
   }
 
@@ -225,6 +231,13 @@ void MapRequestParameters(const ChatCompletionRequest& req, Request& session_req
     auto seed_it = meta.find("random_seed");
     if (seed_it != meta.end() && !seed_it->second.empty()) {
       session_request.options["seed"] = seed_it->second;
+    }
+
+    // Foundry extension: one complete JSON descriptor for a model's raw custom-tool output dialect. Copy only this
+    // recognized key rather than treating arbitrary request metadata as native generation options.
+    auto encoding_it = meta.find(kToolOutputEncodingKey);
+    if (encoding_it != meta.end()) {
+      session_request.options[kToolOutputEncodingKey] = encoding_it->second;
     }
   }
 }

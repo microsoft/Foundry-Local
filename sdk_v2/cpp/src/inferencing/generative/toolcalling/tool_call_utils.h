@@ -2,8 +2,10 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "inferencing/session/session.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,6 +16,11 @@ struct ParsedToolCall {
   std::string id;         // unique call ID (e.g., "call_abc123")
   std::string name;       // function name
   std::string arguments;  // JSON string of arguments
+
+  /// Set only when the model wrote this call as a bare envelope in its visible output rather than inside the
+  /// structured marker block. Carries the exact dialect it used, which is what lets a later turn replay the call as
+  /// the bytes the model actually produced instead of as a `tool_calls` entry it never wrote.
+  std::optional<RawEnvelopeEncoding> raw_encoding;
 };
 
 /// Parse tool calls from generated text using start/end marker tokens.

@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
+
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
@@ -15,6 +17,13 @@
 
 namespace fl {
 namespace responses {
+
+/// Key under which a stored `custom_tool_call` carries the dialect the model wrote it in.
+///
+/// Underscore-prefixed and never published: it exists between this runtime's own store and its own replay path, so
+/// a conversation continued after its warm session was evicted is rebuilt with the same prompt bytes the live
+/// session used. Stripped from every response that reaches a client.
+inline constexpr const char* kRawEnvelopeReplayKey = "_fl_raw_envelope";
 
 // ---------------------------------------------------------------------------
 // Input content types
@@ -260,6 +269,15 @@ struct CustomToolCallOutputItem {
   std::string name;
   std::string input;
   ResponseStatus status = ResponseStatus::kInProgress;
+
+  /// How the model wrote this call, when it wrote it as a bare envelope in its visible output rather than as a
+  /// structured tool-call block.
+  ///
+  /// Internal replay metadata. It is serialized — under kRawEnvelopeReplayKey — only so a stored conversation can be
+  /// rebuilt in the dialect the model actually used after its warm session is gone, and it is removed again before
+  /// any response reaches a client (see ResponseConverter::StripInternalReplayMetadata). The published Responses
+  /// schema is therefore unchanged, and a client that echoes items back cannot forge raw provenance.
+  std::optional<RawEnvelopeEncoding> raw_encoding;
 };
 
 // Reasoning output item (OpenAI Responses API). Surfaces chain-of-thought text emitted between the model's

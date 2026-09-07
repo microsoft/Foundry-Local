@@ -447,15 +447,19 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::stri
 
   // Guard: apply guidance based on its source.
   // User-specified guidance (via response_format) is always applied — the user explicitly requested it.
-  // Auto-generated tool grammar is only applied for tool-call-only mode (tool output requested, no text output).
+  // Auto-generated structured-call grammar is only applied for tool-call-only mode when output is not declared as a
+  // raw envelope. A forced raw-envelope tool must remain unconstrained so the model can write the declared markers.
   // Text-only reasoning (cot_text_only) cannot use auto-generated grammar because a completed grammar signals EOS
   // to the ORT GenAI generator — making IsDone() return true immediately on the next turn, breaking multi-turn
   // continuous decoding. For tool-call-only mode the generator is typically invalidated after a successful call
   // anyway, so this is acceptable.
   bool user_specified_guidance = !tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty();
-  bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
+  bool structured_tool_call_only =
+      tool_ctx.tool_output && !tool_ctx.text_output && tool_ctx.ActiveRawEnvelope() == nullptr;
+  const bool raw_envelope_active = tool_ctx.ActiveRawEnvelope() != nullptr;
 
-  if (!guidance_type.empty() && !guidance_data.empty() && (user_specified_guidance || tool_call_only)) {
+  if (!raw_envelope_active && !guidance_type.empty() && !guidance_data.empty() &&
+      (user_specified_guidance || structured_tool_call_only)) {
     try {
       gen_params->SetGuidance(guidance_type.c_str(), guidance_data.c_str());
     } catch (const std::runtime_error& e) {

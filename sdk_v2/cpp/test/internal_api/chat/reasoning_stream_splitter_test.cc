@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
-#include "inferencing/generative/toolcalling/tool_call_stream_accumulator.h"
+#include "inferencing/generative/toolcalling/generated_output_arbiter.h"
 
 #include <gtest/gtest.h>
 
@@ -18,6 +18,17 @@ using namespace fl;
 namespace {
 
 using Segment = ReasoningStreamSplitter::Segment;
+
+/// A turn prompted with the model's tool-call markers and one ordinary function tool. Reasoning must never reach an
+/// arbiter built from it, whatever it contains.
+ToolCallContext ToolCallTurn() {
+  ToolCallContext context;
+  context.tool_call_start = "<tool_call>";
+  context.tool_call_end = "</tool_call>";
+  context.tool_output = true;
+  context.tool_kinds = {{"unsafe", ToolKind::kFunction}};
+  return context;
+}
 
 void Append(std::vector<Segment>& destination, const std::vector<Segment>& source) {
   for (const auto& segment : source) {
@@ -378,9 +389,9 @@ TEST(ReasoningStreamSplitterTest, TruncatedReasoningRemainsReasoningThroughEndOf
   EXPECT_EQ(splitter.ReasoningTokenCount(), 2);
 }
 
-TEST(ReasoningStreamSplitterTest, ToolCallShapedReasoningNeverReachesToolAccumulator) {
+TEST(ReasoningStreamSplitterTest, ToolCallShapedReasoningNeverReachesTheArbiter) {
   ReasoningStreamSplitter splitter("<think>", "</think>", {10}, {20});
-  ToolCallStreamAccumulator accumulator("<tool_call>", "</tool_call>");
+  GeneratedOutputArbiter accumulator(ToolCallTurn());
   std::vector<Segment> segments;
   std::vector<ParsedToolCall> calls;
   std::string visible;
@@ -594,7 +605,7 @@ TEST(ReasoningStreamSplitterTest, TruncatedPromptOpenedReasoningStaysReasoning) 
 TEST(ReasoningStreamSplitterTest, ToolShapedTextInsidePromptOpenedReasoningIsNotAToolCall) {
   ReasoningStreamSplitter splitter("<think>", "</think>", {101}, {102}, {},
                                    /*starts_inside_reasoning=*/true);
-  ToolCallStreamAccumulator accumulator("<tool_call>", "</tool_call>");
+  GeneratedOutputArbiter accumulator(ToolCallTurn());
 
   std::vector<Segment> segments;
   std::string visible;

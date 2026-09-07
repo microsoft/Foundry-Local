@@ -23,6 +23,12 @@ enum class ToolKind {
   kCustom,
 };
 
+/// A tool the provider converter proved the caller explicitly named in `tool_choice`.
+struct ForcedToolChoice {
+  std::string name;
+  ToolKind kind = ToolKind::kFunction;
+};
+
 struct ToolDefinition {
   std::string name;
   std::string description;

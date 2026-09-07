@@ -3,11 +3,13 @@
 #pragma once
 
 #include "items/item.h"
+#include "inferencing/session/types.h"
 #include "util/key_value_pairs.h"
 
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace fl {
@@ -25,6 +27,10 @@ inline constexpr const char* kSystemPromptOption = "system_prompt";
 struct Request {
   std::vector<Item*> items;  // all items (borrowed pointers)
   KeyValuePairs options;
+
+  /// Trusted provider-converter provenance. This is deliberately separate from `options`, which public native
+  /// callers can populate with arbitrary keys.
+  std::optional<ForcedToolChoice> forced_tool_choice;
 
   /// Start indices, into `items`, of the replay segments the producer knows about. Ascending, and empty means the
   /// whole list is one segment.
@@ -50,6 +56,7 @@ struct Request {
   Request(Request&& other) noexcept
       : items(std::move(other.items)),
         options(std::move(other.options)),
+        forced_tool_choice(std::move(other.forced_tool_choice)),
         item_segment_starts(std::move(other.item_segment_starts)),
         canceled(other.canceled.load(std::memory_order_relaxed)),
         owned_items(std::move(other.owned_items)) {}
@@ -57,6 +64,7 @@ struct Request {
   Request& operator=(Request&& other) noexcept {
     items = std::move(other.items);
     options = std::move(other.options);
+    forced_tool_choice = std::move(other.forced_tool_choice);
     item_segment_starts = std::move(other.item_segment_starts);
     canceled.store(other.canceled.load(std::memory_order_relaxed), std::memory_order_relaxed);
     owned_items = std::move(other.owned_items);

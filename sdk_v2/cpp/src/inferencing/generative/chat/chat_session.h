@@ -81,10 +81,20 @@ class ChatSession : public Session {
   /// prompt, and its produced calls against the same tool set.
   ToolCallContext BuildToolCallContext(const Request& request, const std::vector<ToolDefinition>& definitions) const;
 
-  /// Update per-turn fields (tool_choice, guidance) on an existing tool context.
+  /// Update per-turn fields (tool_choice, forced tool, output encoding, guidance) on an existing tool context.
   /// Called on the cached-generator path so each turn gets fresh per-request settings
   /// while keeping session-level tool definitions and marker tokens stable.
   void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
+
+  /// Resolve the two request-scoped inputs that decide how this turn's generated output is *read*: the tool the
+  /// caller explicitly forced, and the raw-envelope dialect in effect.
+  ///
+  /// The descriptor is resolved from the request's own options first and from the model's published properties
+  /// second. The request value is an atomic override, never a merge, and an invalid one is an error rather than a
+  /// reason to use the model's.
+  ///
+  /// @throws fl::Exception FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT when a configured descriptor is not valid.
+  void ResolveToolOutputPolicy(const Request& request, ToolCallContext& tool_ctx) const;
 
   /// Build final response items from the typed segments and tool calls produced during generation.
   void ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,

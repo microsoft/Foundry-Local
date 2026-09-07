@@ -215,7 +215,7 @@ TEST(ToolCallsToItemsTest, EmptyInputReturnsEmpty) {
 
 TEST(ToolCallsToItemsTest, ConvertsToCorrectItemType) {
   std::vector<ParsedToolCall> calls = {
-      {"call_abc", "get_weather", R"({"city":"Seattle"})"},
+      {"call_abc", "get_weather", R"({"city":"Seattle"})", std::nullopt},
   };
 
   auto items = ToolCallsToItems(calls);
@@ -229,8 +229,8 @@ TEST(ToolCallsToItemsTest, ConvertsToCorrectItemType) {
 
 TEST(ToolCallsToItemsTest, MultipleCalls) {
   std::vector<ParsedToolCall> calls = {
-      {"call_1", "fn_a", "{}"},
-      {"call_2", "fn_b", R"({"x":1})"},
+      {"call_1", "fn_a", "{}", std::nullopt},
+      {"call_2", "fn_b", R"({"x":1})", std::nullopt},
   };
 
   auto items = ToolCallsToItems(calls);

@@ -3,6 +3,7 @@
 #include "contracts/tool_definitions.h"
 
 #include "exception.h"
+#include "inferencing/session/request.h"
 #include "util/string_utils.h"
 
 #include <algorithm>
@@ -20,6 +21,10 @@ namespace {
 constexpr const char* kEmptyFunctionSchema = "{}";
 
 constexpr const char* kTextFormatType = "text";
+
+/// Wire spelling of each tool kind, used for the forced-choice option pair.
+constexpr const char* kFunctionKindName = "function";
+constexpr const char* kCustomKindName = "custom";
 
 }  // namespace
 
@@ -118,6 +123,18 @@ void RetainAllowedTools(std::vector<ToolDefinition>& definitions, const std::vec
   });
 
   definitions.erase(excluded, definitions.end());
+}
+
+void RecordForcedToolChoice(Request& request, const std::string& name, ToolKind kind) {
+  if (name.empty()) {
+    return;
+  }
+
+  request.forced_tool_choice = ForcedToolChoice{name, kind};
+}
+
+std::optional<ForcedToolChoice> ReadForcedToolChoice(const Request& request) {
+  return request.forced_tool_choice;
 }
 
 }  // namespace tools

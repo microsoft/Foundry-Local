@@ -88,6 +88,7 @@ struct CatalogTags {
   std::optional<std::string> supports_tool_calling;
   std::optional<std::string> tool_call_start;
   std::optional<std::string> tool_call_end;
+  std::optional<std::string> tool_output_encoding;
   std::optional<std::string> supports_reasoning;
   std::optional<std::string> reasoning_start;
   std::optional<std::string> reasoning_end;

@@ -170,6 +170,7 @@ void from_json(const nlohmann::json& j, CatalogTags& t) {
   opt_str(j, "supportsToolCalling", t.supports_tool_calling);
   opt_str(j, "toolCallStart", t.tool_call_start);
   opt_str(j, "toolCallEnd", t.tool_call_end);
+  opt_str(j, "toolOutputEncoding", t.tool_output_encoding);
   opt_str(j, "supportsReasoning", t.supports_reasoning);
   opt_str(j, "reasoningStart", t.reasoning_start);
   opt_str(j, "reasoningEnd", t.reasoning_end);
@@ -367,6 +368,10 @@ std::optional<ModelInfo> CatalogModelToModelInfo(const CatalogLocalModel& cm) {
 
     if (tags.tool_call_end) {
       info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR] = *tags.tool_call_end;
+    }
+
+    if (tags.tool_output_encoding) {
+      info.string_properties["tool_output_encoding"] = *tags.tool_output_encoding;
     }
 
     set_bool_int(tags.supports_reasoning, FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT);

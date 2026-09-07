@@ -424,7 +424,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleNo
                                    .session = std::move(session),
                                    .response_id = turn.response_id,
                                    .model_id = turn.model_id,
-                                   .response = response_json,
+                                   // The store's copy carries replay metadata the wire copy does not.
+                                   .response = ResponseConverter::ToStoredJson(response),
                                    .input_items = ResponseConverter::ToInputItems(req_json)});
   }
 
@@ -730,7 +731,6 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       // Publish first when storage was requested. If deletion invalidated the lease, PublishResponse throws and the
       // stream ends with response.failed rather than claiming an unstored descendant completed successfully.
       if (should_store) {
-        nlohmann::json response_json = completed_response;
         PublishResponse(PublishRequest{.store = store,
                                        .session_manager = session_manager,
                                        .logger = logger,
@@ -739,7 +739,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
                                        .session = std::move(session),
                                        .response_id = turn.response_id,
                                        .model_id = turn.model_id,
-                                       .response = std::move(response_json),
+                                       // The store's copy carries replay metadata the streamed events do not.
+                                       .response = ResponseConverter::ToStoredJson(completed_response),
                                        .input_items = ResponseConverter::ToInputItems(req_copy)});
       }
 

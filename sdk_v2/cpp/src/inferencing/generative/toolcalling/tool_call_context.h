@@ -2,8 +2,11 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "contracts/tool_definitions.h"
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "inferencing/session/types.h"
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -63,6 +66,46 @@ struct ToolCallContext {
   /// Whether the named tool takes a raw text payload rather than JSON arguments.
   bool IsCustomTool(const std::string& name) const { return KindOf(name) == ToolKind::kCustom; }
 
+  /// The tool `tool_choice` named for this turn, if it named one. Recorded before NarrowToForcedTool and
+  /// RetainAllowedTools run, because both erase the distinction between a forced tool and a sole declared one.
+  std::optional<ForcedToolChoice> forced_tool;
+
+  /// How this turn's model writes a call to one custom tool straight into visible output, if it was configured with
+  /// a dialect at all. Resolved once per turn from the request options, then from the model's properties.
+  std::optional<RawEnvelopeEncoding> tool_output_encoding;
+
+  /// The dialect this turn will actually read bare output in, or nullptr when bare output is just prose.
+  ///
+  /// Activation is deliberately narrow, because a raw envelope has no self-describing structure: the same bytes are
+  /// a tool call or a paragraph depending only on this decision, and getting it wrong silently converts something
+  /// the model said into something Foundry did. So every one of these must hold:
+  ///
+  ///   - the turn may produce tool output at all (`tool_choice: "none"` cannot produce a call);
+  ///   - a dialect was configured;
+  ///   - the caller explicitly forced a *custom* tool — not `auto`, not `none`, and not an unnamed `required`;
+  ///   - the forced name is exactly the dialect's tool;
+  ///   - that tool survived into the effective tool set, so an `allowed_tools` list that excluded it also disables
+  ///     the dialect, and it is still registered as custom rather than as a function of the same name.
+  ///
+  /// Nothing is inferred: neither "required with one tool left" nor "the only declared tool" enables a dialect. A
+  /// turn that merely offers the tool reads an envelope as the prose it is, which is also what every model that was
+  /// never trained on the convention produces.
+  const RawEnvelopeEncoding* ActiveRawEnvelope() const {
+    if (!tool_output || !tool_output_encoding.has_value() || !forced_tool.has_value()) {
+      return nullptr;
+    }
+
+    if (forced_tool->kind != ToolKind::kCustom || forced_tool->name != tool_output_encoding->tool_name) {
+      return nullptr;
+    }
+
+    if (!IsCustomTool(tool_output_encoding->tool_name)) {
+      return nullptr;
+    }
+
+    return &*tool_output_encoding;
+  }
+
   /// User-specified guidance type from response_format (e.g., "lark_grammar", "json_schema").
   /// Empty means no explicit guidance — the generator may still apply auto-generated tool guidance.
   std::string guidance_type;
@@ -78,8 +121,13 @@ struct ToolCallContext {
   /// Kinds are compared as well as the rendered JSON: a custom tool is normalized into a function-shaped schema
   /// before it reaches `tools_json`, so two tool sets can render byte-identical JSON and still differ in how the
   /// calls they produce must be read back.
+  ///
+  /// The raw-envelope dialect is compared for the same reason, one level further out: it changes what the model's
+  /// bytes *mean* without changing a single tool definition. Reusing a warm session across a dialect change would
+  /// continue a conversation whose earlier turns were read — and replayed into the prompt — under different rules.
   bool HasSameTools(const ToolCallContext& other) const {
-    return tools_json == other.tools_json && tool_kinds == other.tool_kinds;
+    return tools_json == other.tools_json && tool_kinds == other.tool_kinds &&
+           tool_output_encoding == other.tool_output_encoding;
   }
 
   /// Whether the model has known tool call marker tokens.

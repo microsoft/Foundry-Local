@@ -15,10 +15,19 @@ namespace fl {
 
 namespace {
 
+/// The structured calls of a message, in event order.
+///
+/// Raw-envelope calls are deliberately absent: the model never wrote a `tool_calls` entry for one, it wrote bytes
+/// into its visible output, and those bytes are replayed by ProjectedContent. Listing a raw call here as well would
+/// render it twice — once as content, once as a structured call the model never produced.
 nlohmann::ordered_json BuildToolCallsJson(const TranscriptMessage& message) {
   auto tool_calls = nlohmann::ordered_json::array();
 
   for (const auto* call : message.ToolCalls()) {
+    if (call->IsRawEnvelope()) {
+      continue;
+    }
+
     nlohmann::ordered_json entry;
     entry["id"] = call->call_id;
     entry["type"] = "function";
@@ -30,10 +39,38 @@ nlohmann::ordered_json BuildToolCallsJson(const TranscriptMessage& message) {
   return tool_calls;
 }
 
+/// The assistant content a message projects into a later prompt.
+///
+/// Usually this is just the visible text. It differs only for a turn in which the model expressed a call as a bare
+/// envelope: those bytes *were* its visible output, so they are replayed inline, in the position they occurred, as
+/// part of the content. That is what makes a rebuilt conversation show the model the turn it actually had — a model
+/// that writes envelopes is shown the envelope it wrote, not a `tool_calls` entry in a dialect it does not use.
+///
+/// Entries are walked in event order rather than concatenating text and calls separately, so text that surrounded an
+/// envelope keeps its position relative to it.
+std::string ProjectedContent(const TranscriptMessage& message) {
+  std::string content;
+
+  for (const auto& entry : message.entries) {
+    if (entry.kind == TranscriptEntry::Kind::kText) {
+      content += entry.text;
+      continue;
+    }
+
+    // Reasoning is never projected (see BuildMessageJson), and a structured call is projected as a `tool_calls`
+    // entry instead, so a raw envelope is the only other thing that contributes content.
+    if (entry.kind == TranscriptEntry::Kind::kToolCall && entry.tool_call.IsRawEnvelope()) {
+      content += entry.tool_call.RawEnvelopeText();
+    }
+  }
+
+  return content;
+}
+
 nlohmann::ordered_json BuildMessageJson(const TranscriptMessage& message) {
   nlohmann::ordered_json entry;
   entry["role"] = Utils::RoleToString(message.role);
-  entry["content"] = message.VisibleText();
+  entry["content"] = ProjectedContent(message);
 
   if (!message.name.empty()) {
     entry["name"] = message.name;
@@ -54,7 +91,16 @@ nlohmann::ordered_json BuildMessageJson(const TranscriptMessage& message) {
   // Reasoning is never projected back into a prompt, not even alongside the calls it produced. It is the model's
   // private scratchpad: it is typed, stored, and surfaced to the caller, but a conversation replayed from storage
   // cannot reproduce it, so replaying it here would make a warm session and a rebuilt one send different prompts.
-  entry["tool_calls"] = BuildToolCallsJson(message);
+  auto tool_calls = BuildToolCallsJson(message);
+
+  // A turn whose only calls were raw envelopes has no structured calls to declare — they are already in `content`.
+  // Emitting an empty array would tell the template this was a tool-calling turn with no calls, which some
+  // templates render as an empty `tool_calls` block.
+  if (tool_calls.empty()) {
+    return entry;
+  }
+
+  entry["tool_calls"] = std::move(tool_calls);
   return entry;
 }
 

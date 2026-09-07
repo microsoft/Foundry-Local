@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "inferencing/session/types.h"
 #include "items/item.h"
 
@@ -34,6 +35,30 @@ struct TranscriptToolCall {
   /// Which of the session's tool kinds produced this call. Recorded so the authoritative transcript reports the call
   /// as what it was, and so a replayed call normalizes the same way the generated one did.
   ToolKind kind = ToolKind::kFunction;
+
+  /// Provenance: how the model actually wrote this call.
+  ///
+  /// Empty means structured — the call arrived inside the model's tool-call marker block, or was supplied by the
+  /// caller. Set means the arbiter read it out of a bare envelope in visible output, and carries the exact dialect
+  /// it was read under.
+  ///
+  /// This is not cosmetic. A structured call is projected back into a later prompt as a `tool_calls` entry, which is
+  /// the only shape a chat template can render one in. A raw call was never written that way: the model produced
+  /// envelope bytes as ordinary assistant content, and replaying it as a `tool_calls` entry would show the model a
+  /// transcript of a turn it did not have. Keeping the descriptor is what lets projection reproduce those bytes.
+  std::optional<RawEnvelopeEncoding> raw_encoding;
+
+  /// Whether the model wrote this call as a bare envelope rather than a structured block.
+  bool IsRawEnvelope() const { return raw_encoding.has_value(); }
+
+  /// The exact assistant-content bytes the model produced for a raw call.
+  ///
+  /// For a raw envelope `arguments` already *is* those bytes: the arbiter keeps the begin line with its own
+  /// terminator, the opaque payload, and the closing marker, all verbatim. (Only the newline *after* the closing
+  /// marker is excluded — it separated the call from the model's next visible output and was reported as part of
+  /// it.) So this is deliberately not a reconstruction: there is one authority on the payload, and re-deriving it
+  /// from the descriptor could disagree with it — for a CRLF envelope, for instance.
+  const std::string& RawEnvelopeText() const { return arguments; }
 };
 
 /// One event within a message, stored in the order it occurred.
@@ -88,6 +113,7 @@ struct TranscriptMessage {
   void AppendToolCall(TranscriptToolCall call);
 
   bool HasToolCalls() const;
+  bool HasStructuredToolCalls() const;
 
   /// True when the message carries visible text that follows a tool call and is more than whitespace.
   ///
@@ -96,7 +122,8 @@ struct TranscriptMessage {
   /// claim a different order of events than the one that actually happened. Whitespace between or after calls says
   /// nothing about order and is not counted.
   ///
-  /// See ValidateRenderableTurn for the rule that keeps this false on every committed message.
+  /// Raw-envelope calls project as content and therefore do not close the content sequence. See
+  /// ValidateRenderableTurn for the rule that keeps this false on every committed message.
   bool HasVisibleTextAfterToolCall() const;
 
   /// Concatenated visible text across all kText entries.
@@ -137,8 +164,14 @@ struct GeneratedToolCall {
 /// Generation has already been streamed to the caller by the time a turn is committed, so a model that emits
 /// unusable argument bytes must not fail the request. The raw bytes are preserved verbatim and the normalized form
 /// degrades to an empty object, which keeps the committed transcript renderable on every later turn.
+///
+/// @param raw_encoding  Set only by the arbiter, and only for a call it read out of a bare envelope. This is the one
+///        entry point that may mark a call as raw: a call the caller supplied — even for the same custom tool, with
+///        the same payload — is structured, because the caller wrote it as a structured call and replaying it as
+///        model-dialect bytes would put words in the model's mouth.
 GeneratedToolCall MakeGeneratedToolCall(std::string call_id, std::string name, std::string arguments,
-                                        ToolKind kind = ToolKind::kFunction);
+                                        ToolKind kind = ToolKind::kFunction,
+                                        std::optional<RawEnvelopeEncoding> raw_encoding = std::nullopt);
 
 /// Result of turning a request's items into transcript messages.
 struct TranscriptIngest {
@@ -248,19 +281,20 @@ const TranscriptMessage* AssistantPrefillForReply(const std::vector<TranscriptMe
 
 /// Enforce the assistant-turn ordering invariant on one message.
 ///
-/// **Invariant: within an assistant message, all visible text precedes the first tool call.**
+/// **Invariant: within an assistant message, all content precedes the first structured tool call.**
 ///
 /// The transcript records events in the order they happened, but the conventional chat-template schema for an
 /// assistant turn is `content` plus a `tool_calls` array — it has no way to say "this text came *after* that call".
-/// Projecting an interleaved turn would therefore hand the model a different order of events than the one that
-/// occurred, silently. Rather than reorder, the invariant makes the shape not exist:
+/// Raw-envelope calls are content and retain their surrounding visible bytes. Projecting content or a raw call after
+/// a structured call would hand the model a different order of events than the one that occurred, silently. Rather
+/// than reorder, the invariant makes that shape not exist:
 ///
-///  - Generation treats the first tool call as the end of the turn's visible text. Post-call text is never streamed,
-///    never recorded, and stops the turn (ChatSession); the caller sees a `tool_calls` finish reason.
+///  - Generation treats the first structured tool call as the end of content. Later content is never streamed or
+///    recorded and stops the turn (ChatSession); the caller sees a `tool_calls` finish reason.
 ///  - Replayed input carrying that shape is rejected here, because normalizing it would either drop the caller's
 ///    text or move it, and both are silent changes to what the caller said happened.
 ///
-/// Ordinary `text -> calls` and parallel calls are unaffected: they are exactly what the schema expresses.
+/// Ordinary `content -> structured calls`, parallel calls, and `raw calls -> structured calls` are unaffected.
 ///
 /// @throws fl::Exception FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT when `message` has visible text after a tool call.
 void ValidateRenderableTurn(const TranscriptMessage& message);
@@ -275,21 +309,41 @@ enum class TextDisposition {
 /// Keeps a turn being generated on the renderable side of the ordering invariant, so a violation is prevented rather
 /// than diagnosed after the output has already been streamed to the caller.
 ///
-/// The rule is ValidateRenderableTurn's, applied while events arrive: once the turn has issued a tool call, visible
-/// text can no longer be represented, because the chat-template schema would replay it before the call. Such text is
-/// dropped and ends the turn — the caller keeps the calls and a `tool_calls` finish reason. Whitespace is dropped
-/// without ending the turn, so models can still emit subsequent parallel call blocks without replay reordering it.
+/// The rule is ValidateRenderableTurn's, applied while events arrive: once the turn has issued a structured call,
+/// later content can no longer be represented because the chat-template schema would replay it before the call.
+/// Such content is dropped and ends the turn. Whitespace is dropped without ending the turn, so models can still
+/// emit subsequent parallel structured calls. Raw calls remain content until a structured call is issued.
 ///
 /// Seeded with the calls of an assistant prefill the reply will merge into (see AssistantPrefillForReply): the
 /// prefill and the reply become one message, so the prefill's calls close this turn's visible text too.
 class AssistantTurnGuard {
  public:
-  explicit AssistantTurnGuard(bool calls_already_issued = false) : calls_issued_(calls_already_issued) {}
+  explicit AssistantTurnGuard(bool structured_calls_already_issued = false)
+      : structured_calls_issued_(structured_calls_already_issued) {}
 
   static AssistantTurnGuard ForReplyTo(const std::vector<TranscriptMessage>& inputs, size_t merge_floor);
 
-  /// Record that the turn issued a tool call. Every later visible text event is now unrepresentable.
-  void RecordToolCall() noexcept { calls_issued_ = true; }
+  /// Accept a call when its shape can still be replayed in event order. Raw calls are content and may precede a
+  /// structured call; a raw call after a structured call would replay before it and therefore ends the turn.
+  bool OfferToolCall(bool raw_envelope) noexcept {
+    if (ended_) {
+      return false;
+    }
+
+    if (raw_envelope) {
+      if (structured_calls_issued_) {
+        ended_ = true;
+        return false;
+      }
+      return true;
+    }
+
+    structured_calls_issued_ = true;
+    return true;
+  }
+
+  /// Record a structured tool call. Retained for callers and tests that do not need to distinguish call encodings.
+  void RecordToolCall() noexcept { static_cast<void>(OfferToolCall(false)); }
 
   /// Decide what to do with one visible-text event. Reports kEndTurn exactly once per turn.
   TextDisposition OfferVisibleText(std::string_view text) noexcept {
@@ -297,7 +351,7 @@ class AssistantTurnGuard {
       return TextDisposition::kDropped;
     }
 
-    if (!calls_issued_) {
+    if (!structured_calls_issued_) {
       return TextDisposition::kEmit;
     }
 
@@ -314,7 +368,7 @@ class AssistantTurnGuard {
   bool TurnEnded() const noexcept { return ended_; }
 
  private:
-  bool calls_issued_ = false;
+  bool structured_calls_issued_ = false;
   bool ended_ = false;
 };
 

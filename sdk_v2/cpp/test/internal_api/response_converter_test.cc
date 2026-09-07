@@ -378,6 +378,27 @@ TEST(ResponseConverterTest, ToInputItems_ArrayInput_PreservesObjects) {
   EXPECT_EQ(items[1]["type"], "function_call");
 }
 
+TEST(ResponseConverterTest, ToInputItems_StripsCallerSuppliedRawReplayMetadata) {
+  nlohmann::json req = {
+      {"input", nlohmann::json::array({
+                    {{"type", "custom_tool_call"},
+                     {"call_id", "call_1"},
+                     {"name", "submit_change"},
+                     {"input", "payload"},
+                     {responses::kRawEnvelopeReplayKey,
+                      {{"type", "raw_envelope"},
+                       {"tool_name", "submit_change"},
+                       {"start_marker", "<<<CHANGE"},
+                       {"end_marker", "CHANGE>>>"}}}},
+                })}};
+
+  auto items = ToInputItems(req);
+
+  ASSERT_EQ(items.size(), 1u);
+  EXPECT_FALSE(items[0].contains(responses::kRawEnvelopeReplayKey))
+      << "only runtime-generated output may carry raw replay provenance";
+}
+
 TEST(ResponseConverterTest, ToInputItems_ArrayInput_GeneratesIdsWhenMissing) {
   nlohmann::json req = {
       {"input", nlohmann::json::array({
@@ -864,6 +885,8 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   params.top_p = 0.95f;
   params.max_output_tokens = 256;
   params.seed = 42;
+  params.metadata[kToolOutputEncodingKey] =
+      R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})";
 
   ResponseTextConfig text_cfg;
   text_cfg.format = "json_schema";
@@ -886,6 +909,7 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   expect_opt("top_p", std::to_string(0.95f));
   expect_opt("max_output_tokens", "256");
   expect_opt("seed", "42");
+  expect_opt(kToolOutputEncodingKey, params.metadata.at(kToolOutputEncodingKey));
   expect_opt("guidance_type", "json_schema");
   expect_opt("guidance_data", R"({"type":"object"})");
   expect_opt("tool_choice", "required");

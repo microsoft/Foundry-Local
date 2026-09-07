@@ -3,6 +3,7 @@
 
 #include "inferencing/generative/openresponses/response_converter.h"
 
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
 #include "items/tool_call_item.h"
 
 #include <azure/core/base64.hpp>
@@ -132,6 +133,8 @@ ResponseOutputItem ToOutputItem(const ToolCallItem& call, fl::ToolKind kind, con
     custom.name = call.name;
     custom.input = std::move(payload);
     custom.status = status;
+    // Only a call the arbiter read out of a bare envelope carries this, and only the store ever sees it.
+    custom.raw_encoding = call.raw_encoding;
     return custom;
   }
 
@@ -244,9 +247,25 @@ std::unique_ptr<ToolCallItem> MakeReplayedToolCall(const nlohmann::json& item) {
 /// A custom call's payload is raw text, so it is carried as the call's arguments verbatim — the same form the session
 /// produced it in, and the same form the tool would receive. It is never parsed or re-encoded: doing so would change
 /// the bytes for a payload that is itself JSON, or reject one that is not.
+///
+/// A stored item may also carry the dialect the model wrote the call in (kRawEnvelopeReplayKey). Only this runtime's
+/// own store can supply it — it is stripped from every response a client sees — so replay reproduces the model's own
+/// bytes for a call it really did write as an envelope, while a call a client sent in stays structured.
 std::unique_ptr<ToolCallItem> MakeReplayedCustomToolCall(const nlohmann::json& item) {
+  std::optional<RawEnvelopeEncoding> raw_encoding;
+
+  if (auto it = item.find(kRawEnvelopeReplayKey); it != item.end() && !it->is_null()) {
+    // A stored descriptor was validated when it was written. If storage was somehow corrupted, replaying the call
+    // as structured is the safe reading — it is still the same call, with the same payload and the same id.
+    try {
+      raw_encoding = it->get<RawEnvelopeEncoding>();
+    } catch (const std::exception&) {
+      raw_encoding.reset();
+    }
+  }
+
   return std::make_unique<ToolCallItem>(item.value("call_id", ""), item.value("name", ""), item.value("input", ""),
-                                        ToolKind::kCustom);
+                                        ToolKind::kCustom, std::move(raw_encoding));
 }
 
 /// The text a message carrying only media renders as. The chat template requires every message to have at least one
@@ -711,6 +730,12 @@ Request ToSessionRequest(const ResponseCreateParams& params, const ResponseChain
     request.options["seed"] = std::to_string(*params.seed);
   }
 
+  // Foundry extension: one complete JSON descriptor for a model's raw custom-tool output dialect. Copy only this
+  // recognized key rather than treating arbitrary request metadata as native generation options.
+  if (auto encoding = params.metadata.find(kToolOutputEncodingKey); encoding != params.metadata.end()) {
+    request.options[kToolOutputEncodingKey] = encoding->second;
+  }
+
   // Text format / grammar guidance → metadata parameters
   if (params.text.has_value()) {
     const auto& text_cfg = *params.text;
@@ -778,6 +803,11 @@ std::vector<fl::ToolDefinition> ExtractResponsesToolDefinitions(const ResponseCr
             constexpr auto kind = std::is_same_v<T, ForcedCustomTool> ? fl::ToolKind::kCustom
                                                                       : fl::ToolKind::kFunction;
             session_request.options["tool_choice"] = "required";
+
+            // Recorded before narrowing and before allowed_tools filtering. Afterwards the set no longer says
+            // whether the caller named this tool or merely declared it, and behaviour that must stay opt-in —
+            // reading a bare envelope as a call — depends on exactly that distinction.
+            tools::RecordForcedToolChoice(session_request, tc.name, kind);
             tools::NarrowToForcedTool(definitions, tc.name, kind);
           }
         },
@@ -935,6 +965,34 @@ ResponseObject BuildResponseObject(const std::string& response_id,
 }
 
 // ---------------------------------------------------------------------------
+// ToStoredJson — the store's copy, carrying internal replay metadata
+// ---------------------------------------------------------------------------
+
+nlohmann::json ToStoredJson(const ResponseObject& response) {
+  nlohmann::json stored = response;
+
+  auto output = stored.find("output");
+
+  if (output == stored.end() || !output->is_array()) {
+    return stored;
+  }
+
+  // Matched positionally: `stored["output"]` is this very object's `output` serialized in order, so entry i is
+  // item i. Nothing is looked up by id, which a model-supplied name or a duplicate id could confuse.
+  const size_t count = std::min(output->size(), response.output.size());
+
+  for (size_t i = 0; i < count; ++i) {
+    const auto* custom = std::get_if<CustomToolCallOutputItem>(&response.output[i]);
+
+    if (custom != nullptr && custom->raw_encoding.has_value()) {
+      (*output)[i][kRawEnvelopeReplayKey] = *custom->raw_encoding;
+    }
+  }
+
+  return stored;
+}
+
+// ---------------------------------------------------------------------------
 // BuildFailedResponseObject — returns typed ResponseObject with error
 // ---------------------------------------------------------------------------
 
@@ -1065,6 +1123,11 @@ nlohmann::json ToInputItems(const nlohmann::json& req_json) {
     for (const auto& item : input) {
       if (item.is_object()) {
         nlohmann::json stored = item;
+
+        // Internal replay provenance is minted only by this runtime for generated output. A caller may include an
+        // underscore-prefixed lookalike in input, but it must never survive into the store and later claim that a
+        // structured client-supplied call was generated as a raw envelope.
+        stored.erase(kRawEnvelopeReplayKey);
 
         if (stored.value("type", "") == "function_call") {
           if (auto arguments = stored.find("arguments"); arguments != stored.end()) {

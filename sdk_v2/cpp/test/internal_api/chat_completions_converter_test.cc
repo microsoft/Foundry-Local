@@ -562,6 +562,21 @@ TEST(ChatCompletionsConverterTest, MapRequestParameters_MetadataTopKAndRandomSee
   EXPECT_STREQ(session_request.options.Find("seed"), "123");
 }
 
+TEST(ChatCompletionsConverterTest, MapRequestParameters_CopiesOnlyTheRawEnvelopeMetadataExtension) {
+  ChatCompletionRequest req;
+  req.metadata = std::map<std::string, std::string>{
+      {kToolOutputEncodingKey,
+       R"({"type":"raw_envelope","tool_name":"submit_change","start_marker":"<<<CHANGE","end_marker":"CHANGE>>>"})"},
+      {"unrecognized_native_option", "must-not-cross"},
+  };
+
+  Request session_request;
+  MapRequestParameters(req, session_request);
+
+  EXPECT_STREQ(session_request.options.Find(kToolOutputEncodingKey), req.metadata->at(kToolOutputEncodingKey).c_str());
+  EXPECT_EQ(session_request.options.Find("unrecognized_native_option"), nullptr);
+}
+
 TEST(ChatCompletionsConverterTest, MapRequestParameters_EmptyMetadataValuesIgnored) {
   ChatCompletionRequest req;
   req.metadata = std::map<std::string, std::string>{

@@ -12,6 +12,9 @@
 #include <vector>
 
 namespace fl {
+
+struct Request;
+
 namespace tools {
 
 // ========================================================================
@@ -80,6 +83,20 @@ void NarrowToForcedTool(std::vector<ToolDefinition>& definitions, const std::str
 /// Order is preserved, and `allowed_names` is a filter rather than a selection: repeated entries
 /// keep a tool once, and entries naming a tool that was never declared match nothing.
 void RetainAllowedTools(std::vector<ToolDefinition>& definitions, const std::vector<std::string>& allowed_names);
+
+/// Record an explicit forced choice on a trusted provider-converted session request.
+///
+/// Call this *before* NarrowToForcedTool, from every surface that resolves a forced `tool_choice`, so what reaches
+/// the session is the caller's instruction and not an inference drawn from a tool set that filtering has already
+/// reduced to one entry.
+void RecordForcedToolChoice(Request& request, const std::string& name, ToolKind kind);
+
+/// Read back a forced choice recorded by RecordForcedToolChoice.
+///
+/// Returns nullopt when no tool was forced, when the name is empty, or when the kind is missing or unrecognized —
+/// all of which mean "the caller did not name a tool", which is the safe reading: behaviour gated on an explicit
+/// choice stays off rather than switching on for a malformed one.
+std::optional<ForcedToolChoice> ReadForcedToolChoice(const Request& request);
 
 }  // namespace tools
 }  // namespace fl

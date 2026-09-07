@@ -89,6 +89,20 @@ ResponseObject BuildResponseObject(const std::string& response_id,
                                    const std::string& output_text,
                                    const TokenUsage& usage);
 
+/// Serialize a completed response for the store.
+///
+/// Identical to `nlohmann::json(response)` except that each `custom_tool_call` the model wrote as a bare envelope
+/// also carries the dialect it used, under kRawEnvelopeReplayKey.
+///
+/// The annotation exists only on this copy. `to_json` does not write it, so no response that reaches a client —
+/// the POST result, the streamed events, GET, the list page — carries it, and the published Responses schema is
+/// unchanged. The store is the only holder, which is also what makes the metadata untrusted-input-proof: a client
+/// echoing items back cannot claim a call was raw when it was not.
+///
+/// Without this, a conversation continued after its warm session was evicted would replay a raw call as a
+/// structured `tool_calls` entry, showing the model a turn it never had.
+nlohmann::json ToStoredJson(const ResponseObject& response);
+
 /// Build a failed typed Responses API response object.
 ResponseObject BuildFailedResponseObject(const std::string& response_id,
                                          int64_t created_at,

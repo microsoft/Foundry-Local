@@ -3,12 +3,41 @@
 
 #include "inferencing/generative/openresponses/response_store.h"
 
+#include "contracts/responses.h"
+
 #include <algorithm>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace fl {
+
+namespace {
+
+/// The client-visible view of a stored response.
+///
+/// A stored response carries one thing a client never sees: for each `custom_tool_call` the model wrote as a bare
+/// envelope, the dialect it used (see ResponseConverter::ToStoredJson). That is this runtime's own bookkeeping,
+/// kept so a conversation continued after its warm session was evicted replays in the model's own dialect. It is
+/// removed on the way out, here, because this is the one place a stored response becomes a response a caller reads
+/// — GET and the list page both pass through it — so the published Responses schema stays exactly as it was.
+nlohmann::json WireView(nlohmann::json response) {
+  auto output = response.find("output");
+
+  if (output == response.end() || !output->is_array()) {
+    return response;
+  }
+
+  for (auto& item : *output) {
+    if (item.is_object()) {
+      item.erase(responses::kRawEnvelopeReplayKey);
+    }
+  }
+
+  return response;
+}
+
+}  // namespace
 
 // --- ResponseLease ---
 
@@ -180,7 +209,7 @@ std::optional<nlohmann::json> ResponseStore::Get(const std::string& response_id)
   }
 
   TouchLocked(it->second);
-  return it->second->response;
+  return WireView(it->second->response);
 }
 
 std::optional<nlohmann::json> ResponseStore::GetInputItems(const std::string& response_id) {
@@ -353,7 +382,7 @@ ResponseStore::Page ResponseStore::List(int limit, const std::string& after, con
   Page page;
   auto it = start;
   for (int count = 0; it != ordered.end() && count < limit; ++it, ++count) {
-    page.data.push_back((*it)->response);
+    page.data.push_back(WireView((*it)->response));
   }
 
   // The iterator says exactly whether anything follows the page. Reporting `data.size() == limit` instead claimed a

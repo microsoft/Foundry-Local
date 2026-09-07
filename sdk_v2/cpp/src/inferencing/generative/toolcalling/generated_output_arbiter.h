@@ -1,0 +1,584 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+#pragma once
+
+#include "inferencing/generative/toolcalling/raw_envelope_encoding.h"
+#include "inferencing/generative/toolcalling/tool_call_context.h"
+#include "inferencing/generative/toolcalling/tool_call_utils.h"
+#include "inferencing/session/tool_registry.h"
+#include "inferencing/session/types.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
+
+namespace fl {
+
+/// Request-scoped state machine that decides what every byte of a turn's generated output *is*.
+///
+/// A generative chat model expresses a tool call in one of two shapes, and both arrive inline in the same token
+/// stream as ordinary prose:
+///
+///   1. A structured block wrapped in the model's marker tokens, e.g. `<tool_call>{"name":…}</tool_call>`.
+///   2. A bare envelope — `<start_marker>` … `<end_marker>` — written directly into visible output, whose body is
+///      one custom tool's entire text payload. Which tool, and which markers, come from the turn's
+///      RawEnvelopeEncoding descriptor; nothing in the envelope itself names either.
+///
+/// Both readings compete for the same bytes, so they are arbitrated by one state machine rather than by chained
+/// parsers. Chaining is not merely redundant here, it is wrong: a first-pass envelope scanner would carve an
+/// envelope out of a structured call's JSON payload, and a first-pass structured scanner would carve a `<tool_call>`
+/// out of envelope data. Arbitrating once means whichever shape opens first owns every byte until it closes, and
+/// the shape that lost never sees those bytes at all.
+///
+/// State, in stream order:
+///
+///   kVisible     — assistant prose. Scans for whichever opener occurs earliest. Bytes that could still grow into
+///                  either opener are held back rather than emitted, so a marker split across tokens is never leaked.
+///   kStructured  — inside a marker block. Every byte belongs to the block, including the envelope's start marker.
+///   kRawEnvelope — inside a raw envelope. Every byte is payload, including `<tool_call>`.
+///
+/// Raw envelope grammar, enforced exactly:
+///
+///   - The begin line is exactly the descriptor's `start_marker`, starting at stream offset 0 or immediately after
+///     an LF, and followed by LF or CRLF. Its terminator is part of the envelope.
+///   - The end line is exactly the descriptor's `end_marker`, starting at a line boundary, and followed by LF,
+///     CRLF, or end-of-stream. The closing marker is part of the envelope; the newline after it is visible output,
+///     because it separates the call from whatever the model writes next.
+///   - Everything between is opaque payload: no unescaping, no newline normalization, no trimming. An indented,
+///     suffixed, misspelled, reversed, or unterminated marker is not a marker and stays visible.
+///
+/// `Push(chunk)` accepts any text chunk — a single decoded token or a multi-token segment from the upstream
+/// `ReasoningStreamSplitter` — and returns ordered events: visible text, and tool calls whose envelope completed in
+/// this chunk. A call's ID is minted exactly once, at the moment its envelope commits, and is what the streamed
+/// item, the final response, the transcript, and the client's eventual result all correlate through. A call the
+/// arbiter builds from a raw envelope also carries the descriptor it was read under, so a later turn can replay it
+/// in the dialect the model actually wrote.
+///
+/// `Flush()` drains end-of-stream: a natural stop, an output-token limit, a cancellation, or a failed turn. Every
+/// buffered byte comes back as visible text, so an envelope that never closed is reported exactly as generated and
+/// is never actionable.
+///
+/// Callers must not feed REASONING-tagged content into `Push`. Reasoning is the model's scratchpad; a marker inside
+/// it is not a call of either shape. The upstream splitter routes REASONING segments around this arbiter entirely.
+class GeneratedOutputArbiter {
+ public:
+  using Event = std::variant<std::string, ParsedToolCall>;
+
+  struct Output {
+    std::vector<Event> events;
+  };
+
+  /// Build the arbiter for one turn from the context that shaped that turn's prompt.
+  ///
+  /// Everything the arbiter needs is copied, not referenced: the context belongs to the session and a turn must be
+  /// read back with the tool set it was prompted with even if another thread re-registers tools meanwhile.
+  ///
+  /// Raw mode follows `ToolCallContext::ActiveRawEnvelope` exactly — a descriptor alone does not enable it. That
+  /// gate covers `tool_choice: "none"` (which cannot produce a call at all), requires the caller to have forced the
+  /// descriptor's own custom tool by name, and requires that tool to have survived allowed-tool filtering.
+  explicit GeneratedOutputArbiter(const ToolCallContext& context)
+      : start_marker_(context.tool_output ? context.tool_call_start : std::string{}),
+        end_marker_(context.tool_output ? context.tool_call_end : std::string{}),
+        tool_kinds_(context.tool_kinds) {
+    if (const auto* encoding = context.ActiveRawEnvelope()) {
+      raw_encoding_ = *encoding;
+    }
+  }
+
+  /// Feed a chunk of DEFAULT-typed generated text. Returns ordered visible-text and completed-call events.
+  Output Push(const std::string& chunk) {
+    Output out;
+
+    if (chunk.empty()) {
+      return out;
+    }
+
+    if (!DetectionEnabled()) {
+      EmitVisible(out, chunk);
+      return out;
+    }
+
+    buffer_ += chunk;
+    Drain(out, /*flushing=*/false);
+
+    return out;
+  }
+
+  /// Drain at end-of-stream. Anything still buffered — a partial marker, an unterminated structured block, an
+  /// unterminated raw envelope — is emitted as visible text, byte for byte.
+  Output Flush() {
+    Output out;
+
+    if (!DetectionEnabled()) {
+      return out;
+    }
+
+    Drain(out, /*flushing=*/true);
+
+    return out;
+  }
+
+  /// Abandon an unfinished candidate at a non-terminal semantic boundary. Unlike Flush, this never treats the end
+  /// of the available bytes as end-of-stream, so a closing raw marker without its required line terminator cannot
+  /// become actionable merely because a reasoning segment begins next.
+  Output Abandon() {
+    Output out;
+
+    switch (state_) {
+      case State::kVisible:
+        EmitVisibleTracked(out, Consume(buffer_.size()));
+        break;
+      case State::kStructured:
+        EmitVisibleTracked(out, TakeBufferedWith(structured_buffer_));
+        break;
+      case State::kRawEnvelope:
+        EmitVisibleTracked(out, TakeBufferedWith(raw_buffer_));
+        break;
+    }
+
+    state_ = State::kVisible;
+    return out;
+  }
+
+  /// Whether an envelope of either shape is currently open and owns incoming bytes.
+  bool InsideCall() const noexcept { return state_ != State::kVisible; }
+
+  /// Whether a structured marker block is currently open.
+  bool InsideStructuredCall() const noexcept { return state_ == State::kStructured; }
+
+  /// Whether a raw envelope is currently open.
+  bool InsideRawEnvelope() const noexcept { return state_ == State::kRawEnvelope; }
+
+  /// The dialect this turn reads bare output in, or nullptr when bare output is just prose.
+  const RawEnvelopeEncoding* RawEnvelope() const noexcept {
+    return raw_encoding_.has_value() ? &*raw_encoding_ : nullptr;
+  }
+
+  /// Whether this turn resolves a bare envelope to a tool call at all.
+  bool RawEnvelopeEnabled() const noexcept { return raw_encoding_.has_value(); }
+
+ private:
+  enum class State {
+    kVisible,
+    kStructured,
+    kRawEnvelope,
+  };
+
+  /// Where a line-anchored marker line was found, or where one might still begin.
+  struct LineMarkerScan {
+    /// Earliest candidate position, or npos when no position in the scanned text could be one.
+    size_t index = std::string::npos;
+    /// Bytes the complete marker line occupies from `index`, terminator included. Meaningless unless `complete`.
+    size_t length = 0;
+    /// False when the candidate needs more bytes before it can be accepted or rejected.
+    bool complete = false;
+  };
+
+  bool StructuredDetectionEnabled() const noexcept { return !start_marker_.empty() && !end_marker_.empty(); }
+
+  bool DetectionEnabled() const noexcept { return StructuredDetectionEnabled() || raw_encoding_.has_value(); }
+
+  bool IsCustomTool(const std::string& name) const {
+    auto it = tool_kinds_.find(name);
+    return it != tool_kinds_.end() && it->second == ToolKind::kCustom;
+  }
+
+  /// Run the state machine until it stops making progress. Each step either consumes buffered bytes or changes
+  /// state, so a step that does neither means the machine is waiting for more input (or is fully drained).
+  void Drain(Output& out, bool flushing) {
+    for (;;) {
+      const auto state_before = state_;
+      const auto buffered_before = buffer_.size();
+
+      switch (state_) {
+        case State::kVisible:
+          StepVisible(out, flushing);
+          break;
+        case State::kStructured:
+          StepStructured(out, flushing);
+          break;
+        case State::kRawEnvelope:
+          StepRawEnvelope(out, flushing);
+          break;
+      }
+
+      if (state_ == state_before && buffer_.size() == buffered_before) {
+        return;
+      }
+    }
+  }
+
+  /// Outside any envelope: emit prose, and open whichever envelope starts earliest.
+  void StepVisible(Output& out, bool flushing) {
+    const size_t structured_index = StructuredDetectionEnabled() ? buffer_.find(start_marker_) : std::string::npos;
+    const LineMarkerScan raw = raw_encoding_.has_value() ? ScanForRawStart() : LineMarkerScan{};
+
+    // Earliest position whose reading is still undecided. Bytes from here on must not be emitted: more input could
+    // turn them into an opener. At end-of-stream nothing is undecided — no more input is coming.
+    size_t undecided = std::string::npos;
+
+    if (!flushing) {
+      // Only a marker that has not already occurred can still arrive: a complete occurrence always starts at or
+      // before any partial suffix, so opening at it settles the suffix too.
+      if (StructuredDetectionEnabled() && structured_index == std::string::npos) {
+        const auto hold = LongestSuffixThatIsPrefixOf(buffer_, start_marker_);
+        if (hold > 0) {
+          undecided = buffer_.size() - hold;
+        }
+      }
+
+      if (raw.index != std::string::npos && !raw.complete) {
+        undecided = std::min(undecided, raw.index);
+      }
+    }
+
+    // A raw envelope at or before the structured marker wins: whichever opener comes first owns the rest.
+    const bool raw_wins = raw.complete && (structured_index == std::string::npos || raw.index <= structured_index);
+    const size_t open_index = raw_wins ? raw.index : structured_index;
+
+    // An opener inside the undecided region is not yet safe to act on — a longer, earlier opener could still
+    // swallow it. Wait for the bytes that settle it.
+    if (open_index != std::string::npos && (undecided == std::string::npos || open_index < undecided)) {
+      EmitVisibleTracked(out, Consume(open_index));
+
+      if (raw_wins) {
+        // The begin line's terminator is part of the envelope the tool receives.
+        raw_buffer_ = Consume(raw.length);
+        state_ = State::kRawEnvelope;
+      } else {
+        // ParseToolCalls is handed the full `<tool_call>…</tool_call>` substring, so keep the opening marker.
+        structured_buffer_ = Consume(start_marker_.size());
+        state_ = State::kStructured;
+      }
+
+      return;
+    }
+
+    EmitVisibleTracked(out, Consume(undecided == std::string::npos ? buffer_.size() : undecided));
+  }
+
+  /// Inside a structured marker block: every byte belongs to the block until the closing marker.
+  void StepStructured(Output& out, bool flushing) {
+    const size_t found = buffer_.find(end_marker_);
+
+    if (found != std::string::npos) {
+      structured_buffer_ += Consume(found + end_marker_.size());
+
+      auto parsed = ParseToolCalls(structured_buffer_, start_marker_, end_marker_);
+
+      if (parsed.empty()) {
+        // A marker-shaped block that does not parse is model prose, not a call. Preserve it rather than dropping
+        // generated output on the floor.
+        EmitVisibleTracked(out, structured_buffer_);
+      } else {
+        for (auto& call : parsed) {
+          // A custom tool's payload crosses the API boundary as raw text, not as the synthesized `{"input": …}`
+          // wrapper the model was prompted with. Unwrapping here — once, for both the native and the Chat JSON
+          // path — is what makes the stream, the final response, and the transcript agree on the same bytes.
+          if (IsCustomTool(call.name)) {
+            call.arguments = ExtractCustomToolInput(call.arguments);
+          }
+
+          out.events.emplace_back(std::move(call));
+        }
+      }
+
+      structured_buffer_.clear();
+      state_ = State::kVisible;
+      return;
+    }
+
+    if (flushing) {
+      EmitVisibleTracked(out, TakeBufferedWith(structured_buffer_));
+      state_ = State::kVisible;
+      return;
+    }
+
+    structured_buffer_ += Consume(buffer_.size() - LongestSuffixThatIsPrefixOf(buffer_, end_marker_));
+  }
+
+  /// Inside a raw envelope: every byte is payload until a line that is exactly the closing marker.
+  void StepRawEnvelope(Output& out, bool flushing) {
+    // End-of-stream is a valid terminator for the closing line, so a model that stops right after the end marker
+    // still produces a call.
+    const LineMarkerScan end =
+        ScanForMarkerLine(buffer_, at_line_start_, raw_encoding_->end_marker, /*eof_terminates=*/flushing);
+
+    if (end.complete) {
+      // Take the closing marker but not its terminator: the newline after the end marker separates the call from
+      // the model's next visible output and belongs to that output.
+      raw_buffer_ += Consume(end.index + raw_encoding_->end_marker.size());
+
+      // The call carries the dialect it was read under. That is what a later turn replays it as — the bytes the
+      // model wrote — rather than as a structured `tool_calls` entry it never produced.
+      out.events.emplace_back(ParsedToolCall{GenerateToolCallId(), raw_encoding_->tool_name, std::move(raw_buffer_),
+                                             raw_encoding_});
+      raw_buffer_.clear();
+      state_ = State::kVisible;
+      return;
+    }
+
+    if (flushing) {
+      // An envelope that never closed is not a call. Every byte of it is reported as generated.
+      EmitVisibleTracked(out, TakeBufferedWith(raw_buffer_));
+      state_ = State::kVisible;
+      return;
+    }
+
+    const size_t hold = end.index == std::string::npos ? 0 : buffer_.size() - end.index;
+    raw_buffer_ += Consume(buffer_.size() - hold);
+  }
+
+  /// Take `count` bytes off the front of the scan buffer, keeping the line-boundary tracker in step.
+  std::string Consume(size_t count) {
+    std::string consumed = buffer_.substr(0, count);
+    buffer_.erase(0, count);
+
+    if (!consumed.empty()) {
+      at_line_start_ = consumed.back() == '\n';
+    }
+
+    return consumed;
+  }
+
+  /// Concatenate an in-progress envelope with everything still buffered, clearing both.
+  std::string TakeBufferedWith(std::string& envelope) {
+    std::string text = std::move(envelope);
+    envelope.clear();
+    text += Consume(buffer_.size());
+    return text;
+  }
+
+  /// Index just past the next LF at or after `from`, or npos when there is none. A line start at the very end of
+  /// `text` is a real candidate: an empty tail can still grow into a marker.
+  static size_t NextLineStart(std::string_view text, size_t from) {
+    const auto newline = text.find('\n', from);
+    return newline == std::string_view::npos ? std::string::npos : newline + 1;
+  }
+
+  /// Scan visible lines for the raw opener while ignoring Markdown fenced code blocks. A forced tool may still
+  /// explain or quote its envelope syntax before acting; quoted examples are visible text, not calls.
+  LineMarkerScan ScanForRawStart() const {
+    bool inside_fence = inside_markdown_fence_;
+    char fence_character = markdown_fence_character_;
+    size_t fence_length = markdown_fence_length_;
+    std::string line_prefix = visible_line_prefix_;
+
+    for (size_t line_start = 0; line_start <= buffer_.size();) {
+      const auto newline = buffer_.find('\n', line_start);
+      const bool complete_line = newline != std::string::npos;
+      const size_t line_end = complete_line ? newline : buffer_.size();
+      const bool crlf = complete_line && line_end > line_start && buffer_[line_end - 1] == '\r';
+      const size_t content_end = crlf ? line_end - 1 : line_end;
+      const std::string_view segment(buffer_.data() + line_start, content_end - line_start);
+
+      if (!inside_fence && line_prefix.empty()) {
+        const auto& marker = raw_encoding_->start_marker;
+        const size_t comparable = std::min(segment.size(), marker.size());
+
+        if (segment.compare(0, comparable, marker, 0, comparable) == 0) {
+          if (segment.size() < marker.size()) {
+            if (!complete_line) {
+              return {line_start, 0, false};
+            }
+          } else if (!complete_line && segment.size() == marker.size() + 1 && segment.back() == '\r') {
+            return {line_start, 0, false};
+          }
+
+          if (segment.size() == marker.size()) {
+            if (complete_line) {
+              return {line_start, marker.size() + (crlf ? 2 : 1), true};
+            }
+
+            return {line_start, 0, false};
+          }
+        }
+      }
+
+      line_prefix.append(segment);
+      if (!complete_line) {
+        break;
+      }
+
+      UpdateFenceForLine(line_prefix, inside_fence, fence_character, fence_length);
+      line_prefix.clear();
+      line_start = newline + 1;
+    }
+
+    return {};
+  }
+
+  /// Find the earliest position at which `line` stands alone as a complete line, or could still become one.
+  ///
+  /// A candidate must start at a line boundary and be followed by LF, CRLF, or — when `eof_terminates` — the end of
+  /// the scanned text. Any other trailing byte suffixes the line, which makes it ordinary text and moves the scan
+  /// to the next line. `complete == false` with a valid `index` means the text ran out mid-candidate and the caller
+  /// must hold those bytes until more arrive.
+  static LineMarkerScan ScanForMarkerLine(std::string_view text, bool first_is_line_start, std::string_view line,
+                                          bool eof_terminates) {
+    for (size_t pos = first_is_line_start ? 0 : NextLineStart(text, 0); pos != std::string::npos;
+         pos = NextLineStart(text, pos)) {
+      const size_t available = text.size() - pos;
+      const size_t comparable = std::min(available, line.size());
+
+      if (text.compare(pos, comparable, line.substr(0, comparable)) != 0) {
+        continue;
+      }
+
+      if (comparable < line.size()) {
+        return {pos, 0, false};
+      }
+
+      const size_t after = pos + line.size();
+
+      if (after == text.size()) {
+        if (eof_terminates) {
+          return {pos, line.size(), true};
+        }
+
+        return {pos, 0, false};
+      }
+
+      if (text[after] == '\n') {
+        return {pos, line.size() + 1, true};
+      }
+
+      if (text[after] == '\r') {
+        if (after + 1 == text.size()) {
+          // A bare CR at end-of-stream suffixes the line; mid-stream it may still become CRLF.
+          if (!eof_terminates) {
+            return {pos, 0, false};
+          }
+        } else if (text[after + 1] == '\n') {
+          return {pos, line.size() + 2, true};
+        }
+      }
+    }
+
+    return {};
+  }
+
+  static void EmitVisible(Output& out, std::string text) {
+    if (text.empty()) {
+      return;
+    }
+
+    if (!out.events.empty()) {
+      if (auto* previous = std::get_if<std::string>(&out.events.back())) {
+        *previous += text;
+        return;
+      }
+    }
+
+    out.events.emplace_back(std::move(text));
+  }
+
+  void EmitVisibleTracked(Output& out, std::string text) {
+    TrackVisibleMarkdown(text);
+    EmitVisible(out, std::move(text));
+  }
+
+  static void UpdateFenceForLine(std::string_view line, bool& inside_fence, char& fence_character,
+                                 size_t& fence_length) {
+    size_t offset = 0;
+    while (offset < line.size() && offset < 3 && line[offset] == ' ') {
+      ++offset;
+    }
+
+    if (offset == line.size() || (line[offset] != '`' && line[offset] != '~')) {
+      return;
+    }
+
+    const char candidate = line[offset];
+    size_t length = 0;
+    while (offset + length < line.size() && line[offset + length] == candidate) {
+      ++length;
+    }
+
+    if (length < 3) {
+      return;
+    }
+
+    if (!inside_fence) {
+      inside_fence = true;
+      fence_character = candidate;
+      fence_length = length;
+      return;
+    }
+
+    if (candidate != fence_character || length < fence_length) {
+      return;
+    }
+
+    if (std::all_of(line.begin() + static_cast<std::ptrdiff_t>(offset + length), line.end(),
+                    [](char c) { return c == ' ' || c == '\t'; })) {
+      inside_fence = false;
+      fence_character = '\0';
+      fence_length = 0;
+    }
+  }
+
+  void TrackVisibleMarkdown(std::string_view text) {
+    size_t offset = 0;
+    while (offset < text.size()) {
+      const auto newline = text.find('\n', offset);
+      const size_t end = newline == std::string_view::npos ? text.size() : newline;
+      visible_line_prefix_.append(text.substr(offset, end - offset));
+
+      if (newline == std::string_view::npos) {
+        return;
+      }
+
+      if (!visible_line_prefix_.empty() && visible_line_prefix_.back() == '\r') {
+        visible_line_prefix_.pop_back();
+      }
+      UpdateFenceForLine(visible_line_prefix_, inside_markdown_fence_, markdown_fence_character_,
+                         markdown_fence_length_);
+      visible_line_prefix_.clear();
+      offset = newline + 1;
+    }
+  }
+
+  /// Length of the longest suffix of `s` that is also a prefix of `m`. O(min(|s|, |m|)).
+  static size_t LongestSuffixThatIsPrefixOf(const std::string& s, const std::string& m) {
+    const size_t max_length = std::min(s.size(), m.size());
+
+    for (size_t length = max_length; length > 0; --length) {
+      if (s.compare(s.size() - length, length, m, 0, length) == 0) {
+        return length;
+      }
+    }
+
+    return 0;
+  }
+
+  std::string start_marker_;
+  std::string end_marker_;
+  std::unordered_map<std::string, ToolKind> tool_kinds_;
+
+  /// The dialect this turn reads bare output in. Empty when a bare envelope is prose — which is the common case,
+  /// and the case for every turn that did not explicitly force the descriptor's own custom tool.
+  std::optional<RawEnvelopeEncoding> raw_encoding_;
+
+  State state_ = State::kVisible;
+  std::string buffer_;             // bytes pushed but not yet routed
+  std::string structured_buffer_;  // in-progress marker block, opening marker included
+  std::string raw_buffer_;         // in-progress raw envelope, begin line included
+
+  // Whether buffer_[0] sits at a line boundary. Seeded true because generation starts at stream offset 0, and
+  // updated from the last byte of every consumed run — envelope markers are line-anchored, so this is what
+  // distinguishes an envelope from prose that merely quotes one.
+  bool at_line_start_ = true;
+  bool inside_markdown_fence_ = false;
+  char markdown_fence_character_ = '\0';
+  size_t markdown_fence_length_ = 0;
+  std::string visible_line_prefix_;
+};
+
+}  // namespace fl
