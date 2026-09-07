@@ -10,10 +10,9 @@
 #include "inferencing/generative/chat/onnx_chat_generator.h"
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
 #include "inferencing/generative/genai_model_instance.h"
+#include "inferencing/generative/toolcalling/generated_output_arbiter.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
-#include "inferencing/generative/toolcalling/tool_call_stream_accumulator.h"
 #include "inferencing/generative/toolcalling/tool_call_utils.h"
-#include "inferencing/session/tool_registry.h"
 #include "items/text_item.h"
 #include "items/tool_call_item.h"
 #include "model.h"
@@ -98,7 +97,6 @@ TranscriptMessage MakeAssistantMessage(const std::vector<GeneratedOutputEvent>& 
 
   return assistant;
 }
-
 
 ReasoningStreamSplitter CreateReasoningSplitter(const ToolCallContext& tool_ctx,
                                                 GenAIModelInstance& model,
@@ -589,15 +587,15 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // reported as visible text.
   auto splitter = CreateReasoningSplitter(cached_tool_ctx_, Model(), cached_generator_->PromptOpensReasoning());
 
-  // Accumulator: separates visible text from tool-call blocks in the DEFAULT-segment stream. For models without
-  // tool-call markers configured, both marker strings are empty and the accumulator degrades to passthrough.
-  // REASONING segments bypass the accumulator entirely — tool-call-shaped text inside <think>...</think> is the
-  // model's scratchpad and is not a real tool call.
-  ToolCallStreamAccumulator tool_accumulator(
-      cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_start : std::string{},
-      cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_end : std::string{});
+  // Arbiter: decides what every DEFAULT-typed byte of this turn is — visible prose, a structured tool-call block, or
+  // a raw `*** Begin Patch` envelope for the turn's `apply_patch` custom tool. One state machine reads all three, so
+  // neither shape can carve a call out of the other's payload. Models with no tool-call markers and no `apply_patch`
+  // custom tool degrade to passthrough.
+  // REASONING segments bypass the arbiter entirely — a marker inside <think>...</think> is the model's scratchpad
+  // and is not a real tool call.
+  GeneratedOutputArbiter arbiter(cached_tool_ctx_);
 
-  auto emit_tool_output = [&](ToolCallStreamAccumulator::Output out) {
+  auto emit_tool_output = [&](GeneratedOutputArbiter::Output out) {
     for (auto& event : out.events) {
       if (auto* text = std::get_if<std::string>(&event)) {
         // A structured tool call is the end of the turn's visible text: a chat template renders an assistant turn as
@@ -615,15 +613,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         continue;
       }
 
+      // The arbiter minted this call's ID when its envelope committed and already resolved its payload to the
+      // bytes that cross the API boundary. Streaming, the final response, the transcript, and the result the
+      // client sends back all correlate through that one ID.
       auto call = std::move(std::get<ParsedToolCall>(event));
       turn_guard.RecordToolCall();
-
-      // A custom tool's payload crosses the API boundary as raw text, not as the synthesized
-      // `{"input": ...}` wrapper the model was prompted with. Unwrap once, here, so the stream, the
-      // final response, and the transcript that later turns rebuild from all carry the same bytes.
-      if (cached_tool_ctx_.IsCustomTool(call.name)) {
-        call.arguments = ExtractCustomToolInput(call.arguments);
-      }
 
       if (streaming_callback) {
         streaming_callback->PushItem(std::make_unique<ToolCallItem>(call.id, call.name, call.arguments));
@@ -635,11 +629,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   auto emit_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
       if (seg.type != FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
-        // Release a visible prefix held as a potential tool marker before appending later reasoning.
-        if (!tool_accumulator.InsideToolCall()) {
-          emit_tool_output(tool_accumulator.Flush());
-        }
-        // REASONING goes straight through — never feed it to the tool-call accumulator.
+        // Resolve at the last complete boundary before reasoning. If the call is unfinished, the splitter consumed
+        // bytes the arbiter cannot reproduce, so Flush reports the candidate as visible rather than corrupting a call.
+        emit_tool_output(arbiter.Flush());
+        // REASONING goes straight through — never feed it to the arbiter.
         AppendGeneratedSegment(generated_events, seg.text, seg.type);
         if (streaming_callback) {
           streaming_callback->PushItem(std::make_unique<TextItem>(seg.text, seg.type));
@@ -647,11 +640,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         continue;
       }
 
-      emit_tool_output(tool_accumulator.Push(seg.text));
+      emit_tool_output(arbiter.Push(seg.text));
     }
   };
 
-  auto flush_accumulator = [&]() { emit_tool_output(tool_accumulator.Flush()); };
+  auto flush_arbiter = [&]() { emit_tool_output(arbiter.Flush()); };
 
   while (!cached_generator_->IsDone() && !request.canceled && !turn_guard.TurnEnded()) {
     cached_generator_->GenerateNextToken();
@@ -672,10 +665,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     }
   }
 
-  // End-of-stream: drain the reasoning splitter first so any final DEFAULT bytes feed into the tool accumulator,
-  // then drain the tool accumulator.
+  // End-of-stream — natural stop, output-token limit, or cancellation. Drain the reasoning splitter first so any
+  // final DEFAULT bytes reach the arbiter, then drain the arbiter so an envelope that never closed is reported as
+  // the visible text it turned out to be.
   emit_segments(splitter.Flush());
-  flush_accumulator();
+  flush_arbiter();
 
   int total_tokens = cached_generator_->TokenCount();
 
@@ -818,13 +812,12 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
                                                             FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
   }
 
-  // Tool-call accumulator: parses tool-call blocks out of the visible stream. Empty markers degrade to passthrough.
-  // Replaces a prior inline accumulator that did exact per-segment marker matching — that only worked because the
-  // qwen tokenizer happens to emit `<tool_call>` as a single special token. Tokenizers that split the marker across
-  // multiple tokens (or chat templates that produce marker-shaped text gradually) would silently fail. The shared
-  // accumulator buffers across tokens and is verified by unit tests.
-  ToolCallStreamAccumulator tool_accumulator(tool_ctx.tool_output ? tool_ctx.tool_call_start : std::string{},
-                                             tool_ctx.tool_output ? tool_ctx.tool_call_end : std::string{});
+  // The same arbiter the native path uses, built from this request's own tool context. Reading generated output in
+  // exactly one place is what keeps the two surfaces from disagreeing about what a byte was: a structured block, a
+  // raw `*** Begin Patch` envelope for the turn's `apply_patch` custom tool, or prose. Marker matching is buffered
+  // across tokens, so a tokenizer that splits `<tool_call>` — or a template that grows a marker gradually — is
+  // handled the same way as one that emits it as a single special token.
+  GeneratedOutputArbiter arbiter(tool_ctx);
 
   int next_tool_call_index = 0;
   std::vector<GeneratedOutputEvent> generated_events;
@@ -847,7 +840,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
                                                             FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
   };
 
-  auto process_tool_output = [&](ToolCallStreamAccumulator::Output out) {
+  auto process_tool_output = [&](GeneratedOutputArbiter::Output out) {
     for (auto& event : out.events) {
       if (auto* text = std::get_if<std::string>(&event)) {
         // A chat completion carries the assistant reply as `content` plus a `tool_calls` array — the same schema the
@@ -863,12 +856,10 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
         continue;
       }
 
+      // ID minted once by the arbiter and reused for the streamed delta, the final response and the stored
+      // conversation, so a client can correlate a call it saw streaming with the result it sends back.
       auto call = std::move(std::get<ParsedToolCall>(event));
       turn_guard.RecordToolCall();
-
-      if (tool_ctx.IsCustomTool(call.name)) {
-        call.arguments = ExtractCustomToolInput(call.arguments);
-      }
 
       if (is_streaming) {
         auto streamed = chat_completions::MakeToolCall(call.id, call.name, call.arguments,
@@ -885,12 +876,12 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
 
   auto process_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
-      // REASONING segments: never feed reasoning text to the tool-call accumulator — tool-call-shaped text inside
-      // <think>...</think> is scratchpad, not a real call. Emit via reasoning_content, not content.
+      // REASONING segments: never feed reasoning text to the arbiter — a marker inside <think>...</think> is
+      // scratchpad, not a real call. Emit via reasoning_content, not content.
       if (seg.type != FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
-        if (!tool_accumulator.InsideToolCall()) {
-          process_tool_output(tool_accumulator.Flush());
-        }
+        // Resolve at the last complete boundary before reasoning. If the call is unfinished, the splitter consumed
+        // bytes the arbiter cannot reproduce, so Flush reports the candidate as visible rather than corrupting a call.
+        process_tool_output(arbiter.Flush());
         AppendGeneratedSegment(generated_events, seg.text, seg.type);
 
         if (is_streaming && !seg.text.empty()) {
@@ -902,7 +893,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
         continue;
       }
 
-      process_tool_output(tool_accumulator.Push(seg.text));
+      process_tool_output(arbiter.Push(seg.text));
     }
   };
 
@@ -920,9 +911,9 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   }
 
   // Drain any buffered partial-marker bytes at end-of-stream. Reasoning splitter first so any final DEFAULT bytes
-  // feed into the tool accumulator; then drain the tool accumulator.
+  // reach the arbiter; then drain the arbiter.
   process_segments(splitter.Flush());
-  process_tool_output(tool_accumulator.Flush());
+  process_tool_output(arbiter.Flush());
 
   int total_tokens = generator->TokenCount();
 
