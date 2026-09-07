@@ -27,6 +27,7 @@ add_executable(foundry_local_tests
     internal_api/chat/reasoning_stream_splitter_test.cc
     internal_api/chat/chat_session_test.cc
     internal_api/chat/chat_template_test.cc
+    internal_api/chat/chat_transcript_test.cc
     internal_api/chat/onnx_chat_generator_vision_test.cc
     internal_api/chat/stop_strings_test.cc
     internal_api/chat_completions_test.cc
@@ -43,6 +44,7 @@ add_executable(foundry_local_tests
     internal_api/file_uri_test.cc
     internal_api/file_writer_test.cc
     internal_api/genai_config_test.cc
+    internal_api/handler_error_mapping_test.cc
     internal_api/http_ca_bundle_test.cc
     internal_api/http_download_test.cc
     internal_api/http_retry_test.cc
@@ -59,6 +61,7 @@ add_executable(foundry_local_tests
     internal_api/response_converter_test.cc
     internal_api/response_store_test.cc
     internal_api/responses_json_test.cc
+    internal_api/scope_guard_test.cc
     internal_api/session_manager_test.cc
     internal_api/sha256_test.cc
     internal_api/region_fallback_test.cc

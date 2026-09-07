@@ -5,13 +5,98 @@
 #include "foundry_local/foundry_local_c.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace fl {
+
+/// Resolved reasoning boundary markers for a model and request: the marker strings the tokenizer decodes to, plus the
+/// token IDs representing them when the model publishes those IDs.
+struct ReasoningMarkers {
+  std::string start;
+  std::string end;
+  std::vector<int32_t> start_token_ids;
+  std::vector<int32_t> end_token_ids;
+
+  bool Configured() const noexcept { return !start.empty() && !end.empty(); }
+};
+
+namespace reasoning_detail {
+
+/// Index of the last occurrence of `marker` in `tokens`, or nullopt when it does not occur.
+inline std::optional<size_t> LastTokenSequenceIndex(std::span<const int32_t> tokens,
+                                                    const std::vector<int32_t>& marker) {
+  if (marker.empty() || tokens.size() < marker.size()) {
+    return std::nullopt;
+  }
+
+  for (size_t pos = tokens.size() - marker.size() + 1; pos-- > 0;) {
+    if (std::equal(marker.begin(), marker.end(), tokens.begin() + static_cast<std::ptrdiff_t>(pos))) {
+      return pos;
+    }
+  }
+
+  return std::nullopt;
+}
+
+}  // namespace reasoning_detail
+
+/// Whether a rendered prompt leaves a reasoning block open.
+///
+/// Some package templates end the assistant prompt with the configured beginning-of-reasoning marker. That marker is
+/// prompt input, so generation starts *inside* reasoning and the model only ever emits the closing marker. A splitter
+/// that always starts outside would report the scratchpad as visible text, leak the closing marker, and count no
+/// reasoning tokens.
+///
+/// Two independent conditions must both hold, because the prompt also contains untrusted message content:
+///
+///  1. Position — the last opener in the rendered text must be followed by nothing but whitespace. A marker-shaped
+///     sequence inside a user, system, or tool message is always followed by the rest of that message and by the
+///     assistant turn header, so message content can never seed the state. Without this, a tool result quoting an
+///     unbalanced marker would silently reclassify an entire answer as hidden reasoning.
+///  2. Identity — when the model publishes marker token IDs, the encoded prompt must agree that reasoning is open
+///     (its last opener ID comes after its last closer ID). Special tokens must be matched by ID because a tokenizer
+///     may decode them to nothing. Models that publish no marker IDs fall back to the positional rule alone.
+inline bool PromptOpensReasoning(std::span<const int32_t> prompt_token_ids,
+                                 const ReasoningMarkers& markers,
+                                 std::string_view prompt_text) {
+  if (!markers.Configured()) {
+    return false;
+  }
+
+  const auto last_start = prompt_text.rfind(markers.start);
+  if (last_start == std::string_view::npos) {
+    return false;
+  }
+
+  const auto tail = prompt_text.substr(last_start + markers.start.size());
+  const auto tail_is_whitespace = std::all_of(tail.begin(), tail.end(), [](unsigned char c) {
+    return std::isspace(c) != 0;
+  });
+
+  if (!tail_is_whitespace) {
+    return false;
+  }
+
+  if (markers.start_token_ids.empty() || markers.end_token_ids.empty() || prompt_token_ids.empty()) {
+    return true;
+  }
+
+  const auto last_start_token = reasoning_detail::LastTokenSequenceIndex(prompt_token_ids, markers.start_token_ids);
+  if (!last_start_token.has_value()) {
+    return false;
+  }
+
+  const auto last_end_token = reasoning_detail::LastTokenSequenceIndex(prompt_token_ids, markers.end_token_ids);
+  return !last_end_token.has_value() || *last_end_token < *last_start_token;
+}
 
 /// Token-aware state machine that splits generated output around reasoning markers into typed segments.
 ///
@@ -28,16 +113,24 @@ class ReasoningStreamSplitter {
     flTextItemType type;
   };
 
+  /// @param starts_inside_reasoning  Seed the stream as already inside a reasoning block, for prompts whose template
+  ///        emitted the opening marker (see PromptOpensReasoning). The opener is prompt input, so it never reaches
+  ///        the splitter and is never counted as a generated reasoning token; the model's closing marker is consumed
+  ///        and suppressed exactly as it is for a block the model opened itself.
   ReasoningStreamSplitter(std::string start_marker,
                           std::string end_marker,
                           std::vector<int32_t> start_token_ids = {},
                           std::vector<int32_t> end_token_ids = {},
-                          std::vector<int32_t> ignored_token_ids = {})
+                          std::vector<int32_t> ignored_token_ids = {},
+                          bool starts_inside_reasoning = false)
       : start_marker_(std::move(start_marker)),
         end_marker_(std::move(end_marker)),
         start_token_ids_(std::move(start_token_ids)),
         end_token_ids_(std::move(end_token_ids)),
-        ignored_token_ids_(std::move(ignored_token_ids)) {}
+        ignored_token_ids_(std::move(ignored_token_ids)),
+        // Reads the marker members, which the declaration order below guarantees are already initialized. Seeding is
+        // ignored when no markers are configured, so a passthrough splitter can never be stuck inside reasoning.
+        inside_reasoning_(HasTextMarkers() && starts_inside_reasoning) {}
 
   /// Feed one generated token into the splitter. Marker IDs are consumed even when decoded_text is empty.
   std::vector<Segment> Push(int32_t token_id, std::string decoded_text) {

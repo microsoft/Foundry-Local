@@ -4,6 +4,8 @@
 #include "inferencing/generative/openresponses/response_store.h"
 
 #include <algorithm>
+#include <unordered_set>
+#include <vector>
 
 namespace fl {
 
@@ -52,6 +54,117 @@ std::optional<nlohmann::json> ResponseStore::GetInputItems(const std::string& re
 
   TouchLocked(it->second);
   return it->second->input_items;
+}
+
+std::vector<std::list<ResponseStore::Entry>::iterator> ResponseStore::WalkChainLocked(
+    const std::string& response_id) {
+  // A visited set bounds the walk: cyclic links would otherwise loop forever, and a cycle means the stored chain is
+  // not a conversation that can be replayed.
+  std::vector<std::list<Entry>::iterator> chain;
+  std::unordered_set<std::string> visited;
+  std::string id = response_id;
+
+  while (!id.empty()) {
+    if (!visited.insert(id).second) {
+      return {};
+    }
+
+    auto it = index_.find(id);
+    if (it == index_.end()) {
+      return {};
+    }
+
+    chain.push_back(it->second);
+
+    const auto previous = it->second->response.find("previous_response_id");
+    if (previous == it->second->response.end() || !previous->is_string()) {
+      break;
+    }
+
+    id = previous->get<std::string>();
+  }
+
+  return chain;
+}
+
+namespace {
+
+/// True when `item` is the system message ToInputItems synthesized from a request's `instructions`.
+/// Instructions are request-scoped in the Responses API, so replaying them from every hop of a chain would stack up
+/// copies of the system prompt in the middle of the conversation.
+///
+/// Every field is type-checked before it is read: stored items are arbitrary caller input, and a system message whose
+/// `content` is an array of content parts must be replayed, not throw.
+bool IsInstructionsItem(const nlohmann::json& item, const nlohmann::json& response) {
+  const auto instructions = response.find("instructions");
+  if (instructions == response.end() || !instructions->is_string()) {
+    return false;
+  }
+
+  if (!item.is_object()) {
+    return false;
+  }
+
+  const auto role = item.find("role");
+  if (role == item.end() || !role->is_string() || role->get<std::string>() != "system") {
+    return false;
+  }
+
+  // ToInputItems always writes the instructions as a plain string; any other shape is caller-supplied content.
+  const auto content = item.find("content");
+  if (content == item.end() || !content->is_string()) {
+    return false;
+  }
+
+  return content->get<std::string>() == instructions->get<std::string>();
+}
+
+}  // namespace
+
+std::optional<nlohmann::json> ResponseStore::BuildChainContext(const std::string& response_id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  auto chain = WalkChainLocked(response_id);
+  if (chain.empty()) {
+    return std::nullopt;
+  }
+
+  // The walk collected hops newest-first; replay oldest-first so each hop's tool calls precede the results for them.
+  auto context = nlohmann::json::array();
+  for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
+    const auto& entry = **hop;
+
+    if (entry.input_items.is_array()) {
+      for (const auto& item : entry.input_items) {
+        if (!IsInstructionsItem(item, entry.response)) {
+          context.push_back(item);
+        }
+      }
+    }
+
+    const auto output = entry.response.find("output");
+    if (output != entry.response.end() && output->is_array()) {
+      context.insert(context.end(), output->begin(), output->end());
+    }
+  }
+
+  // Requesting the chain is a use of every entry in it. list::splice keeps the collected iterators valid.
+  for (auto& hop : chain) {
+    TouchLocked(hop);
+  }
+
+  return context;
+}
+
+bool ResponseStore::TouchChain(const std::string& response_id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  auto chain = WalkChainLocked(response_id);
+  for (auto& hop : chain) {
+    TouchLocked(hop);
+  }
+
+  return !chain.empty();
 }
 
 bool ResponseStore::Delete(const std::string& response_id) {

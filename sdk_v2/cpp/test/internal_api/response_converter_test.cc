@@ -16,10 +16,15 @@
 #include "items/message_item.h"
 #include "items/text_item.h"
 #include "items/tool_call_item.h"
+#include "inferencing/generative/chat/chat_template.h"
+#include "inferencing/generative/chat/chat_transcript.h"
+#include "inferencing/generative/openresponses/response_store.h"
+#include "items/tool_result_item.h"
 
 using namespace fl;
 using namespace fl::responses;
 using namespace fl::ResponseConverter;
+using json = nlohmann::json;
 
 // ========================================================================
 // Helper: minimal ResponseCreateParams for echo tests
@@ -887,4 +892,330 @@ TEST(ResponseConverterTest, ToSessionRequest_ZeroPenaltiesAreNoOps) {
 
   EXPECT_EQ(req.options.Find("presence_penalty"), nullptr);
   EXPECT_EQ(req.options.Find("frequency_penalty"), nullptr);
+}
+
+// ========================================================================
+// ToSessionRequest — tool call replay
+//
+// A caller continues a tool-calling conversation either by chaining to a
+// stored response (previous_output carries `function_call` entries) or by
+// sending the call back in the request `input`. Both forms must survive as
+// ToolCallItems so the session can correlate the results that follow.
+// ========================================================================
+
+TEST(ResponseConverterTest, ToSessionRequest_StoredReplayPreservesFunctionCalls) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  std::vector<InputItem> input;
+  FunctionCallResultInputItem result;
+  result.call_id = "call_1";
+  result.output = "sunny";
+  input.push_back(result);
+  params.input = std::move(input);
+
+  auto previous_output = nlohmann::json::parse(R"([
+    {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Let me check."}]},
+    {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Seattle\"}"}
+  ])");
+
+  auto request = ToSessionRequest(params, &previous_output);
+
+  ASSERT_EQ(request.items.size(), 3u);
+  EXPECT_EQ(request.items[0]->type, FOUNDRY_LOCAL_ITEM_MESSAGE);
+
+  ASSERT_EQ(request.items[1]->type, FOUNDRY_LOCAL_ITEM_TOOL_CALL);
+  auto* call = static_cast<ToolCallItem*>(request.items[1]);
+  EXPECT_EQ(call->call_id, "call_1");
+  EXPECT_EQ(call->name, "get_weather");
+  EXPECT_EQ(call->arguments, R"({"city":"Seattle"})");
+
+  ASSERT_EQ(request.items[2]->type, FOUNDRY_LOCAL_ITEM_TOOL_RESULT);
+  auto* tool_result = static_cast<ToolResultItem*>(request.items[2]);
+  EXPECT_EQ(tool_result->call_id, "call_1");
+  EXPECT_EQ(tool_result->result, "sunny");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_FunctionCallInputItemBecomesToolCallItem) {
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Seattle\"}"},
+      {"type": "function_call_output", "call_id": "call_1", "output": ""}
+    ]
+  })");
+
+  auto params = body.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 2u);
+
+  ASSERT_EQ(request.items[0]->type, FOUNDRY_LOCAL_ITEM_TOOL_CALL);
+  auto* call = static_cast<ToolCallItem*>(request.items[0]);
+  EXPECT_EQ(call->call_id, "call_1");
+  EXPECT_EQ(call->name, "get_weather");
+  EXPECT_EQ(call->arguments, R"({"city":"Seattle"})");
+
+  ASSERT_EQ(request.items[1]->type, FOUNDRY_LOCAL_ITEM_TOOL_RESULT);
+  auto* tool_result = static_cast<ToolResultItem*>(request.items[1]);
+  EXPECT_EQ(tool_result->call_id, "call_1");
+  EXPECT_EQ(tool_result->result, "");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_ReconstructedChainCorrelatesCallAndResultAfterCacheMiss) {
+  // The session cache dropped the conversation, so the whole chain is rebuilt from the store and replayed. The
+  // assistant tool call must reach the request ahead of the result that answers it, and the new user turn last.
+  ResponseStore store;
+
+  json first_response;
+  first_response["id"] = "resp_1";
+  first_response["previous_response_id"] = nullptr;
+  first_response["output"] = json::array({{{"type", "function_call"},
+                                           {"call_id", "call_1"},
+                                           {"name", "get_weather"},
+                                           {"arguments", R"({"city":"Seattle"})"}}});
+  store.Store("resp_1", first_response,
+              json::array({{{"type", "message"}, {"role", "user"}, {"content", "weather?"}}}));
+
+  json second_response;
+  second_response["id"] = "resp_2";
+  second_response["previous_response_id"] = "resp_1";
+  second_response["output"] =
+      json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "It is sunny."}}});
+  store.Store("resp_2", second_response,
+              json::array({{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "sunny"}}}));
+
+  auto context = store.BuildChainContext("resp_2");
+  ASSERT_TRUE(context.has_value());
+
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("And tomorrow?");
+
+  auto request = ToSessionRequest(params, &(*context));
+
+  ASSERT_EQ(request.items.size(), 5u);
+  EXPECT_EQ(request.items[0]->type, FOUNDRY_LOCAL_ITEM_MESSAGE);
+
+  ASSERT_EQ(request.items[1]->type, FOUNDRY_LOCAL_ITEM_TOOL_CALL);
+  EXPECT_EQ(static_cast<ToolCallItem*>(request.items[1])->call_id, "call_1");
+  EXPECT_EQ(static_cast<ToolCallItem*>(request.items[1])->arguments, R"({"city":"Seattle"})");
+
+  ASSERT_EQ(request.items[2]->type, FOUNDRY_LOCAL_ITEM_TOOL_RESULT);
+  EXPECT_EQ(static_cast<ToolResultItem*>(request.items[2])->call_id, "call_1");
+
+  EXPECT_EQ(request.items[3]->type, FOUNDRY_LOCAL_ITEM_MESSAGE);
+  EXPECT_EQ(static_cast<MessageItem*>(request.items[4])->GetSimpleText(), "And tomorrow?");
+
+  // The replayed context is coherent: the transcript accepts it, with the call already answered.
+  auto messages = BuildTranscriptMessages(request.items);
+  ChatTranscript transcript;
+  EXPECT_NO_THROW(transcript.ValidateInputs(messages));
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_ReplayedCallWithUnusableArgumentsIsNormalizedNotRejected) {
+  // The service replaying its own earlier output must not fail because the model once emitted argument bytes that
+  // are not a JSON object — the model was already shown that call as having no arguments.
+  auto previous_context = nlohmann::json::parse(R"([
+    {"type": "message", "role": "user", "content": "weather?"},
+    {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "[1,2]"},
+    {"type": "function_call_output", "call_id": "call_1", "output": "sunny"}
+  ])");
+
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("And tomorrow?");
+
+  Request request;
+  ASSERT_NO_THROW(request = ToSessionRequest(params, &previous_context));
+
+  ASSERT_EQ(request.items.size(), 4u);
+  ASSERT_EQ(request.items[1]->type, FOUNDRY_LOCAL_ITEM_TOOL_CALL);
+  EXPECT_EQ(static_cast<ToolCallItem*>(request.items[1])->arguments, "");
+
+  // The replayed conversation is coherent and the strict transcript path accepts it.
+  auto messages = BuildTranscriptMessages(request.items);
+  ChatTranscript transcript;
+  EXPECT_NO_THROW(transcript.ValidateInputs(messages));
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_CallerSuppliedUnusableArgumentsAreStillRejected) {
+  // The same bytes arriving in the request `input` are a client error, not a replay of our own output.
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "[1,2]"}
+    ]
+  })");
+
+  auto params = body.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 1u);
+  EXPECT_EQ(static_cast<ToolCallItem*>(request.items[0])->arguments, "[1,2]");
+  EXPECT_THROW(BuildTranscriptMessages(request.items), fl::Exception);
+}
+
+// ========================================================================
+// Typed stateless replay — a caller resending the whole conversation in
+// `input` instead of chaining via previous_response_id must reach the same
+// prompt as chain reconstruction does.
+// ========================================================================
+
+TEST(ResponseConverterTest, ToSessionRequest_TypedReplayPreservesAssistantOutputTextAndToolExchange) {
+  // Exactly what the Responses API emitted on earlier turns, echoed back by the caller: an assistant message with
+  // `output_text` parts, the function_call it issued, and the function_call_output answering it.
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"role": "user", "content": [{"type": "input_text", "text": "Hi"}]},
+      {"role": "assistant", "content": [{"type": "output_text", "text": "Hello there."}]},
+      {"role": "user", "content": [{"type": "input_text", "text": "Weather in Seattle?"}]},
+      {"role": "assistant", "content": [{"type": "output_text", "text": "Let me check."}]},
+      {"type": "function_call", "call_id": "call_1", "name": "get_weather",
+       "arguments": "{\"city\":\"Seattle\"}"},
+      {"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
+      {"role": "user", "content": [{"type": "input_text", "text": "And tomorrow?"}]}
+    ]
+  })");
+
+  auto params = body.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 7u);
+  EXPECT_EQ(static_cast<MessageItem*>(request.items[1])->GetSimpleText(), "Hello there.");
+  EXPECT_EQ(static_cast<MessageItem*>(request.items[3])->GetSimpleText(), "Let me check.");
+  ASSERT_EQ(request.items[4]->type, FOUNDRY_LOCAL_ITEM_TOOL_CALL);
+  ASSERT_EQ(request.items[5]->type, FOUNDRY_LOCAL_ITEM_TOOL_RESULT);
+
+  // The transcript folds the call into the adjacent assistant message and correlates the result with it.
+  auto messages = BuildTranscriptMessages(request.items);
+  ChatTranscript transcript;
+  EXPECT_NO_THROW(transcript.ValidateInputs(messages));
+
+  // Exact template input: the prior text-only assistant turn survives, and so does the tool exchange.
+  EXPECT_EQ(BuildChatMessagesJson(messages),
+            R"([{"role":"user","content":"Hi"},)"
+            R"({"role":"assistant","content":"Hello there."},)"
+            R"({"role":"user","content":"Weather in Seattle?"},)"
+            R"({"role":"assistant","content":"Let me check.","tool_calls":[{"id":"call_1","type":"function",)"
+            R"("function":{"name":"get_weather","arguments":{"city":"Seattle"}}}]},)"
+            R"({"role":"tool","content":"sunny","tool_call_id":"call_1"},)"
+            R"({"role":"user","content":"And tomorrow?"}])");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_TypedReplayMatchesChainReconstruction) {
+  // The same conversation replayed two ways must produce the same prompt input.
+  ResponseStore store;
+
+  json first;
+  first["id"] = "resp_1";
+  first["previous_response_id"] = nullptr;
+  first["output"] = json::array({{{"type", "message"},
+                                  {"role", "assistant"},
+                                  {"content", json::array({{{"type", "output_text"}, {"text", "Let me check."}}})}},
+                                 {{"type", "function_call"},
+                                  {"call_id", "call_1"},
+                                  {"name", "get_weather"},
+                                  {"arguments", R"({"city":"Seattle"})"}}});
+  store.Store("resp_1", first,
+              json::array({{{"type", "message"}, {"role", "user"}, {"content", "Weather in Seattle?"}}}));
+
+  auto context = store.BuildChainContext("resp_1");
+  ASSERT_TRUE(context.has_value());
+
+  ResponseCreateParams chained;
+  chained.model = "test-model";
+  {
+    std::vector<InputItem> items;
+    FunctionCallResultInputItem result;
+    result.call_id = "call_1";
+    result.output = "sunny";
+    items.push_back(result);
+    chained.input = std::move(items);
+  }
+
+  auto chained_request = ToSessionRequest(chained, &(*context));
+
+  auto stateless_body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"role": "user", "content": [{"type": "input_text", "text": "Weather in Seattle?"}]},
+      {"role": "assistant", "content": [{"type": "output_text", "text": "Let me check."}]},
+      {"type": "function_call", "call_id": "call_1", "name": "get_weather",
+       "arguments": "{\"city\":\"Seattle\"}"},
+      {"type": "function_call_output", "call_id": "call_1", "output": "sunny"}
+    ]
+  })");
+  auto stateless_params = stateless_body.get<ResponseCreateParams>();
+  auto stateless_request = ToSessionRequest(stateless_params);
+
+  EXPECT_EQ(BuildChatMessagesJson(BuildTranscriptMessages(stateless_request.items)),
+            BuildChatMessagesJson(BuildTranscriptMessages(chained_request.items)));
+}
+
+TEST(ResponseConverterTest, StoredFunctionCallArgumentsAreCanonicalizedForChainReplay) {
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"type":"function_call","call_id":"call_1","name":"get_weather","arguments":{"city":"Seattle"}}
+    ]
+  })");
+
+  auto stored_items = ToInputItems(body);
+  ASSERT_EQ(stored_items.size(), 1u);
+  ASSERT_TRUE(stored_items.front()["arguments"].is_string());
+  EXPECT_EQ(stored_items.front()["arguments"], R"({"city":"Seattle"})");
+
+  ResponseStore store;
+  nlohmann::json response = {
+      {"id", "resp_1"},
+      {"previous_response_id", nullptr},
+      {"output", nlohmann::json::array()},
+  };
+  store.Store("resp_1", response, stored_items);
+
+  auto context = store.BuildChainContext("resp_1");
+  ASSERT_TRUE(context.has_value());
+
+  ResponseCreateParams next;
+  next.model = "test-model";
+  next.input = std::vector<InputItem>{};
+  auto request = ToSessionRequest(next, &*context);
+
+  ASSERT_EQ(request.items.size(), 1u);
+  auto* call = static_cast<ToolCallItem*>(request.items.front());
+  EXPECT_EQ(call->call_id, "call_1");
+  EXPECT_EQ(call->name, "get_weather");
+  EXPECT_EQ(call->arguments, R"({"city":"Seattle"})");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_TypedReplayAcceptsStoredTextPartShape) {
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [{"role": "assistant", "content": [{"type": "text", "text": "Stored shape."}]}]
+  })");
+
+  auto params = body.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 1u);
+  EXPECT_EQ(static_cast<MessageItem*>(request.items[0])->GetSimpleText(), "Stored shape.");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_TypedReplayStillSkipsUnknownContentTypes) {
+  // Policy is unchanged for content types we do not model: they are skipped, not coerced into text.
+  auto body = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [{"role": "user", "content": [
+      {"type": "some_future_part", "text": "ignored"},
+      {"type": "input_text", "text": "kept"}
+    ]}]
+  })");
+
+  auto params = body.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 1u);
+  EXPECT_EQ(static_cast<MessageItem*>(request.items[0])->GetSimpleText(), "kept");
 }
