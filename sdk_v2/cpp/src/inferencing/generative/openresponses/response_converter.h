@@ -30,12 +30,10 @@ std::string GenerateId(const std::string& prefix);
 /// function_call_output → tool result, parameter mapping.
 ///
 /// @param params            The typed Responses API request parameters.
-/// @param previous_input    Input items from a previous response (JSON, for chaining).
-/// @param previous_output   Output items from a previous response (JSON, for chaining).
+/// @param previous_context  Fully reconstructed chained context: each hop's input then output, oldest first.
 /// @return  A session Request ready for ChatSession::Run().
 Request ToSessionRequest(const ResponseCreateParams& params,
-                         const nlohmann::json* previous_input = nullptr,
-                         const nlohmann::json* previous_output = nullptr);
+                         const nlohmann::json* previous_context = nullptr);
 
 /// Extract tool definitions from the Responses request, mirroring the chat-completions
 /// `ExtractToolDefinitions` helper. Returns a pre-serialized JSON array of tools in the

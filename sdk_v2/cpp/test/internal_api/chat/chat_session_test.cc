@@ -83,7 +83,7 @@ class ChatSessionTest : public ::testing::Test {
 TEST_F(ChatSessionTest, ConstructWithModelOnly) {
   ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
   EXPECT_EQ(session.MessageCount(), 0u);
-  EXPECT_TRUE(session.GetHistory().empty());
+  EXPECT_TRUE(session.Transcript().Empty());
   EXPECT_EQ(session.TurnCount(), 0u);
 }
 
@@ -139,9 +139,10 @@ TEST_F(ChatSessionTest, RunBasic) {
 
   // History should contain user + assistant
   EXPECT_EQ(session.MessageCount(), 2u);
-  EXPECT_EQ(session.GetHistory()[0].role, FOUNDRY_LOCAL_ROLE_USER);
-  EXPECT_EQ(session.GetHistory()[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
-  EXPECT_EQ(session.GetHistory()[1].GetSimpleText(), text);
+  const auto& messages = session.Transcript().Messages();
+  EXPECT_EQ(messages[0].role, FOUNDRY_LOCAL_ROLE_USER);
+  EXPECT_EQ(messages[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(messages[1].VisibleText(), text);
 }
 
 TEST_F(ChatSessionTest, ChatCompletionRejectsAudioInput) {

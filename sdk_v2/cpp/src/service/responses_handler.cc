@@ -72,6 +72,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 
   try {
     params = req_json.get<ResponseCreateParams>();
+  } catch (const fl::Exception& ex) {
+    // Contract validation (e.g. function_call arguments that are neither a string nor an object) rejects malformed
+    // client payloads.
+    return ErrorResponse(StatusForException(ex), "Invalid request parameters", ex.what());
   } catch (const nlohmann::json::exception& ex) {
     return ErrorResponse(Status::CODE_400, "Invalid request parameters", ex.what());
   }
@@ -101,36 +105,33 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveM
   return nullptr;
 }
 
-void ResponsesHandler::LoadPreviousContext(const ResponseCreateParams& params,
-                                           const nlohmann::json*& previous_input,
-                                           const nlohmann::json*& previous_output,
-                                           nlohmann::json& prev_input_storage,
-                                           nlohmann::json& prev_output_storage) {
-  previous_input = nullptr;
-  previous_output = nullptr;
+std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::LoadPreviousContext(
+    const ResponseCreateParams& params,
+    nlohmann::json& context_storage,
+    const nlohmann::json*& previous_context) {
+  previous_context = nullptr;
 
   if (!params.previous_response_id.has_value()) {
-    return;
+    return nullptr;
   }
 
   const std::string& prev_id = *params.previous_response_id;
-  auto prev_response = ctx_.response_store.Get(prev_id);
 
-  if (!prev_response) {
-    ctx_.logger.Log(LogLevel::Warning, fmt::format("Previous response {} not found", prev_id));
-    return;
+  // Each stored response keeps only its own request's input items, so the whole chain has to be walked to rebuild
+  // the conversation. A truncated replay would drop the assistant tool calls that this request's tool results
+  // answer, so a broken chain is reported rather than silently shortened.
+  auto context = ctx_.response_store.BuildChainContext(prev_id);
+  if (!context) {
+    ctx_.logger.Log(LogLevel::Warning,
+                    fmt::format("Cannot reconstruct conversation from previous response {}", prev_id));
+    return ErrorResponse(Status::CODE_404, "Previous response not found",
+                         "Conversation history for '" + prev_id +
+                             "' is no longer available; resend the full conversation in 'input'");
   }
 
-  auto prev_items = ctx_.response_store.GetInputItems(prev_id);
-  if (prev_items) {
-    prev_input_storage = *prev_items;
-    previous_input = &prev_input_storage;
-  }
-
-  if (prev_response->contains("output")) {
-    prev_output_storage = (*prev_response)["output"];
-    previous_output = &prev_output_storage;
-  }
+  context_storage = std::move(*context);
+  previous_context = &context_storage;
+  return nullptr;
 }
 
 // --- Main handler ---
@@ -170,14 +171,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
   tracker.SetModelId(model_name);
 
-  // 3. Load previous context if chaining via previous_response_id
-  const nlohmann::json* previous_input = nullptr;
-  const nlohmann::json* previous_output = nullptr;
-  nlohmann::json prev_input_storage;
-  nlohmann::json prev_output_storage;
-  LoadPreviousContext(params, previous_input, previous_output, prev_input_storage, prev_output_storage);
-
-  // 4. Obtain or reuse cached session
+  // 3. Obtain or reuse cached session
   auto now = std::chrono::system_clock::now();
   int64_t created_at = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
   std::string response_id = ResponseConverter::GenerateId("resp");
@@ -190,20 +184,34 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
     if (session) {
       ctx_.logger.Log(LogLevel::Information,
                       fmt::format("CreateResponse: reusing cached session from '{}'", *params.previous_response_id));
+
+      // The session already holds the conversation, but keep its stored hops warm: if this session is later evicted,
+      // rebuilding the chain from the store is the only way to continue.
+      ctx_.response_store.TouchChain(*params.previous_response_id);
     }
   }
 
-  // 5. Build session request — skip previous context if session was reused (it's already in the KV cache)
-  const nlohmann::json* effective_prev_input = session ? nullptr : previous_input;
-  const nlohmann::json* effective_prev_output = session ? nullptr : previous_output;
-  Request session_request = ResponseConverter::ToSessionRequest(params, effective_prev_input, effective_prev_output);
-
-  // Extract tools + tool_choice. Done outside ToSessionRequest to mirror the chat-completions
-  // path (BuildRequestItems / ExtractToolDefinitions split) and so attachment to the session
-  // happens here in the handler that owns the session lifetime.
-  std::string tools_json = ResponseConverter::ExtractResponsesToolDefinitions(params, session_request);
-
   try {
+    // 4. Rebuild previous context only on a session-cache miss — a live session already holds the conversation in its
+    //    transcript and KV cache, so a chain that can no longer be reconstructed from the store is irrelevant there.
+    nlohmann::json previous_context_storage;
+    const nlohmann::json* previous_context = nullptr;
+
+    if (!session) {
+      if (auto err = LoadPreviousContext(params, previous_context_storage, previous_context)) {
+        tracker.SetStatus(ActionStatus::kClientError);
+        return err;
+      }
+    }
+
+    // 5. Build session request
+    Request session_request = ResponseConverter::ToSessionRequest(params, previous_context);
+
+    // Extract tools + tool_choice. Done outside ToSessionRequest to mirror the chat-completions
+    // path (BuildRequestItems / ExtractToolDefinitions split) and so attachment to the session
+    // happens here in the handler that owns the session lifetime.
+    std::string tools_json = ResponseConverter::ExtractResponsesToolDefinitions(params, session_request);
+
     if (!session) {
       session = std::make_unique<ChatSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
     }
@@ -232,6 +240,24 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
       return response;
     }
+  } catch (const fl::Exception& ex) {
+    tracker.RecordException(ex);
+    const auto status = StatusForException(ex);
+
+    if (status.code == Status::CODE_400.code) {
+      // An incoherent conversation — an unknown or duplicate tool call ID, or tool arguments that are not a JSON
+      // object — is the caller's mistake, so report it the same way the other request validation failures are.
+      tracker.SetStatus(ActionStatus::kClientError);
+      ctx_.logger.Log(LogLevel::Warning, fmt::format("Response {} rejected: {}", response_id, ex.what()));
+      return ErrorResponse(status, "Invalid request", ex.what());
+    }
+
+    ctx_.logger.Log(LogLevel::Error, fmt::format("Response {} failed: {}", response_id, ex.what()));
+
+    auto failed = ResponseConverter::BuildFailedResponseObject(response_id, created_at, model_name, params,
+                                                               "server_error", ex.what());
+    nlohmann::json failed_json = failed;
+    return JsonResponse(status, failed_json);
   } catch (const std::exception& ex) {
     tracker.RecordException(ex);
 
@@ -597,9 +623,15 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
     } catch (const std::exception& ex) {
       logger.Log(LogLevel::Error, fmt::format("Response {} failed during streaming: {}", response_id, ex.what()));
 
+      // The status line is already sent, so a rejected request can only be reported in the failure event. Keep the
+      // error code honest so the caller can tell a client mistake from a service failure.
+      const auto* request_error = dynamic_cast<const fl::Exception*>(&ex);
+      const char* error_code = request_error != nullptr ? ErrorTypeForStatus(StatusForException(*request_error))
+                                                        : "server_error";
+
       auto error_response = ResponseConverter::BuildFailedResponseObject(
           response_id, created_at, model_name, params_copy,
-          "server_error", ex.what());
+          error_code, ex.what());
 
       StreamEvent failed;
       failed.type = StreamEventType::kResponseFailed;

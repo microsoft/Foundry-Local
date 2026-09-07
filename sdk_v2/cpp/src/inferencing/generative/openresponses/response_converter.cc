@@ -61,6 +61,7 @@ static_assert(sizeof(ResponseObject) == 832,
 }  // namespace fl
 
 #include "exception.h"
+#include "inferencing/generative/chat/chat_transcript.h"
 #include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/message_item.h"
@@ -107,9 +108,19 @@ static void AddJsonItemsToRequest(Request& request, const nlohmann::json& items)
     }
 
     if (type == "function_call") {
-      request.AddOwnedItem(std::make_unique<ToolCallItem>(entry.value("call_id", ""),
-                                                          entry.value("name", ""),
-                                                          entry.value("arguments", "")));
+      // Chain context is the service's own earlier output. A call the model emitted with argument bytes that are not
+      // a JSON object was already presented to the model as having no arguments, so replay reproduces exactly that
+      // rather than re-admitting bytes the strict caller-supplied path rejects.
+      std::string arguments;
+      if (auto it = entry.find("arguments"); it != entry.end() && !it->is_null()) {
+        arguments = it->is_string() ? it->get<std::string>() : it->dump();
+      }
+      if (!ParseToolCallArguments(arguments).has_value()) {
+        arguments.clear();
+      }
+
+      request.AddOwnedItem(std::make_unique<ToolCallItem>(entry.value("call_id", ""), entry.value("name", ""),
+                                                          std::move(arguments)));
       continue;
     }
 
@@ -325,7 +336,9 @@ std::unique_ptr<AudioItem> MakeAudioItemFromInputAudio(const InputAudioContent& 
 static void AddTypedInputItems(Request& request,
                                const std::vector<InputItem>& input_items) {
   for (const auto& input_item : input_items) {
-    if (auto* fc_result = std::get_if<FunctionCallResultInputItem>(&input_item)) {
+    if (auto* fc = std::get_if<FunctionCallInputItem>(&input_item)) {
+      request.AddOwnedItem(std::make_unique<ToolCallItem>(fc->call_id, fc->name, fc->arguments));
+    } else if (auto* fc_result = std::get_if<FunctionCallResultInputItem>(&input_item)) {
       auto i = std::make_unique<ToolResultItem>(fc_result->call_id, fc_result->output);
       request.AddOwnedItem(std::move(i));
     } else if (auto* msg = std::get_if<InputMessage>(&input_item)) {
@@ -374,9 +387,7 @@ static void AddTypedInputItems(Request& request,
 // ToSessionRequest — typed params version
 // ---------------------------------------------------------------------------
 
-Request ToSessionRequest(const ResponseCreateParams& params,
-                         const nlohmann::json* previous_input,
-                         const nlohmann::json* previous_output) {
+Request ToSessionRequest(const ResponseCreateParams& params, const nlohmann::json* previous_context) {
   Request request;
 
   // Instructions → system message
@@ -385,13 +396,10 @@ Request ToSessionRequest(const ResponseCreateParams& params,
     request.AddOwnedItem(std::move(i));
   }
 
-  // Add previous context (for conversation chaining via previous_response_id)
-  if (previous_input && previous_input->is_array()) {
-    AddJsonItemsToRequest(request, *previous_input);
-  }
-
-  if (previous_output && previous_output->is_array()) {
-    AddJsonItemsToRequest(request, *previous_output);
+  // Add previous context (for conversation chaining via previous_response_id). The caller supplies a fully
+  // reconstructed chain, so replayed tool results always find the call they answer.
+  if (previous_context && previous_context->is_array()) {
+    AddJsonItemsToRequest(request, *previous_context);
   }
 
   // Parse current input — variant dispatch
@@ -825,6 +833,16 @@ nlohmann::json ToInputItems(const nlohmann::json& req_json) {
     for (const auto& item : input) {
       if (item.is_object()) {
         nlohmann::json stored = item;
+
+        if (stored.value("type", "") == "function_call") {
+          if (auto arguments = stored.find("arguments"); arguments != stored.end()) {
+            if (arguments->is_object()) {
+              *arguments = arguments->dump();
+            } else if (arguments->is_null()) {
+              *arguments = "";
+            }
+          }
+        }
 
         if (!stored.contains("id") || !stored["id"].is_string() ||
             stored["id"].get<std::string>().empty()) {

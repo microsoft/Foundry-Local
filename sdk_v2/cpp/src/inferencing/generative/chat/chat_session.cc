@@ -14,14 +14,15 @@
 #include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/text_item.h"
-#include "items/tool_result_item.h"
 #include "items/tool_call_item.h"
 #include "model.h"
+#include "util/scope_guard.h"
 #include "utils.h"
 
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
+#include <optional>
 #include <utility>
 
 namespace fl {
@@ -50,22 +51,109 @@ void ApplyToolChoiceToContext(std::optional<flToolChoice> tool_choice, ToolCallC
 
 using TextSegment = ReasoningStreamSplitter::Segment;
 
+/// Media parts referenced by a request, plus copies of the messages that carry them.
+/// The media path feeds MessageItems (with their image / audio parts) straight to the template, so it cannot use the
+/// transcript projection.
+struct MediaInput {
+  std::vector<MessageItem> messages;
+  std::vector<const ImageItem*> images;
+  std::vector<const AudioItem*> audios;
+
+  bool Empty() const { return images.empty() && audios.empty(); }
+};
+
+MediaInput CollectMediaInput(const Request& request) {
+  MediaInput media;
+
+  for (const auto* item : request.items) {
+    if (item == nullptr || item->type != FOUNDRY_LOCAL_ITEM_MESSAGE) {
+      continue;
+    }
+
+    const auto& message_item = static_cast<const MessageItem&>(*item);
+    for (const auto& part : message_item.content) {
+      if (!part.view) {
+        continue;
+      }
+
+      if (part.view->type == FOUNDRY_LOCAL_ITEM_IMAGE) {
+        media.images.push_back(static_cast<const ImageItem*>(part.view));
+      } else if (part.view->type == FOUNDRY_LOCAL_ITEM_AUDIO) {
+        media.audios.push_back(static_cast<const AudioItem*>(part.view));
+      }
+    }
+  }
+
+  if (media.Empty()) {
+    return media;
+  }
+
+  for (const auto* item : request.items) {
+    if (item != nullptr && item->type == FOUNDRY_LOCAL_ITEM_MESSAGE) {
+      const auto& message_item = static_cast<const MessageItem&>(*item);
+      if (!message_item.content.empty()) {
+        media.messages.push_back(message_item);
+      }
+    }
+  }
+
+  return media;
+}
+
+/// Build the assistant transcript message for a completed generation. The generation events are already in the order
+/// the model produced them, so the transcript keeps visible text, reasoning, and calls interleaved exactly as emitted.
+///
+/// The turn's output has already been streamed to the caller by the time this runs, so a model that emitted argument
+/// bytes that are not a JSON object must not fail the request. The raw bytes are kept verbatim on the call (and on
+/// the response items), the normalized form degrades to an empty object, and the defect is logged.
+TranscriptMessage MakeAssistantMessage(const std::vector<GeneratedOutputEvent>& events, ILogger& logger) {
+  TranscriptMessage assistant;
+  assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+
+  for (const auto& event : events) {
+    if (const auto* segment = std::get_if<TextSegment>(&event)) {
+      if (segment->type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING) {
+        assistant.AppendReasoning(segment->text);
+      } else {
+        assistant.AppendText(segment->text);
+      }
+      continue;
+    }
+
+    const auto& parsed = std::get<ParsedToolCall>(event);
+    auto generated = MakeGeneratedToolCall(parsed.id, parsed.name, parsed.arguments);
+
+    if (!generated.arguments_usable) {
+      logger.Log(LogLevel::Warning,
+                 fmt::format("Model emitted tool call '{}' with arguments that are not a JSON object; keeping the "
+                             "raw arguments and treating the call as having none: {}",
+                             parsed.name, parsed.arguments));
+    }
+
+    assistant.AppendToolCall(std::move(generated.call));
+  }
+
+  return assistant;
+}
+
+/// True when a turn's inputs replay a tool call or answer one.
+bool TurnCarriesToolActivity(const std::vector<TranscriptMessage>& inputs) {
+  return std::any_of(inputs.begin(), inputs.end(), [](const TranscriptMessage& message) {
+    return message.role == FOUNDRY_LOCAL_ROLE_TOOL || message.HasToolCalls();
+  });
+}
+
 ReasoningStreamSplitter CreateReasoningSplitter(const ToolCallContext& tool_ctx,
-                                                GenAIModelInstance& model) {
+                                                GenAIModelInstance& model,
+                                                bool prompt_opens_reasoning) {
   if (!tool_ctx.supports_reasoning) {
     return {"", ""};
   }
 
-  const auto& tag_info = model.GetTagInfo();
-  auto start = tool_ctx.reasoning_start.empty() ? tag_info.bor_str : tool_ctx.reasoning_start;
-  auto end = tool_ctx.reasoning_end.empty() ? tag_info.eor_str : tool_ctx.reasoning_end;
-  auto start_token_ids =
-      tag_info.bor_id.has_value() ? std::vector<int32_t>{*tag_info.bor_id} : std::vector<int32_t>{};
-  auto end_token_ids =
-      tag_info.eor_id.has_value() ? std::vector<int32_t>{*tag_info.eor_id} : std::vector<int32_t>{};
+  auto markers = ResolveReasoningMarkers(tool_ctx, model);
   auto ignored_token_ids = model.GetPreprocessor().GetEosTokenIds();
-  return {std::move(start), std::move(end), std::move(start_token_ids), std::move(end_token_ids),
-          std::move(ignored_token_ids)};
+  return {std::move(markers.start), std::move(markers.end), std::move(markers.start_token_ids),
+          std::move(markers.end_token_ids), std::move(ignored_token_ids), prompt_opens_reasoning};
 }
 
 void AppendSegment(std::vector<TextSegment>& destination, std::string text, flTextItemType type) {
@@ -116,10 +204,10 @@ ChatSession::ChatSession(ChatSession&& other) noexcept
       logger_(other.logger_),
       model_(other.model_),
       owns_session_(other.owns_session_),
-      history_(std::move(other.history_)),
-      turns_(std::move(other.turns_)),
+      transcript_(std::move(other.transcript_)),
       session_options_(std::move(other.session_options_)),
-      cached_generator_(std::move(other.cached_generator_)) {
+      cached_generator_(std::move(other.cached_generator_)),
+      cached_tool_ctx_(std::move(other.cached_tool_ctx_)) {
   other.owns_session_ = false;
 }
 
@@ -359,7 +447,7 @@ void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> event
 
 void ChatSession::ProcessRequestImpl(const Request& request, Response& response) {
   // OpenAI chat completions JSON pass-through: a TEXT item tagged OPENAI_JSON. Routes to a separate handler that
-  // never uses the cached generator or history (the JSON payload is self-contained).
+  // never uses the cached generator or the transcript (the JSON payload is self-contained).
   for (const auto* item : request.items) {
     if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
       const auto& text_item = static_cast<const fl::TextItem&>(*item);
@@ -371,53 +459,30 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     }
   }
 
-  // Collect new input messages locally — NOT in history_ yet.
-  // History is only committed on successful generation (delayed commit).
-  std::vector<MessageItem> new_messages;
-  for (const auto* item : request.items) {
-    if (item->type == FOUNDRY_LOCAL_ITEM_MESSAGE) {
-      auto& message_item = static_cast<const fl::MessageItem&>(*item);
-      if (!message_item.content.empty()) {
-        new_messages.push_back(message_item);
-      }
-    } else if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
-      // Convert tool result to a message with role="tool" for the chat template
-      auto& tool_result = static_cast<const fl::ToolResultItem&>(*item);
-      if (!tool_result.result.empty()) {
-        new_messages.emplace_back(FOUNDRY_LOCAL_ROLE_TOOL, tool_result.result);
-      }
-    }
-  }
+  // Collect this turn's input messages locally — nothing reaches the transcript until the turn commits.
+  auto inputs = BuildTranscriptMessages(request.items);
 
-  if (new_messages.empty()) {
+  if (inputs.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
              "At least one MESSAGE item with non-empty content is required in the request");
   }
+
+  // Reject bad tool-call correlation before any generator work: a rejected turn must cost nothing and leave no state.
+  transcript_.ValidateInputs(inputs);
 
   // Media input detection.
   //
   // Media input is only allowed on the first turn of a session. After that:
   //   - AppendMessages (continuous decoding) has no media-aware path; media
   //     parts in subsequent turns would be silently dropped.
-  //   - Conversation history can't replay image bytes through the chat
-  //     template, so we can't even rebuild from scratch with prior images.
+  //   - The transcript can't replay image bytes through the chat template,
+  //     so we can't even rebuild from scratch with prior images.
   // The simplest correct behaviour is to require a fresh session for every
   // media request. Text follow-ups within the same session are fine.
-  std::vector<const ImageItem*> images;
-  std::vector<const AudioItem*> audios;
-  for (const auto& msg : new_messages) {
-    for (const auto& part : msg.content) {
-      if (part.view && part.view->type == FOUNDRY_LOCAL_ITEM_IMAGE) {
-        images.push_back(static_cast<const ImageItem*>(part.view));
-      } else if (part.view && part.view->type == FOUNDRY_LOCAL_ITEM_AUDIO) {
-        audios.push_back(static_cast<const AudioItem*>(part.view));
-      }
-    }
-  }
+  auto media = CollectMediaInput(request);
+  const bool media_turn = !media.Empty();
 
-  const bool media_turn = !images.empty() || !audios.empty();
-
-  if (media_turn && !history_.empty()) {
+  if (media_turn && !transcript_.Empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
              "image or audio input is only allowed on the first turn of a session; "
              "create a new ChatSession to send media");
@@ -428,12 +493,21 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   SearchOptions effective_options = SearchOptions::FromParameters(effective_kvp);
 
   int prompt_tokens = 0;
-  int pre_turn_token_count = 0;
+  // Empty until this turn's input is appended to an existing generator. A rebuilt generator bakes the input into its
+  // prompt, so there is no pre-turn boundary that undo could rewind back to.
+  std::optional<int> pre_turn_token_count;
+
+  // A turn that replays or answers a tool call cannot be appended as a suffix: chat templates render a tool exchange
+  // relative to the surrounding conversation, and a package template given only tool messages produces nothing it can
+  // interpret. Rebuild from the complete committed transcript instead.
+  if (cached_generator_ && TurnCarriesToolActivity(inputs)) {
+    InvalidateCachedGenerator();
+  }
 
   if (cached_generator_) {
     // Check if guidance requirements changed since the generator was created. Guidance (LARK grammar) is baked into
     // the OGA generator at creation time and cannot be changed. If tool_choice went from "required" to "auto" (or
-    // vice versa), we must recreate the generator from full history.
+    // vice versa), we must recreate the generator from the full transcript.
     auto turn_tool_ctx = cached_tool_ctx_;
     UpdateToolContextForTurn(request, turn_tool_ctx);
 
@@ -442,45 +516,54 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     bool prev_needs_guidance = prev_has_user_guidance || (cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output);
     bool curr_needs_guidance = curr_has_user_guidance || (turn_tool_ctx.tool_output && !turn_tool_ctx.text_output);
 
-    // Guidance (grammar) is baked into the OGA generator at creation time and cannot be changed.
     // Rebuild when: guidance requirements changed OR the previous turn had user-specified guidance
     // (the finite grammar may have completed, causing IsDone() to return true on the next turn,
     // and switching schemas requires a fresh grammar).
     if (prev_needs_guidance != curr_needs_guidance || prev_has_user_guidance) {
-      // Guidance requirements changed — invalidate. The branch below will rebuild from full history.
-      cached_generator_.reset();
-      cached_tool_ctx_ = {};
-    } else {
-      // Continuous decoding: append only the new messages to the existing generator.
-      pre_turn_token_count = cached_generator_->TokenCount();
-      prompt_tokens = cached_generator_->AppendMessages(new_messages, Model(), cached_tool_ctx_.tools_json);
-
-      // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
-      UpdateToolContextForTurn(request, cached_tool_ctx_);
+      InvalidateCachedGenerator();
     }
   }
 
-  if (!cached_generator_) {
-    // First request (or cache invalidated): create the generator from scratch.
-    // Combine existing history with new messages for the full context.
-    auto tool_ctx = BuildToolCallContext(request);
+  // Past this point the cached generator gets this turn's input appended or is created for it. Any exit before the
+  // commit below leaves its KV cache holding tokens the transcript knows nothing about, so the guard drops it and the
+  // next turn rebuilds deterministically from committed history. Cancellation of an appended turn is the one settled
+  // case that can be rewound instead, and dismisses the guard explicitly below.
+  bool turn_committed = false;
+  ScopeGuard invalidate_uncommitted([&]() noexcept {
+    if (!turn_committed) {
+      InvalidateCachedGenerator();
+    }
+  });
 
-    std::vector<MessageItem> all_messages;
-    all_messages.reserve(history_.size() + new_messages.size());
-    all_messages.insert(all_messages.end(), history_.begin(), history_.end());
-    all_messages.insert(all_messages.end(), new_messages.begin(), new_messages.end());
+  if (cached_generator_) {
+    // Continuous decoding: append only the new messages to the existing generator.
+    pre_turn_token_count = cached_generator_->TokenCount();
+    prompt_tokens = cached_generator_->AppendMessages(inputs, Model(), cached_tool_ctx_.tools_json);
+
+    // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
+    UpdateToolContextForTurn(request, cached_tool_ctx_);
+  } else {
+    // First request (or cache invalidated): create the generator from scratch.
+    auto tool_ctx = BuildToolCallContext(request);
 
     std::unique_ptr<OnnxChatGenerator> generator;
     if (media_turn) {
       // Media is single-shot: the generator is dropped after the turn (see
-      // CommitTurn cleanup below) because AppendMessages can't extend a
-      // sequence whose state includes image-derived tokens. Sizing the KV
-      // cache to the model's full context window would needlessly allocate
-      // gigabytes (262k tokens × 28 layers × 8 heads × 128 dims for
-      // qwen3-vl-2b ≈ 120 GB). Bound it to prompt + max_output_tokens.
-      generator = OnnxChatGenerator::CreateWithMedia(all_messages, effective_options, Model(), images, audios,
-                         tool_ctx, /*use_full_context*/ false);
+      // the cleanup below) because AppendMessages can't extend a sequence
+      // whose state includes image-derived tokens. Sizing the KV cache to
+      // the model's full context window would needlessly allocate gigabytes
+      // (262k tokens × 28 layers × 8 heads × 128 dims for qwen3-vl-2b
+      // ≈ 120 GB). Bound it to prompt + max_output_tokens.
+      generator = OnnxChatGenerator::CreateWithMedia(media.messages, effective_options, Model(), media.images,
+                                                     media.audios, tool_ctx, /*use_full_context*/ false);
     } else {
+      // Combine the committed transcript with this turn's input for the full context.
+      std::vector<TranscriptMessage> all_messages;
+      const auto& committed = transcript_.Messages();
+      all_messages.reserve(committed.size() + inputs.size());
+      all_messages.insert(all_messages.end(), committed.begin(), committed.end());
+      all_messages.insert(all_messages.end(), inputs.begin(), inputs.end());
+
       generator = OnnxChatGenerator::Create(all_messages, effective_options, Model(), tool_ctx,
                                             /*use_full_context*/ true);
     }
@@ -491,7 +574,6 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   }
 
   int max_output = effective_options.max_output_tokens.value_or(0);
-  const auto committed_tool_ctx = cached_tool_ctx_;
 
   // Generate token-by-token with optional streaming.
   // Check request.canceled each iteration — a streaming callback returning
@@ -501,8 +583,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   std::vector<GeneratedOutputEvent> generated_events;
 
   // Marker IDs are derived from the configured strings with the model tokenizer. This detects special markers even
-  // when their decoded chunks are empty, while non-reasoning models retain the DEFAULT passthrough.
-  auto splitter = CreateReasoningSplitter(cached_tool_ctx_, Model());
+  // when their decoded chunks are empty, while non-reasoning models retain the DEFAULT passthrough. The splitter is
+  // seeded from the prompt so a template that already opened a reasoning block does not have its scratchpad
+  // reported as visible text.
+  auto splitter = CreateReasoningSplitter(cached_tool_ctx_, Model(), cached_generator_->PromptOpensReasoning());
 
   // Accumulator: separates visible text from tool-call blocks in the DEFAULT-segment stream. For models without
   // tool-call markers configured, both marker strings are empty and the accumulator degrades to passthrough.
@@ -512,28 +596,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_start : std::string{},
       cached_tool_ctx_.tool_output ? cached_tool_ctx_.tool_call_end : std::string{});
 
-  std::string assistant_history_text;
-
-  auto append_history_call = [&](const ParsedToolCall& call) {
-    nlohmann::ordered_json rendered;
-    rendered["name"] = call.name;
-    auto arguments = nlohmann::json::parse(call.arguments, nullptr, /*allow_exceptions=*/false);
-    rendered["arguments"] = arguments.is_discarded() ? nlohmann::json(call.arguments) : std::move(arguments);
-    if (!assistant_history_text.empty() && assistant_history_text.back() != '\n') {
-      assistant_history_text.push_back('\n');
-    }
-    if (committed_tool_ctx.HasToolCallTokens()) {
-      assistant_history_text += committed_tool_ctx.tool_call_start + "\n" + rendered.dump() + "\n" +
-                                committed_tool_ctx.tool_call_end;
-    } else {
-      assistant_history_text += rendered.dump();
-    }
-  };
-
   auto emit_tool_output = [&](ToolCallStreamAccumulator::Output out) {
     for (auto& event : out.events) {
       if (auto* text = std::get_if<std::string>(&event)) {
-        assistant_history_text += *text;
         AppendGeneratedSegment(generated_events, *text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
         if (streaming_callback) {
           streaming_callback->PushItem(
@@ -543,7 +608,6 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       }
 
       auto call = std::move(std::get<ParsedToolCall>(event));
-      append_history_call(call);
       if (streaming_callback) {
         streaming_callback->PushItem(std::make_unique<ToolCallItem>(call.id, call.name, call.arguments));
       }
@@ -598,43 +662,51 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   int total_tokens = cached_generator_->TokenCount();
 
-  if (request.canceled) {
-    // Rewind the generator to undo this turn's input. The generator remains valid
-    // for the next attempt — the caller can re-send the same input.
-    cached_generator_->RewindTo(pre_turn_token_count);
+  auto assistant_message = MakeAssistantMessage(generated_events, logger_);
+
+  if (!request.canceled) {
+    // Reject a generation whose calls cannot be correlated before it reaches the caller — a committed turn must never
+    // leave the outstanding-call set inconsistent.
+    transcript_.ValidateGeneratedOutput(assistant_message);
   }
 
   ProcessGeneratedOutput(std::move(generated_events), effective_options, request.canceled, response,
                          prompt_tokens, total_tokens, splitter.ReasoningTokenCount());
 
-  // Commit input messages + assistant reply to history only on success (not cancelled)
-  if (!request.canceled) {
-    // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
-    // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
-    // return true on the next turn. Invalidate after any grammar-guided generation so the next turn rebuilds.
-    //
-    // Reasoning models (qwen3, etc.) also need invalidation: continuous decoding leaves prior <think> tokens in the KV
-    // cache and the model fails to close subsequent reasoning blocks. The chat template strips prior </think> content
-    // when re-applied to history, so a rebuild restores correct behavior. This matches C#, which always applies the
-    // full template per turn.
-    bool grammar_was_active = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
-    bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
-
-    if (grammar_was_active || reasoning_was_active) {
-      cached_generator_.reset();
-      cached_tool_ctx_ = {};
+  if (request.canceled) {
+    // A cancelled turn commits nothing. Cancellation is a settled stop between tokens, so a turn that was appended to
+    // an existing generator can be rewound to the boundary it started from and the generator stays usable for a
+    // retry. A generator created or rebuilt for this turn has no such boundary — the turn's input is part of its
+    // prompt — so the guard drops it and the next turn rebuilds from the committed transcript. If the rewind itself
+    // fails, the guard has not been dismissed yet and still invalidates.
+    if (pre_turn_token_count.has_value()) {
+      cached_generator_->RewindTo(*pre_turn_token_count);
+      invalidate_uncommitted.Dismiss();
     }
 
-    CommitTurn(std::move(new_messages), std::move(assistant_history_text), pre_turn_token_count, total_tokens);
+    return;
+  }
 
-    // After a media turn, drop the cached generator so any text follow-up
-    // rebuilds from history. AppendMessages cannot extend a media-decoded
-    // sequence; trying to do so would silently feed text into a state that
-    // includes media-derived tokens.
-    if (media_turn) {
-      cached_generator_.reset();
-      cached_tool_ctx_ = {};
-    }
+  // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
+  // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
+  // return true on the next turn. Invalidate after any grammar-guided generation so the next turn rebuilds.
+  //
+  // Reasoning models (qwen3, etc.) also need invalidation: continuous decoding leaves prior <think> tokens in the KV
+  // cache and the model fails to close subsequent reasoning blocks. The template projection does not replay reasoning
+  // from plain text turns, so a rebuild restores correct behavior. This matches C#, which always applies the full
+  // template per turn.
+  //
+  // Media is single-shot too: AppendMessages cannot extend a media-decoded sequence, so any text follow-up must
+  // rebuild rather than silently feed text into a state that includes media-derived tokens.
+  bool grammar_was_active = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
+  bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
+
+  transcript_.CommitTurn(std::move(inputs), std::move(assistant_message),
+                         {pre_turn_token_count, total_tokens});
+  turn_committed = true;
+
+  if (grammar_was_active || reasoning_was_active || media_turn) {
+    InvalidateCachedGenerator();
   }
 }
 
@@ -691,14 +763,14 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   auto effective_kvp = MergedOptions(internal_request.options);
   SearchOptions options = SearchOptions::FromParameters(effective_kvp);
 
-  // Collect MessageItems from the internal request for the generator.
-  // We don't use history_ here — all messages come from the parsed JSON input.
-  std::vector<MessageItem> messages;
-  for (const auto* item : internal_request.items) {
-    if (item->type == FOUNDRY_LOCAL_ITEM_MESSAGE) {
-      messages.push_back(static_cast<const MessageItem&>(*item));
-    }
-  }
+  // Collect transcript messages from the internal request for the generator.
+  // The session transcript is not used here — everything comes from the parsed JSON input.
+  auto messages = BuildTranscriptMessages(internal_request.items);
+
+  // The payload is self-contained, so correlate its tool calls and results against an empty transcript. This gives
+  // the same stable errors a session turn would produce for a history the model cannot interpret.
+  const ChatTranscript payload_transcript;
+  payload_transcript.ValidateInputs(messages);
 
   // Create generator
   auto generator = OnnxChatGenerator::Create(messages, options, Model(), tool_ctx);
@@ -726,7 +798,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   std::vector<GeneratedOutputEvent> generated_events;
 
   // Use the same typed segments for streaming and final response construction.
-  auto splitter = CreateReasoningSplitter(tool_ctx, Model());
+  auto splitter = CreateReasoningSplitter(tool_ctx, Model(), generator->PromptOpensReasoning());
 
   auto emit_visible_text = [&](std::string visible) {
     if (visible.empty() || !is_streaming) {
@@ -829,69 +901,51 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
                                                       FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
 }
 
-const std::vector<MessageItem>& ChatSession::GetHistory() const {
-  return history_;
+const ChatTranscript& ChatSession::Transcript() const {
+  return transcript_;
 }
 
-void ChatSession::CommitTurn(std::vector<MessageItem>&& new_messages, std::string assistant_history,
-                             int pre_turn_token_count, int post_turn_token_count) {
-  size_t history_start = history_.size();
-  size_t input_count = new_messages.size();
-
-  // Commit input messages to history
-  for (auto& msg : new_messages) {
-    history_.push_back(std::move(msg));
-  }
-
-  if (assistant_history.empty()) {
-    // A successful turn still owns an assistant role when all generated content was hidden reasoning. Preserve the
-    // role boundary so rebuilding the next turn never produces consecutive user messages.
-    MessageItem assistant;
-    assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-    history_.push_back(std::move(assistant));
-  } else {
-    history_.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(assistant_history));
-  }
-
-  turns_.push_back({history_start, input_count, pre_turn_token_count, post_turn_token_count});
+void ChatSession::InvalidateCachedGenerator() noexcept {
+  cached_generator_.reset();
+  cached_tool_ctx_ = {};
 }
 
 size_t ChatSession::TurnCount() const {
-  return turns_.size();
+  return transcript_.TurnCount();
 }
 
 void ChatSession::UndoTurns(size_t count) {
+  auto request_lock = LockRequestMutex();
+
   if (count == 0) {
     return;
   }
 
-  if (count > turns_.size()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-             "Cannot undo " + std::to_string(count) + " turns; only " +
-                 std::to_string(turns_.size()) + " turns exist");
+  const bool undo_all = count == transcript_.TurnCount();
+
+  // The transcript validates `count` and rolls back messages, turn records, and outstanding-call state as one step.
+  auto tokens = transcript_.UndoTurns(count);
+
+  if (!cached_generator_) {
+    return;
   }
 
-  // Find the target turn — the one we're rewinding to the start of
-  auto& target = turns_[turns_.size() - count];
-
-  // Truncate history back to where the target turn started
-  history_.resize(target.history_start);
-
-  // Rewind the generator
-  if (cached_generator_) {
-    if (count == turns_.size()) {
-      // Undoing all turns — destroy the generator entirely
-      cached_generator_.reset();
-      cached_tool_ctx_ = {};
-    } else {
-      cached_generator_->RewindTo(target.pre_turn_token_count);
-    }
+  if (undo_all || !tokens.pre_turn.has_value()) {
+    // Undoing every turn, or undoing back to a turn whose generator was rebuilt — in both cases the current KV cache
+    // has no boundary matching the target state, so drop it and let the next turn rebuild.
+    InvalidateCachedGenerator();
+    return;
   }
 
-  turns_.resize(turns_.size() - count);
+  // The transcript is already truncated. A failed rewind would leave the KV cache describing a conversation the
+  // transcript no longer has, so drop the generator before the failure propagates.
+  ScopeGuard invalidate_on_failed_rewind([this]() noexcept { InvalidateCachedGenerator(); });
+  cached_generator_->RewindTo(*tokens.pre_turn);
+  invalidate_on_failed_rewind.Dismiss();
 }
 
 size_t ChatSession::MessageCount() const {
-  return history_.size();
+  return transcript_.MessageCount();
 }
+
 }  // namespace fl

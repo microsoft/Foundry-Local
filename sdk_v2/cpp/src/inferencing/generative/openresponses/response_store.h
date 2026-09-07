@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace fl {
 
@@ -40,6 +41,27 @@ class ResponseStore {
   /// Retrieve stored input items for a response. Returns nullopt if not found.
   std::optional<nlohmann::json> GetInputItems(const std::string& response_id);
 
+  /// Reconstruct the complete replay context for a chained response: for every hop from the root of the
+  /// `previous_response_id` chain to `response_id`, that hop's own input items followed by its output items, oldest
+  /// first.
+  ///
+  /// Each entry stores only its own request's input items — that is exactly what the /input_items endpoint must
+  /// return — so a caller that replayed a single hop would lose everything before it, including the assistant tool
+  /// calls that later tool results have to correlate against.
+  ///
+  /// Instructions are request-scoped in the Responses API and are not carried across a chain, so each hop's
+  /// instructions-derived system item is left out of the replay while remaining in that hop's stored input items.
+  ///
+  /// Returns nullopt when the chain cannot be reconstructed: a link is missing (evicted or never stored) or the
+  /// stored links form a cycle. Callers must fail explicitly rather than run inference on a truncated conversation.
+  std::optional<nlohmann::json> BuildChainContext(const std::string& response_id);
+
+  /// Mark every hop of a chain as recently used without materializing its context. Callers that continue a
+  /// conversation from a live session skip reconstruction entirely; without this the conversation's own early hops
+  /// would age out of the store while it is still active, and a later cache miss could no longer rebuild it.
+  /// Returns false when the chain is already broken.
+  bool TouchChain(const std::string& response_id);
+
   /// Delete a stored response. Returns true if it existed.
   bool Delete(const std::string& response_id);
 
@@ -69,6 +91,10 @@ class ResponseStore {
 
   void Evict();
   void TouchLocked(std::list<Entry>::iterator it);
+
+  /// Walk `response_id` back to the root of its `previous_response_id` chain. Returns the hops newest-first, or an
+  /// empty vector when a link is missing or the links form a cycle.
+  std::vector<std::list<Entry>::iterator> WalkChainLocked(const std::string& response_id);
 };
 
 }  // namespace fl

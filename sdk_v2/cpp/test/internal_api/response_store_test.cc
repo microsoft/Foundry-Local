@@ -56,7 +56,7 @@ TEST(ResponseConverterTest, ToSessionRequestStringInput) {
   };
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req = ResponseConverter::ToSessionRequest(params, nullptr, nullptr);
+  auto session_req = ResponseConverter::ToSessionRequest(params);
 
   // Should have one user message
   ASSERT_EQ(session_req.items.size(), 1u);
@@ -74,7 +74,7 @@ TEST(ResponseConverterTest, ToSessionRequestWithInstructions) {
   };
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req = ResponseConverter::ToSessionRequest(params, nullptr, nullptr);
+  auto session_req = ResponseConverter::ToSessionRequest(params);
 
   ASSERT_GE(session_req.items.size(), 2u);
   // First item should be the system message
@@ -95,7 +95,7 @@ TEST(ResponseConverterTest, ToSessionRequestWithTemperature) {
   };
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req = ResponseConverter::ToSessionRequest(params, nullptr, nullptr);
+  auto session_req = ResponseConverter::ToSessionRequest(params);
 
   EXPECT_STREQ(session_req.options.Find("temperature"), "0.700000");
 }
@@ -108,7 +108,7 @@ TEST(ResponseConverterTest, ToSessionRequestWithMaxOutputTokens) {
   };
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req = ResponseConverter::ToSessionRequest(params, nullptr, nullptr);
+  auto session_req = ResponseConverter::ToSessionRequest(params);
 
   EXPECT_STREQ(session_req.options.Find("max_output_tokens"), "512");
 }
@@ -124,7 +124,7 @@ TEST(ResponseConverterTest, ToSessionRequestArrayInput) {
   };
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req = ResponseConverter::ToSessionRequest(params, nullptr, nullptr);
+  auto session_req = ResponseConverter::ToSessionRequest(params);
 
   ASSERT_EQ(session_req.items.size(), 3u);
   const MessageItem& msg1 = static_cast<const MessageItem&>(*session_req.items[0]);
@@ -154,8 +154,9 @@ TEST(ResponseConverterTest, ToSessionRequestWithPreviousContext) {
   });
 
   auto params = req.get<ResponseCreateParams>();
-  auto session_req =
-      ResponseConverter::ToSessionRequest(params, &prev_input, &prev_output);
+  nlohmann::json previous_context = prev_input;
+  previous_context.insert(previous_context.end(), prev_output.begin(), prev_output.end());
+  auto session_req = ResponseConverter::ToSessionRequest(params, &previous_context);
 
   // Should have: previous user msg + previous assistant msg + new user msg
   ASSERT_GE(session_req.items.size(), 3u);
@@ -452,4 +453,251 @@ TEST(ResponseStoreTest, SizeTracksEntryCount) {
 
   store.Delete("resp_1");
   EXPECT_EQ(store.Size(), 1u);
+}
+
+// ========================================================================
+// BuildChainContext — complete-chain reconstruction
+//
+// Each entry stores only its own request's input items (that is what the
+// /input_items endpoint returns), so continuing a conversation after the
+// session cache has dropped it requires walking the whole chain.
+// ========================================================================
+
+namespace {
+
+/// Store one hop of a conversation: its own request input items and the response it produced.
+void StoreHop(ResponseStore& store, const std::string& id, const std::string& previous_id,
+              const json& input_items, const json& output) {
+  json response;
+  response["id"] = id;
+  response["previous_response_id"] = previous_id.empty() ? json(nullptr) : json(previous_id);
+  response["output"] = output;
+  store.Store(id, std::move(response), input_items);
+}
+
+}  // namespace
+
+TEST(ResponseStoreChainTest, ReconstructsToolCallAndResultAcrossMultipleHops) {
+  ResponseStore store;
+
+  // resp_1: user asks; the model answers with a tool call.
+  StoreHop(store, "resp_1", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "weather?"}}}),
+           json::array({{{"type", "function_call"},
+                         {"call_id", "call_1"},
+                         {"name", "get_weather"},
+                         {"arguments", R"({"city":"Seattle"})"}}}));
+
+  // resp_2: caller supplies the tool result; the model answers in text.
+  StoreHop(store, "resp_2", "resp_1",
+           json::array({{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "sunny"}}}),
+           json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "It is sunny."}}}));
+
+  auto context = store.BuildChainContext("resp_2");
+
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 4u);
+
+  // Oldest first, each hop's input followed by its output — so the tool call precedes the result that answers it.
+  EXPECT_EQ((*context)[0]["role"], "user");
+  EXPECT_EQ((*context)[1]["type"], "function_call");
+  EXPECT_EQ((*context)[1]["call_id"], "call_1");
+  EXPECT_EQ((*context)[2]["type"], "function_call_output");
+  EXPECT_EQ((*context)[2]["call_id"], "call_1");
+  EXPECT_EQ((*context)[3]["role"], "assistant");
+}
+
+TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {
+  ResponseStore store;
+  StoreHop(store, "resp_1", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "hello"}}}),
+           json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "hi"}}}));
+
+  auto context = store.BuildChainContext("resp_1");
+
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0]["role"], "user");
+  EXPECT_EQ((*context)[1]["role"], "assistant");
+}
+
+TEST(ResponseStoreChainTest, MissingLinkCannotBeReconstructed) {
+  ResponseStore store;
+  // resp_2 points at a root that is no longer stored (evicted, or from a previous process).
+  StoreHop(store, "resp_2", "resp_1",
+           json::array({{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "sunny"}}}),
+           json::array());
+
+  EXPECT_FALSE(store.BuildChainContext("resp_2").has_value());
+}
+
+TEST(ResponseStoreChainTest, UnknownResponseCannotBeReconstructed) {
+  ResponseStore store;
+
+  EXPECT_FALSE(store.BuildChainContext("resp_missing").has_value());
+}
+
+TEST(ResponseStoreChainTest, CyclicChainCannotBeReconstructed) {
+  ResponseStore store;
+  StoreHop(store, "resp_1", "resp_2", json::array(), json::array());
+  StoreHop(store, "resp_2", "resp_1", json::array(), json::array());
+
+  EXPECT_FALSE(store.BuildChainContext("resp_2").has_value());
+}
+
+TEST(ResponseStoreChainTest, ReconstructionDoesNotChangeInputItemsEndpointSemantics) {
+  ResponseStore store;
+  StoreHop(store, "resp_1", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "weather?"}}}),
+           json::array({{{"type", "function_call"}, {"call_id", "call_1"}, {"name", "get_weather"}}}));
+  StoreHop(store, "resp_2", "resp_1",
+           json::array({{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "sunny"}}}),
+           json::array());
+
+  ASSERT_TRUE(store.BuildChainContext("resp_2").has_value());
+
+  // /input_items must still report only the request's own items, not the reconstructed chain.
+  auto items = store.GetInputItems("resp_2");
+  ASSERT_TRUE(items.has_value());
+  ASSERT_EQ(items->size(), 1u);
+  EXPECT_EQ((*items)[0]["type"], "function_call_output");
+}
+
+TEST(ResponseStoreChainTest, InstructionsAreNotReplayedOncePerHop) {
+  ResponseStore store;
+
+  // ToInputItems injects a request's instructions as the leading system item of that request's stored input.
+  auto hop_input = [](const std::string& instructions, const std::string& user_text) {
+    return json::array({{{"type", "message"}, {"role", "system"}, {"content", instructions}},
+                        {{"type", "message"}, {"role", "user"}, {"content", user_text}}});
+  };
+
+  json first;
+  first["id"] = "resp_1";
+  first["previous_response_id"] = nullptr;
+  first["instructions"] = "Be terse.";
+  first["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "ok"}}});
+  store.Store("resp_1", first, hop_input("Be terse.", "hello"));
+
+  json second;
+  second["id"] = "resp_2";
+  second["previous_response_id"] = "resp_1";
+  second["instructions"] = "Be terse.";
+  second["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "sure"}}});
+  store.Store("resp_2", second, hop_input("Be terse.", "again"));
+
+  auto context = store.BuildChainContext("resp_2");
+  ASSERT_TRUE(context.has_value());
+
+  // Instructions are request-scoped: the current request supplies its own, so no hop replays one.
+  int system_items = 0;
+  for (const auto& item : *context) {
+    if (item.value("role", "") == "system") {
+      ++system_items;
+    }
+  }
+
+  EXPECT_EQ(system_items, 0);
+  ASSERT_EQ(context->size(), 4u);
+  EXPECT_EQ((*context)[0]["content"], "hello");
+  EXPECT_EQ((*context)[1]["content"], "ok");
+  EXPECT_EQ((*context)[2]["content"], "again");
+  EXPECT_EQ((*context)[3]["content"], "sure");
+
+  // A system message the caller actually put in `input` is not an instructions item and is still replayed.
+  json third;
+  third["id"] = "resp_3";
+  third["previous_response_id"] = nullptr;
+  third["output"] = json::array();
+  store.Store("resp_3", third,
+              json::array({{{"type", "message"}, {"role", "system"}, {"content", "caller system"}}}));
+
+  auto kept = store.BuildChainContext("resp_3");
+  ASSERT_TRUE(kept.has_value());
+  ASSERT_EQ(kept->size(), 1u);
+  EXPECT_EQ((*kept)[0]["content"], "caller system");
+}
+
+TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
+  ResponseStore store(3);
+
+  StoreHop(store, "resp_1", "", json::array({{{"type", "message"}, {"role", "user"}, {"content", "one"}}}),
+           json::array());
+  StoreHop(store, "resp_2", "resp_1", json::array({{{"type", "message"}, {"role", "user"}, {"content", "two"}}}),
+           json::array());
+
+  // Unrelated traffic would otherwise evict the conversation's root before it is ever replayed.
+  EXPECT_TRUE(store.TouchChain("resp_2"));
+  StoreHop(store, "other_1", "", json::array(), json::array());
+
+  auto context = store.BuildChainContext("resp_2");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0]["content"], "one");
+}
+
+TEST(ResponseStoreChainTest, TouchChainReportsABrokenChain) {
+  ResponseStore store;
+  StoreHop(store, "resp_2", "resp_1", json::array(), json::array());
+
+  EXPECT_FALSE(store.TouchChain("resp_2"));
+  EXPECT_FALSE(store.TouchChain("resp_missing"));
+}
+
+TEST(ResponseStoreChainTest, CallerSystemMessageWithArrayContentReplaysAlongsideInstructions) {
+  // Regression: the instructions probe used to read `content` as a string unconditionally, so a caller-supplied
+  // system message whose content is an array of parts threw while reconstructing a chain that also had instructions.
+  ResponseStore store;
+
+  json response;
+  response["id"] = "resp_1";
+  response["previous_response_id"] = nullptr;
+  response["instructions"] = "Be terse.";
+  response["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "ok"}}});
+
+  auto input_items = json::array({
+      // The instructions-derived item, which must be dropped.
+      {{"type", "message"}, {"role", "system"}, {"content", "Be terse."}},
+      // A caller-supplied system message in content-part form, which must survive.
+      {{"type", "message"},
+       {"role", "system"},
+       {"content", json::array({{{"type", "input_text"}, {"text", "Answer in French."}}})}},
+      {{"type", "message"}, {"role", "user"}, {"content", "hello"}},
+  });
+  store.Store("resp_1", response, input_items);
+
+  std::optional<json> context;
+  ASSERT_NO_THROW(context = store.BuildChainContext("resp_1"));
+  ASSERT_TRUE(context.has_value());
+
+  ASSERT_EQ(context->size(), 3u);
+  EXPECT_EQ((*context)[0]["role"], "system");
+  EXPECT_TRUE((*context)[0]["content"].is_array());
+  EXPECT_EQ((*context)[0]["content"][0]["text"], "Answer in French.");
+  EXPECT_EQ((*context)[1]["content"], "hello");
+  EXPECT_EQ((*context)[2]["content"], "ok");
+}
+
+TEST(ResponseStoreChainTest, NonStringRolesAndContentDoNotBreakReconstruction) {
+  ResponseStore store;
+
+  json response;
+  response["id"] = "resp_1";
+  response["previous_response_id"] = nullptr;
+  response["instructions"] = "Be terse.";
+  response["output"] = json::array();
+
+  // Arbitrary stored shapes must be tolerated by the instructions probe.
+  store.Store("resp_1", response,
+              json::array({json::array({1, 2}),
+                           {{"role", 7}, {"content", "Be terse."}},
+                           {{"role", "system"}, {"content", 42}},
+                           {{"role", "system"}, {"content", "Be terse."}}}));
+
+  std::optional<json> context;
+  ASSERT_NO_THROW(context = store.BuildChainContext("resp_1"));
+  ASSERT_TRUE(context.has_value());
+
+  // Only the genuine instructions item is dropped.
+  EXPECT_EQ(context->size(), 3u);
 }
