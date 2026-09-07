@@ -30,6 +30,8 @@ struct ToolDefinition {
   /// callers must not supply one.
   std::string json_schema;
   ToolKind kind = ToolKind::kFunction;
+  bool include_description_in_prompt = true;
+  bool include_parameters_in_prompt = true;
 };
 
 }  // namespace fl

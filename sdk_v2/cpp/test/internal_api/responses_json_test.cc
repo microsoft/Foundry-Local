@@ -602,7 +602,7 @@ TEST(StreamEventTest, FunctionCallArgumentsDeltaEvent) {
   e.delta = "{\"ci";
   e.output_index = 1;
   e.item_id = "fc_1";
-  e.function_call_id = "call_abc";
+  e.tool_call_id = "call_abc";
 
   json j;
   to_json(j, e);
@@ -618,9 +618,9 @@ TEST(StreamEventTest, FunctionCallArgumentsDoneEvent) {
   e.sequence_number = 4;
   e.output_index = 1;
   e.item_id = "fc_1";
-  e.function_name = "get_weather";
-  e.function_call_id = "call_abc";
-  e.function_arguments = R"({"city":"Seattle"})";
+  e.tool_name = "get_weather";
+  e.tool_call_id = "call_abc";
+  e.tool_payload = R"({"city":"Seattle"})";
 
   json j;
   to_json(j, e);

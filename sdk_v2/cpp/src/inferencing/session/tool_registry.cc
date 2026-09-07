@@ -52,12 +52,15 @@ std::string ExtractCustomToolInput(const std::string& arguments) {
 }
 
 void ToolRegistry::Add(ToolDefinition tool_def) {
+  // Every definition is a named tool. A generated call resolves against the registry by name, so an
+  // entry that cannot be named could never be called, removed or checked for uniqueness — it would
+  // only be a way to smuggle an unresolvable payload into a prompt.
+  if (tool_def.name.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "a tool definition requires a name");
+  }
+
   // Validate and normalize before taking the lock — none of it touches shared state.
   if (tool_def.kind == ToolKind::kCustom) {
-    if (tool_def.name.empty()) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "a custom tool definition requires a name");
-    }
-
     if (!tool_def.json_schema.empty()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "custom tool '", tool_def.name,
                "' must not supply a json_schema; the schema is synthesized");
@@ -71,23 +74,19 @@ void ToolRegistry::Add(ToolDefinition tool_def) {
 
   std::lock_guard<std::mutex> lock(*mutex_);
 
-  // Unnamed entries are pre-serialized tools payloads rather than registrable tools, so uniqueness
-  // does not apply to them. A session holds a handful of tools, so a scan beats a second index.
-  if (!tool_def.name.empty()) {
-    const auto existing = std::find_if(definitions_.begin(), definitions_.end(),
-                                       [&](const ToolDefinition& td) { return td.name == tool_def.name; });
-    if (existing != definitions_.end()) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "a tool named '", tool_def.name,
-               "' is already registered; remove it before registering it again");
-    }
+  // A session holds a handful of tools, so a scan is simpler than maintaining a second index.
+  const auto existing = std::find_if(definitions_.begin(), definitions_.end(),
+                                     [&](const ToolDefinition& td) { return td.name == tool_def.name; });
+  if (existing != definitions_.end()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "a tool named '", tool_def.name,
+             "' is already registered; remove it before registering it again");
   }
 
   definitions_.push_back(std::move(tool_def));
 }
 
 bool ToolRegistry::Remove(const std::string& name) {
-  // An empty name is not a registered name. Matching it positionally would silently drop the
-  // unnamed pre-serialized entry a request had just installed.
+  // No definition is registered under an empty name, so there is nothing an empty name could match.
   if (name.empty()) {
     return false;
   }
@@ -112,6 +111,11 @@ void ToolRegistry::Clear() {
 std::vector<ToolDefinition> ToolRegistry::Definitions() const {
   std::lock_guard<std::mutex> lock(*mutex_);
   return definitions_;
+}
+
+bool ToolRegistry::Empty() const {
+  std::lock_guard<std::mutex> lock(*mutex_);
+  return definitions_.empty();
 }
 
 ToolDefinition ToolDefinitionFromC(const flToolDefinition& tool_def) {

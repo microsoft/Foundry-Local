@@ -4,6 +4,7 @@
 
 #ifdef FOUNDRY_LOCAL_HAS_WEB_SERVICE
 
+#include "inferencing/generative/openresponses/response_converter.h"
 #include "service/handler_utils.h"
 
 #include "inferencing/generative/openresponses/response_chain.h"
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace fl {
 
@@ -77,15 +79,19 @@ class ResponsesHandler : public HttpRequestHandler {
 
   // --- Inference dispatch ---
 
+  // `tool_kinds` is the registry snapshot taken for this turn: it decides whether a produced call
+  // is reported as a function call or a custom tool call.
   std::shared_ptr<OutgoingResponse> HandleNonStreaming(std::unique_ptr<ChatSession> session, Request& session_request,
                                                        const ResponseTurn& turn, ResponseLease lease,
                                                        const responses::ResponseCreateParams& params,
-                                                       const nlohmann::json& req_json);
+                                                       const nlohmann::json& req_json,
+                                                       const ResponseConverter::ToolKindsByName& tool_kinds);
 
   std::shared_ptr<OutgoingResponse> HandleStreaming(std::unique_ptr<ChatSession> session, Request session_request,
                                                     const ResponseTurn& turn, ResponseLease lease,
                                                     const responses::ResponseCreateParams& params,
-                                                    const nlohmann::json& req_json);
+                                                    const nlohmann::json& req_json,
+                                                    ResponseConverter::ToolKindsByName tool_kinds);
 
   ServiceContext& ctx_;
 };
