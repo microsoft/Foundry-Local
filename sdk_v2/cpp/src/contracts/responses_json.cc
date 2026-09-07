@@ -3,6 +3,7 @@
 
 #include "contracts/responses.h"
 
+#include "contracts/tool_definitions.h"
 #include "exception.h"
 #include "util/json_helpers.h"
 
@@ -92,6 +93,10 @@ std::string StreamEventTypeToString(StreamEventType type) {
       return "response.function_call_arguments.delta";
     case StreamEventType::kFunctionCallArgumentsDone:
       return "response.function_call_arguments.done";
+    case StreamEventType::kCustomToolCallInputDelta:
+      return "response.custom_tool_call_input.delta";
+    case StreamEventType::kCustomToolCallInputDone:
+      return "response.custom_tool_call_input.done";
     case StreamEventType::kReasoningDelta:
       return "response.reasoning.delta";
     case StreamEventType::kReasoningDone:
@@ -189,6 +194,28 @@ void from_json(const nlohmann::json& j, FunctionCallResultInputItem& f) {
   f.output = j.at("output").get<std::string>();
 }
 
+void from_json(const nlohmann::json& j, CustomToolCallResultInputItem& c) {
+  c.type = j.value("type", "custom_tool_call_output");
+  c.call_id = j.at("call_id").get<std::string>();
+  c.output = j.at("output").get<std::string>();
+}
+
+void from_json(const nlohmann::json& j, CustomToolCallInputItem& c) {
+  c.type = j.value("type", "custom_tool_call");
+  c.call_id = j.at("call_id").get<std::string>();
+  c.name = j.at("name").get<std::string>();
+
+  // A custom call's payload is free-form text. A non-string would have to be coerced to be usable, and coercing is
+  // exactly what must not happen to a payload the tool reads verbatim.
+  if (auto input = j.find("input"); input != j.end() && !input->is_null()) {
+    if (!input->is_string()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "custom_tool_call input must be a string");
+    }
+
+    c.input = input->get<std::string>();
+  }
+}
+
 // ========================================================================
 // Tool types from_json
 // ========================================================================
@@ -205,8 +232,46 @@ void from_json(const nlohmann::json& j, FunctionDefinition& f) {
   opt_bool(j, "strict", f.strict);
 }
 
+void from_json(const nlohmann::json& j, CustomToolDefinition& c) {
+  if (!j.contains("name") || !j["name"].is_string() || j["name"].get<std::string>().empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "custom tool must contain a non-empty string 'name'");
+  }
+
+  c.name = j["name"].get<std::string>();
+  opt_str(j, "description", c.description);
+
+  // Validated but not stored: text is the only supported shape, so a format that survives
+  // validation carries no information the rest of the pipeline needs.
+  auto format = j.find("format");
+  tools::ValidateCustomToolFormat(format == j.end() ? nlohmann::json() : *format, c.name);
+}
+
 void from_json(const nlohmann::json& j, ToolDefinition& t) {
-  t.type = j.value("type", "function");
+  // Tool entries are polymorphic and only the member matching `type` is meaningful, so an unrecognized type is
+  // rejected rather than falling through to the function branch. Reading it as a function would offer the model a
+  // tool the runtime cannot honour — a nameless one if the entry nests its declaration — instead of telling the
+  // caller the tool is unsupported. Symmetric with the Chat Completions surface.
+  if (auto type = j.find("type"); type != j.end() && !type->is_null()) {
+    if (!type->is_string()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "tool 'type' must be a string");
+    }
+
+    t.type = type->get<std::string>();
+  } else {
+    t.type = "function";
+  }
+
+  if (t.type != "function" && t.type != "custom") {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "unsupported tool type '", t.type,
+             "'; expected 'function' or 'custom'");
+  }
+
+  // A custom tool declares itself inline and has no `parameters` — reading it as a function would
+  // silently produce a nameless function tool.
+  if (t.type == "custom") {
+    t.custom = j.get<CustomToolDefinition>();
+    return;
+  }
 
   // Responses API uses flat format: name/description/parameters at tool level
   if (j.contains("name")) {
@@ -228,6 +293,10 @@ void from_json(const nlohmann::json& j, ToolDefinition& t) {
 }
 
 void from_json(const nlohmann::json& j, ForcedFunction& f) {
+  f.name = j.at("name").get<std::string>();
+}
+
+void from_json(const nlohmann::json& j, ForcedCustomTool& f) {
   f.name = j.at("name").get<std::string>();
 }
 
@@ -278,6 +347,10 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
         } else if (type == "function_call") {
           // Assistant tool calls are replayed as input when the caller chains turns without server-side storage.
           items.push_back(entry.get<FunctionCallInputItem>());
+        } else if (type == "custom_tool_call_output") {
+          items.push_back(entry.get<CustomToolCallResultInputItem>());
+        } else if (type == "custom_tool_call") {
+          items.push_back(entry.get<CustomToolCallInputItem>());
         } else if (type == "reasoning") {
           // Reasoning text is private and is never fed back to the model. The assistant turn that produced it still
           // happened, so it replays as an empty assistant message: dropping the item outright would leave two user
@@ -324,14 +397,37 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
     p.tools = j["tools"].get<std::vector<ToolDefinition>>();
   }
 
-  // tool_choice: string ("auto"/"none"/"required") or {"type":"function","name":"..."}
+  // tool_choice: a mode string ("auto"/"none"/"required") or a forced tool:
+  //   {"type":"function","name":".."} / {"type":"custom","name":".."}
   if (j.contains("tool_choice") && !j["tool_choice"].is_null()) {
     const auto& tc = j["tool_choice"];
 
     if (tc.is_string()) {
-      p.tool_choice = tc.get<std::string>();
-    } else if (tc.is_object() && tc.contains("name")) {
-      p.tool_choice = tc.get<ForcedFunction>();
+      const auto mode = tc.get<std::string>();
+      if (mode != "auto" && mode != "none" && mode != "required") {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "invalid tool_choice '", mode,
+                 "'; expected 'auto', 'none' or 'required'");
+      }
+
+      p.tool_choice = mode;
+    } else if (tc.is_object()) {
+      if (!tc.contains("name") || !tc["name"].is_string() || tc["name"].get<std::string>().empty()) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                 "a forced tool_choice must contain a non-empty string 'name'");
+      }
+
+      const auto type = tc.value("type", "function");
+
+      if (type == "custom") {
+        p.tool_choice = tc.get<ForcedCustomTool>();
+      } else if (type == "function") {
+        p.tool_choice = tc.get<ForcedFunction>();
+      } else {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "unsupported tool_choice type '", type,
+                 "'; expected 'function' or 'custom'");
+      }
+    } else {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "tool_choice must be a string or an object");
     }
   }
 
@@ -450,6 +546,17 @@ void to_json(nlohmann::json& j, const FunctionCallOutputItem& f) {
   };
 }
 
+void to_json(nlohmann::json& j, const CustomToolCallOutputItem& c) {
+  j = nlohmann::json{
+      {"type", c.type},
+      {"id", c.id},
+      {"call_id", c.call_id},
+      {"name", c.name},
+      {"input", c.input},
+      {"status", ResponseStatusToString(c.status)},
+  };
+}
+
 void to_json(nlohmann::json& j, const ReasoningSummaryText& s) {
   j = nlohmann::json{
       {"type", "summary_text"},
@@ -523,7 +630,26 @@ void to_json(nlohmann::json& j, const FunctionDefinition& f) {
   }
 }
 
+void to_json(nlohmann::json& j, const CustomToolDefinition& c) {
+  j = nlohmann::json{{"name", c.name}};
+
+  if (c.description.has_value()) {
+    j["description"] = *c.description;
+  }
+
+  // Always spelled out: text is the only format the runtime accepts, so echoing it states the
+  // declaration the tool actually runs under instead of leaving it implied by omission.
+  j["format"] = nlohmann::json{{"type", "text"}};
+}
+
 void to_json(nlohmann::json& j, const ToolDefinition& t) {
+  if (t.custom.has_value()) {
+    // Responses inlines the custom declaration next to "type" rather than nesting it.
+    j = nlohmann::json{{"type", "custom"}};
+    j.update(nlohmann::json(*t.custom));
+    return;
+  }
+
   // Responses API flat format: type/name/description/parameters at tool level
   j = nlohmann::json{
       {"type", t.type},
@@ -541,6 +667,13 @@ void to_json(nlohmann::json& j, const ToolDefinition& t) {
   if (t.function.strict.has_value()) {
     j["strict"] = *t.function.strict;
   }
+}
+
+void to_json(nlohmann::json& j, const ForcedCustomTool& f) {
+  j = nlohmann::json{
+      {"type", "custom"},
+      {"name", f.name},
+  };
 }
 
 void to_json(nlohmann::json& j, const ForcedFunction& f) {
@@ -646,7 +779,8 @@ void to_json(nlohmann::json& j, const ResponseObject& r) {
       if constexpr (std::is_same_v<T, std::string>) {
         j["tool_choice"] = v;
       } else {
-        j["tool_choice"] = nlohmann::json{{"type", "function"}, {"name", v.name}};
+        // Echo through the alternative's own to_json so the forced kind survives the round trip.
+        j["tool_choice"] = nlohmann::json(v);
       }
     },
                *r.tool_choice);
@@ -741,31 +875,34 @@ void to_json(nlohmann::json& j, const StreamEvent& e) {
     j["item_id"] = e.item_id;
   }
 
-  // Function call streaming
-  if (e.type == StreamEventType::kFunctionCallArgumentsDelta) {
+  // Tool call streaming. A function call reports its payload as "arguments" and a custom tool call
+  // as "input"; everything else about the two lifecycles is identical.
+  if (e.type == StreamEventType::kFunctionCallArgumentsDelta ||
+      e.type == StreamEventType::kCustomToolCallInputDelta) {
     j["delta"] = e.delta;
     j["output_index"] = e.output_index;
     j["item_id"] = e.item_id;
 
-    if (e.function_call_id.has_value()) {
-      j["call_id"] = *e.function_call_id;
+    if (e.tool_call_id.has_value()) {
+      j["call_id"] = *e.tool_call_id;
     }
   }
 
-  if (e.type == StreamEventType::kFunctionCallArgumentsDone) {
+  if (e.type == StreamEventType::kFunctionCallArgumentsDone ||
+      e.type == StreamEventType::kCustomToolCallInputDone) {
     j["output_index"] = e.output_index;
     j["item_id"] = e.item_id;
 
-    if (e.function_name.has_value()) {
-      j["name"] = *e.function_name;
+    if (e.tool_name.has_value()) {
+      j["name"] = *e.tool_name;
     }
 
-    if (e.function_call_id.has_value()) {
-      j["call_id"] = *e.function_call_id;
+    if (e.tool_call_id.has_value()) {
+      j["call_id"] = *e.tool_call_id;
     }
 
-    if (e.function_arguments.has_value()) {
-      j["arguments"] = *e.function_arguments;
+    if (e.tool_payload.has_value()) {
+      j[e.type == StreamEventType::kCustomToolCallInputDone ? "input" : "arguments"] = *e.tool_payload;
     }
   }
 

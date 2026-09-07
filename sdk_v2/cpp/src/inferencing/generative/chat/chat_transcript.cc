@@ -303,10 +303,13 @@ TranscriptIngest IngestRequestItems(const std::vector<Item*>& items, const std::
     if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
       const auto& call_item = static_cast<const ToolCallItem&>(*item);
 
+      // A replayed call states its own kind when the surface that produced it knew one; the registry's index is only
+      // the fallback for a call that arrived without one.
+      const auto kind = call_item.declared_kind.value_or(kind_of(call_item.name));
+
       TranscriptMessage message;
       message.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-      message.AppendToolCall(
-          MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments, kind_of(call_item.name)));
+      message.AppendToolCall(MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments, kind));
 
       // The same rule folds the call into the open assistant turn, so replayed content and its calls stay in one
       // message — and a call that opens a segment starts its own.

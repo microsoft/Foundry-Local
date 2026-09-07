@@ -78,6 +78,9 @@ TEST(ChatCompletionMessageTest, ToolCallsParsedWithNullContent) {
   ASSERT_EQ(msg.tool_calls.size(), 1u);
   EXPECT_EQ(msg.tool_calls[0].id, "call_1");
   EXPECT_EQ(msg.tool_calls[0].type, "function");
+  EXPECT_FALSE(msg.tool_calls[0].IsCustom());
+  EXPECT_EQ(msg.tool_calls[0].Name(), "get_weather");
+  EXPECT_EQ(msg.tool_calls[0].Payload(), R"({"city":"Seattle"})");
   EXPECT_EQ(msg.tool_calls[0].function.name, "get_weather");
   EXPECT_EQ(msg.tool_calls[0].function.arguments, R"({"city":"Seattle"})");
 }
@@ -113,12 +116,37 @@ TEST(ChatCompletionMessageTest, ToolCallWithoutFunctionNameIsRejected) {
   EXPECT_THROW(j.get<ChatCompletionMessage>(), fl::Exception);
 }
 
-TEST(ChatCompletionMessageTest, UnknownToolCallKindIsRejected) {
-  // Only function calls exist today. Unknown kinds are rejected rather than quietly coerced — support for a new kind
-  // is an explicit extension, not a fallback.
+TEST(ChatCompletionMessageTest, CustomToolCallCarriesRawInput) {
+  // A custom tool call is the second supported kind: its payload is free-form text nested under "custom",
+  // and it must not be read through the function contract.
   auto j = json::parse(R"({
     "role": "assistant",
-    "tool_calls": [{"id": "call_1", "type": "custom", "custom": {"name": "x"}}]
+    "tool_calls": [{"id": "call_2", "type": "custom", "custom": {"name": "apply_patch", "input": "PATCH BODY"}}]
+  })");
+  auto msg = j.get<ChatCompletionMessage>();
+
+  ASSERT_EQ(msg.tool_calls.size(), 1u);
+  EXPECT_TRUE(msg.tool_calls[0].IsCustom());
+  EXPECT_EQ(msg.tool_calls[0].Name(), "apply_patch");
+  EXPECT_EQ(msg.tool_calls[0].Payload(), "PATCH BODY");
+  EXPECT_TRUE(msg.tool_calls[0].function.name.empty()) << "a custom call carries no function payload";
+}
+
+TEST(ChatCompletionMessageTest, CustomToolCallWithNonStringInputIsRejected) {
+  auto j = json::parse(R"({
+    "role": "assistant",
+    "tool_calls": [{"id": "call_2", "type": "custom", "custom": {"name": "apply_patch", "input": {"a": 1}}}]
+  })");
+
+  EXPECT_THROW(j.get<ChatCompletionMessage>(), fl::Exception);
+}
+
+TEST(ChatCompletionMessageTest, UnknownToolCallKindIsRejected) {
+  // Function and custom are the two kinds that exist. Anything else is rejected rather than quietly coerced —
+  // support for a new kind is an explicit extension, not a fallback.
+  auto j = json::parse(R"({
+    "role": "assistant",
+    "tool_calls": [{"id": "call_1", "type": "computer_use", "computer_use": {"name": "x"}}]
   })");
 
   try {
@@ -350,7 +378,8 @@ TEST(ChatCompletionRequestTest, PolymorphicFieldsPreservedAsJson) {
   EXPECT_EQ(req.stop->size(), 2);
 
   ASSERT_TRUE(req.tool_choice.has_value());
-  EXPECT_EQ(*req.tool_choice, "auto");
+  EXPECT_EQ(req.tool_choice->kind, ChatCompletionToolChoice::Kind::kAuto);
+  EXPECT_EQ(req.tool_choice->ModeString(), "auto");
 
   ASSERT_TRUE(req.response_format.has_value());
   EXPECT_EQ((*req.response_format)["type"], "json_object");

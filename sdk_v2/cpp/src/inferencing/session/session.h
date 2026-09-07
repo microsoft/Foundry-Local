@@ -62,8 +62,8 @@ class Session {
   /// Add a tool definition to this session. Names are case-sensitive and unique across kinds.
   /// Safe to call while a request is being processed: the registry is internally synchronized and
   /// generation reads only the snapshot taken when the request started.
-  /// @throws fl::Exception if the name is already registered, a function tool's json_schema is not
-  ///         valid JSON, or a custom tool supplies a json_schema.
+  /// @throws fl::Exception if the tool has no name, the name is already registered, a function
+  ///         tool's json_schema is not valid JSON, or a custom tool supplies a json_schema.
   void AddToolDefinition(ToolDefinition tool_def);
 
   /// Remove a previously-added tool definition by name.
@@ -78,6 +78,13 @@ class Session {
   /// and the calls it produces are all resolved against the same tool set.
   std::vector<ToolDefinition> ToolDefinitions() const {
     return tool_registry_.Definitions();
+  }
+
+  /// Whether this session has any tool definitions. For precondition checks that only need to know
+  /// whether the registry is empty — taking a full snapshot to measure its size would copy every
+  /// definition and imply a turn snapshot that is not being taken.
+  bool HasToolDefinitions() const {
+    return !tool_registry_.Empty();
   }
 
   /// Remove all tool definitions from this session. Needed when a session is reused across

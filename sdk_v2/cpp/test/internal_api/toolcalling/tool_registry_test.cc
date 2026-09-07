@@ -110,15 +110,14 @@ TEST(ToolRegistryTest, AcceptsAnyValidJsonAsFunctionSchema) {
   EXPECT_EQ(Find(registry, "number_schema")->json_schema, "42");
 }
 
-TEST(ToolRegistryTest, AllowsUnnamedPreSerializedDefinitions) {
-  // The converter paths register a whole pre-serialized tools array under an empty name. Those are
-  // not registrable tools: uniqueness does not apply and they are not findable.
+TEST(ToolRegistryTest, RejectsUnnamedFunctionTool) {
+  // Every definition is a named tool. An unnamed entry could never be resolved, removed or checked
+  // for uniqueness, so accepting one would only be a way to smuggle an unresolvable payload into a
+  // prompt.
   ToolRegistry registry;
-  registry.Add(ToolDefinition{"", "", R"([{"type":"function"}])", ToolKind::kFunction});
-  registry.Add(ToolDefinition{"", "", R"([{"type":"function"}])", ToolKind::kFunction});
-
-  EXPECT_EQ(registry.Definitions().size(), 2u);
-  EXPECT_FALSE(Find(registry, "").has_value());
+  EXPECT_INVALID_ARGUMENT(registry.Add(Function("")));
+  EXPECT_INVALID_ARGUMENT(registry.Add(ToolDefinition{"", "", R"([{"type":"function"}])", ToolKind::kFunction}));
+  EXPECT_TRUE(registry.Definitions().empty());
 }
 
 // ========================================================================
@@ -272,24 +271,20 @@ TEST(ToolRegistryTest, PreservesRegistrationOrder) {
 }
 
 // ========================================================================
-// Unnamed entries, removal safety
+// Removal safety
 // ========================================================================
 
 TEST(ToolRegistryTest, RemoveWithAnEmptyNameRemovesNothing) {
-  // An unnamed entry is a request-scoped pre-serialized tools payload, not a registered tool.
-  // Matching it positionally would let RemoveToolDefinition("") tear out the tools the in-flight
-  // request is being generated against.
+  // No definition is registered under an empty name, so an empty name matches nothing. Matching
+  // positionally instead would let RemoveToolDefinition("") tear out a registered tool.
   ToolRegistry registry;
-  registry.Add(ToolDefinition{"", "", R"([{"type":"function"}])", ToolKind::kFunction});
   registry.Add(Function("named"));
 
   EXPECT_FALSE(registry.Remove(""));
-  EXPECT_EQ(registry.Definitions().size(), 2u);
-  EXPECT_EQ(registry.Definitions()[0].json_schema, R"([{"type":"function"}])");
+  EXPECT_EQ(registry.Definitions().size(), 1u);
 
   EXPECT_TRUE(registry.Remove("named"));
-  EXPECT_EQ(registry.Definitions().size(), 1u);
-  EXPECT_EQ(registry.Definitions()[0].name, "");
+  EXPECT_TRUE(registry.Definitions().empty());
 }
 
 // ========================================================================
