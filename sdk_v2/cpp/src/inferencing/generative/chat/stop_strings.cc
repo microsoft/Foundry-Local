@@ -166,7 +166,7 @@ std::vector<std::string> LoadStopStringsOption(const KeyValuePairs& options) {
   try {
     stop_json = nlohmann::json::parse(serialized_view);
   } catch (const nlohmann::json::parse_error& e) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
              std::string("internal stop strings option is not valid JSON: ") + e.what());
   }
 

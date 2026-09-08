@@ -158,3 +158,10 @@ TEST(StopStringFilterTest, LoadStopStringsOptionRejectsOversizedSerializedPayloa
 
   ExpectInvalidArgument([&]() { LoadStopStringsOption(options); }, "131072 serialized bytes");
 }
+
+TEST(StopStringFilterTest, LoadStopStringsOptionReportsMalformedJsonAsInvalidArgument) {
+  KeyValuePairs options;
+  options[kInternalStopStringsOptionKey] = R"(["unterminated")";
+
+  ExpectInvalidArgument([&]() { LoadStopStringsOption(options); }, "not valid JSON");
+}
