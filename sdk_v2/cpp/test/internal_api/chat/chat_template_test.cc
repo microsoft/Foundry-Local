@@ -133,6 +133,20 @@ TEST_F(ChatTemplateTest, EngineContinuationIncludesAssistantTurnBoundary) {
   EXPECT_NE(prompt.find("assistant"), std::string::npos) << prompt;
 }
 
+TEST_F(ChatTemplateTest, EngineContinuationMarkerDoesNotCollideWithToolMetadata) {
+  constexpr std::string_view marker = "__foundry_engine_assistant_boundary_0__";
+  std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "What is the codeword?"}};
+  const std::string tools_json =
+      R"([{"type":"function","function":{"name":"lookup","description":")" + std::string(marker) +
+      R"(","parameters":{"type":"object","properties":{}}}}])";
+
+  std::string prompt = BuildChatContinuationPrompt(messages, GetModel(), tools_json);
+
+  EXPECT_EQ(prompt.find(marker), std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("What is the codeword?"), std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("assistant"), std::string::npos) << prompt;
+}
+
 // ---------------------------------------------------------------------------
 // EncodePrompt tests
 // ---------------------------------------------------------------------------

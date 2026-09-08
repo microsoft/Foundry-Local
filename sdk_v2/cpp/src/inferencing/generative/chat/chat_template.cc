@@ -66,21 +66,31 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
 std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
                                         GenAIModelInstance& model,
                                         const std::string& tools_json) {
-  constexpr std::string_view kAssistantMarker = "__foundry_engine_assistant_boundary__";
+  const auto rendered_inputs = BuildChatPrompt(messages, model, tools_json);
+  constexpr std::string_view kMarkerPrefix = "__foundry_engine_assistant_boundary_";
+  size_t marker_suffix = 0;
+  std::string assistant_marker;
+  do {
+    assistant_marker = std::string(kMarkerPrefix) + std::to_string(marker_suffix++) + "__";
+  } while (rendered_inputs.find(assistant_marker) != std::string::npos);
 
   std::vector<MessageItem> marked_messages;
   marked_messages.reserve(messages.size() + 1);
-  marked_messages.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::string(kAssistantMarker));
+  marked_messages.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, assistant_marker);
   marked_messages.insert(marked_messages.end(), messages.begin(), messages.end());
 
   auto marked_prompt = BuildChatPrompt(marked_messages, model, tools_json);
-  const auto marker_position = marked_prompt.find(kAssistantMarker);
+  const auto marker_position = marked_prompt.find(assistant_marker);
   if (marker_position == std::string::npos) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
              "chat template did not preserve assistant content needed to build an Engine continuation");
   }
+  if (marked_prompt.find(assistant_marker, marker_position + assistant_marker.size()) != std::string::npos) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "chat template duplicated assistant content needed to build an Engine continuation");
+  }
 
-  return marked_prompt.substr(marker_position + kAssistantMarker.size());
+  return marked_prompt.substr(marker_position + assistant_marker.size());
 }
 
 std::unique_ptr<OgaSequences> EncodePrompt(const std::string& prompt,
