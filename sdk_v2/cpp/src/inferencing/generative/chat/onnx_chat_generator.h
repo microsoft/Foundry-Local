@@ -38,6 +38,7 @@ class OnnxChatGenerator : public ChatGenerator {
   bool IsDone() const override;
   void GenerateNextToken() override;
   std::string Decode() override;
+  std::optional<int32_t> CurrentTokenId() const override;
   int TokenCount() const override;
   int PromptTokenCount() const override;
   void Cancel() override;
@@ -47,7 +48,7 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Reasoning-model chat templates pre-fill this marker so the model's first
   /// generated token is reasoning content rather than the marker itself. The
   /// stream splitter consumes this flag to start in the reasoning state.
-  bool PromptEndsInReasoning() const { return prompt_ends_in_reasoning_; }
+  bool PromptEndsInReasoning() const override { return prompt_ends_in_reasoning_; }
 
   /// Encode new messages and append their tokens to the generator's sequence.
   /// Used for continuous decoding — only the new turn's messages are encoded and appended.
@@ -145,6 +146,7 @@ class OnnxChatGenerator : public ChatGenerator {
   GenAIModelInstance& model_;  // non-owning reference — model outlives generator
   int prompt_token_count_ = 0;
   bool prompt_ends_in_reasoning_ = false;
+  std::optional<int32_t> current_token_;
   std::atomic<bool> cancelled_{false};
 };
 

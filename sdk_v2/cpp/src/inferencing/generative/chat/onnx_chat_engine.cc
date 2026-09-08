@@ -319,7 +319,6 @@ void OnnxChatEngine::RouteEvents() {
     }
 
     auto& conversation = it->second->state;
-    const auto flags = event->Flags();
     {
       std::lock_guard<std::mutex> lock(conversation->mutex);
       if ((flags & OgaEngineEventFlag_Token) != 0) {

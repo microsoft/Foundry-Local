@@ -220,7 +220,7 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
 
     auto parse_one = [&](const nlohmann::json& call) {
       if (!call.is_object()) {
-        return;
+        return false;
       }
 
       ParsedToolCall tc;
@@ -232,19 +232,29 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
         tc.name = call["function"].get<std::string>();
       } else if (call.size() == 1) {
         const auto& [name, arguments] = *call.items().begin();
+        if (name == "name" || name == "function" || name == "arguments" ||
+            name == "parameters" || name == "args") {
+          return false;
+        }
         tc.name = NormalizeToolName(name, advertised_tools);
+        if (tc.name.empty()) {
+          return false;
+        }
         if (name == "cmd" && tc.name == "shell") {
           tc.arguments = nlohmann::json({{"cmd", arguments}}).dump();
         } else {
           tc.arguments = arguments.is_string() ? arguments.get<std::string>() : arguments.dump();
         }
         results.push_back(std::move(tc));
-        return;
+        return true;
       } else {
-        return;
+        return false;
       }
 
       tc.name = NormalizeToolName(std::move(tc.name), advertised_tools);
+      if (tc.name.empty()) {
+        return false;
+      }
 
       // Arguments can be under "arguments", "parameters", or "args".
       if (call.contains("arguments")) {
@@ -275,17 +285,23 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
       }
 
       results.push_back(std::move(tc));
+      return true;
     };
 
     if (json.is_array()) {
       for (const auto& item : json) {
-        parse_one(item);
+        if (!parse_one(item)) {
+          results.clear();
+          return results;
+        }
       }
     } else if (json.is_object()) {
-      parse_one(json);
+      if (!parse_one(json)) {
+        results.clear();
+      }
     }
   } catch (const nlohmann::json::exception&) {
-    // Invalid tool-call shape — return whatever we have so far (may be empty)
+    results.clear();
   }
 
   return results;

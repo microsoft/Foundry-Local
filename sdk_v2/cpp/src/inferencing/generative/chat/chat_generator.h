@@ -42,6 +42,9 @@ class ChatGenerator {
   /// Get the most recently generated token ID before Decode consumes it.
   virtual std::optional<int32_t> CurrentTokenId() const = 0;
 
+  /// Return whether the rendered prompt ends with an open reasoning marker.
+  virtual bool PromptEndsInReasoning() const = 0;
+
   /// Get the total number of tokens (input + generated) so far.
   virtual int TokenCount() const = 0;
 

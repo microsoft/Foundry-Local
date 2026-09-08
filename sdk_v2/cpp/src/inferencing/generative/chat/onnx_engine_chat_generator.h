@@ -25,6 +25,8 @@ class OnnxEngineChatGenerator final : public ChatGenerator {
   bool IsDone() const override;
   void GenerateNextToken() override;
   std::string Decode() override;
+  std::optional<int32_t> CurrentTokenId() const override { return current_token_; }
+  bool PromptEndsInReasoning() const override { return false; }
   int TokenCount() const override;
   int PromptTokenCount() const override;
   void Cancel() override;

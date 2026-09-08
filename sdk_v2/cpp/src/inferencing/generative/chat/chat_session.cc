@@ -61,6 +61,25 @@ std::unique_ptr<ChatGenerator> CreateTextChatGenerator(const std::vector<Message
   return OnnxChatGenerator::Create(messages, options, model, tool_ctx, use_full_context);
 }
 
+ReasoningStreamSplitter CreateReasoningSplitter(const ToolCallContext& tool_ctx,
+                                                GenAIModelInstance& model,
+                                                bool start_inside_reasoning) {
+  if (!tool_ctx.supports_reasoning) {
+    return {"", ""};
+  }
+
+  const auto& tag_info = model.GetTagInfo();
+  auto start = tool_ctx.reasoning_start.empty() ? tag_info.bor_str : tool_ctx.reasoning_start;
+  auto end = tool_ctx.reasoning_end.empty() ? tag_info.eor_str : tool_ctx.reasoning_end;
+  auto start_token_ids =
+      tag_info.bor_id.has_value() ? std::vector<int32_t>{*tag_info.bor_id} : std::vector<int32_t>{};
+  auto end_token_ids =
+      tag_info.eor_id.has_value() ? std::vector<int32_t>{*tag_info.eor_id} : std::vector<int32_t>{};
+  auto ignored_token_ids = model.GetPreprocessor().GetEosTokenIds();
+  return {std::move(start), std::move(end), std::move(start_token_ids), std::move(end_token_ids),
+          std::move(ignored_token_ids), start_inside_reasoning};
+}
+
 }  // namespace
 
 ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry)
@@ -568,14 +587,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   // Splitter: only active for reasoning models. For non-reasoning models start_marker is empty and the splitter
   // degrades to a passthrough (every token becomes one DEFAULT segment), so the streaming path stays uniform.
-  ReasoningStreamSplitter splitter(
-      cached_tool_ctx_.supports_reasoning ? (cached_tool_ctx_.reasoning_start.empty() ? std::string("<think>")
-                                                                                      : cached_tool_ctx_.reasoning_start)
-                                          : std::string(),
-      cached_tool_ctx_.supports_reasoning ? (cached_tool_ctx_.reasoning_end.empty() ? std::string("</think>")
-                                                                                    : cached_tool_ctx_.reasoning_end)
-                                          : std::string(),
-      cached_generator_ && cached_generator_->PromptEndsInReasoning());
+    auto splitter = CreateReasoningSplitter(
+      cached_tool_ctx_, Model(), cached_generator_ && cached_generator_->PromptEndsInReasoning());
 
   // Accumulator: separates visible text from tool-call blocks in the DEFAULT-segment stream. For models without
   // tool-call markers configured, both marker strings are empty and the accumulator degrades to passthrough.
@@ -591,6 +604,24 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // which is fine because the IDs only need to be stable when a client is observing the stream.
   std::vector<ParsedToolCall> streamed_tool_calls;
 
+  auto emit_tool_output = [&](ToolCallStreamAccumulator::Output output) {
+    for (auto& event : output.events) {
+      if (auto* visible_text = std::get_if<std::string>(&event)) {
+        if (streaming_callback) {
+          streaming_callback->PushItem(
+              std::make_unique<TextItem>(std::move(*visible_text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+        }
+      } else {
+        auto parsed_call = std::move(std::get<ParsedToolCall>(event));
+        if (streaming_callback) {
+          streaming_callback->PushItem(
+              std::make_unique<ToolCallItem>(parsed_call.id, parsed_call.name, parsed_call.arguments));
+        }
+        streamed_tool_calls.push_back(std::move(parsed_call));
+      }
+    }
+  };
+
   auto emit_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
       if (seg.type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING) {
@@ -601,45 +632,24 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         continue;
       }
 
-      auto out = tool_accumulator.Push(seg.text);
-
-      if (streaming_callback && !out.visible_text.empty()) {
-        streaming_callback->PushItem(
-            std::make_unique<TextItem>(std::move(out.visible_text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
-      }
-
-      for (auto& pc : out.ready_calls) {
-        if (streaming_callback) {
-          streaming_callback->PushItem(std::make_unique<ToolCallItem>(pc.id, pc.name, pc.arguments));
-        }
-        streamed_tool_calls.push_back(std::move(pc));
-      }
+      emit_tool_output(tool_accumulator.Push(seg.text));
     }
   };
 
-  auto flush_accumulator = [&]() {
-    auto out = tool_accumulator.Flush();
-
-    if (streaming_callback && !out.visible_text.empty()) {
-      streaming_callback->PushItem(
-          std::make_unique<TextItem>(std::move(out.visible_text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
-    }
-
-    for (auto& pc : out.ready_calls) {
-      if (streaming_callback) {
-        streaming_callback->PushItem(std::make_unique<ToolCallItem>(pc.id, pc.name, pc.arguments));
-      }
-      streamed_tool_calls.push_back(std::move(pc));
-    }
-  };
+  auto flush_accumulator = [&]() { emit_tool_output(tool_accumulator.Flush()); };
 
   while (!cached_generator_->IsDone() && !request.canceled) {
     cached_generator_->GenerateNextToken();
+    const auto token_id = cached_generator_->CurrentTokenId();
     std::string token = cached_generator_->Decode();
     ++output_tokens;
 
     if (!token.empty()) {
       text += token;
+    }
+    if (token_id.has_value()) {
+      emit_segments(splitter.Push(*token_id, std::move(token)));
+    } else if (!token.empty()) {
       emit_segments(splitter.Push(token));
     }
 
@@ -811,14 +821,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   // Chat Completions stream — the OpenAI Chat Completions spec has no reasoning-delta concept; reasoning is exposed
   // via the Responses API path in Stage 4. The non-streaming response already excludes reasoning text from
   // `delta.content` via the typed-MessageItem build in ProcessGeneratedOutput.
-  ReasoningStreamSplitter splitter(
-      tool_ctx.supports_reasoning ? (tool_ctx.reasoning_start.empty() ? std::string("<think>")
-                                                                      : tool_ctx.reasoning_start)
-                                  : std::string(),
-      tool_ctx.supports_reasoning ? (tool_ctx.reasoning_end.empty() ? std::string("</think>")
-                                                                    : tool_ctx.reasoning_end)
-                                  : std::string(),
-      generator->PromptEndsInReasoning());
+  auto splitter = CreateReasoningSplitter(tool_ctx, Model(), generator->PromptEndsInReasoning());
 
   auto emit_visible_text = [&](std::string visible) {
     if (visible.empty() || !is_streaming) {
@@ -860,6 +863,24 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
     }
   };
 
+  auto process_tool_output = [&](ToolCallStreamAccumulator::Output output) {
+    std::vector<ParsedToolCall> ready_calls;
+    auto flush_ready_calls = [&]() {
+      emit_ready_calls(ready_calls);
+      ready_calls.clear();
+    };
+
+    for (auto& event : output.events) {
+      if (auto* visible_text = std::get_if<std::string>(&event)) {
+        flush_ready_calls();
+        emit_visible_text(std::move(*visible_text));
+      } else {
+        ready_calls.push_back(std::move(std::get<ParsedToolCall>(event)));
+      }
+    }
+    flush_ready_calls();
+  };
+
   auto process_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
       // REASONING segments: intentionally dropped from the Chat Completions stream. Never feed reasoning text to
@@ -868,9 +889,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
         continue;
       }
 
-      auto out = tool_accumulator.Push(seg.text);
-      emit_visible_text(std::move(out.visible_text));
-      emit_ready_calls(out.ready_calls);
+      process_tool_output(tool_accumulator.Push(seg.text));
     }
   };
 
@@ -878,10 +897,15 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   std::string text;
   while (!generator->IsDone() && !original_request.canceled) {
     generator->GenerateNextToken();
+    const auto token_id = generator->CurrentTokenId();
     std::string token = generator->Decode();
 
     if (!token.empty()) {
       text += token;
+    }
+    if (token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, std::move(token)));
+    } else if (!token.empty()) {
       process_segments(splitter.Push(token));
     }
   }
@@ -889,11 +913,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   // Drain any buffered partial-marker bytes at end-of-stream. Reasoning splitter first so any final DEFAULT bytes
   // feed into the tool accumulator; then drain the tool accumulator.
   process_segments(splitter.Flush());
-  {
-    auto out = tool_accumulator.Flush();
-    emit_visible_text(std::move(out.visible_text));
-    emit_ready_calls(out.ready_calls);
-  }
+  process_tool_output(tool_accumulator.Flush());
 
   if (original_request.canceled) {
     generator->Cancel();
