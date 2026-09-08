@@ -36,6 +36,23 @@ TEST(StopStringFilterTest, EmptyConfigurationIsPassthrough) {
   EXPECT_FALSE(filter.matched_index().has_value());
 }
 
+TEST(StopStringFilterTest, ReportsWhetherOutputRemainsAlignedWithTheCurrentToken) {
+  StopStringFilter filter({"END"});
+
+  auto passthrough = filter.PushWithTokenAlignment("hello");
+  EXPECT_EQ(passthrough.text, "hello");
+  EXPECT_TRUE(passthrough.token_aligned);
+
+  auto buffered = filter.PushWithTokenAlignment("E");
+  EXPECT_TRUE(buffered.text.empty());
+  EXPECT_FALSE(buffered.token_aligned);
+
+  // The released prefix happens to equal the current fragment, but belongs to the preceding token.
+  auto combined = filter.PushWithTokenAlignment("E");
+  EXPECT_EQ(combined.text, "E");
+  EXPECT_FALSE(combined.token_aligned);
+}
+
 TEST(StopStringFilterTest, MatchAcrossFragmentsDropsStopAndLaterBytes) {
   StopStringFilter filter({"END"});
 

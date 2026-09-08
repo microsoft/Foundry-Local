@@ -171,14 +171,19 @@ StopStringFilter::StopStringFilter(std::vector<std::string> stop_strings) : stop
 }
 
 std::string StopStringFilter::Push(std::string_view fragment) {
+  return PushWithTokenAlignment(fragment).text;
+}
+
+StopStringFilter::PushResult StopStringFilter::PushWithTokenAlignment(std::string_view fragment) {
   if (fragment.empty() || matched_) {
     return {};
   }
 
   if (stop_strings_.empty()) {
-    return std::string(fragment);
+    return {std::string(fragment), true};
   }
 
+  const bool had_pending_text = !pending_.empty();
   pending_.append(fragment);
 
   if (const auto match = FindBestMatch()) {
@@ -187,14 +192,15 @@ std::string StopStringFilter::Push(std::string_view fragment) {
 
     std::string safe_prefix = pending_.substr(0, match->start);
     pending_.clear();
-    return safe_prefix;
+    return {std::move(safe_prefix), false};
   }
 
   const size_t keep = LongestPendingSuffix();
   const size_t safe_count = pending_.size() - keep;
   std::string safe_prefix = pending_.substr(0, safe_count);
   pending_.erase(0, safe_count);
-  return safe_prefix;
+  const bool token_aligned = !had_pending_text && safe_count == fragment.size();
+  return {std::move(safe_prefix), token_aligned};
 }
 
 std::string StopStringFilter::Flush() {

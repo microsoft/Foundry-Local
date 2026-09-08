@@ -38,6 +38,15 @@ class GenAIConfigTest : public ::testing::Test {
   std::filesystem::path test_dir_;
 };
 
+void ExpectConfigError(const std::string& path, const std::string& message_fragment) {
+  try {
+    (void)GenAIConfig::LoadFromFile(path);
+    FAIL() << "Expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_NE(std::string(e.what()).find(message_fragment), std::string::npos) << e.what();
+  }
+}
+
 }  // anonymous namespace
 
 // ========================================================================
@@ -208,6 +217,13 @@ TEST_F(GenAIConfigTest, SelectsGeneratorWhenEngineBatchingIsAbsent) {
   EXPECT_FALSE(config.EngineMaxBatchSize().has_value());
 }
 
+TEST_F(GenAIConfigTest, RejectsNonObjectEngineConfiguration) {
+  for (const auto& invalid_engine : {"null", R"("dynamic_batching")", "[]"}) {
+    auto path = WriteFile("genai_config.json", std::string(R"({"engine": )") + invalid_engine + "}");
+    ExpectConfigError(path, "genai_config.json engine must be an object");
+  }
+}
+
 TEST_F(GenAIConfigTest, ParsesDynamicEngineConfiguration) {
   auto path = WriteFile("genai_config.json", R"({
     "engine": {
@@ -277,9 +293,9 @@ TEST_F(GenAIConfigTest, RejectsInvalidEngineCapacity) {
   auto wrong_type_path =
       WriteFile("wrong_type.json", R"({"engine": {"dynamic_batching": {"max_scheduled_tokens": "bad"}}})");
 
-  EXPECT_THROW(GenAIConfig::LoadFromFile(zero_path), fl::Exception);
-  EXPECT_THROW(GenAIConfig::LoadFromFile(negative_path), fl::Exception);
-  EXPECT_THROW(GenAIConfig::LoadFromFile(wrong_type_path), fl::Exception);
+  ExpectConfigError(zero_path, "genai_config.json engine.dynamic_batching.max_batch_size");
+  ExpectConfigError(negative_path, "genai_config.json engine.static_batching.max_batch_size");
+  ExpectConfigError(wrong_type_path, "genai_config.json engine.dynamic_batching.max_scheduled_tokens");
 }
 
 TEST_F(GenAIConfigTest, LoadThrowsForMissingFile) {

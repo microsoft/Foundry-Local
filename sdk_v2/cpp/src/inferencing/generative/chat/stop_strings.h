@@ -34,11 +34,19 @@ std::vector<std::string> LoadStopStringsOption(const KeyValuePairs& options);
 /// never splits a code point; every chunk returned from Push()/Flush() remains valid UTF-8.
 class StopStringFilter {
  public:
+  struct PushResult {
+    std::string text;
+    bool token_aligned = false;
+  };
+
   explicit StopStringFilter(std::vector<std::string> stop_strings = {});
 
   /// Feed one decoded fragment into the matcher and return the confirmed-safe prefix.
   /// If a stop string completes, the matching bytes and every later byte are suppressed.
   std::string Push(std::string_view fragment);
+
+  /// Feed one decoded token fragment and report whether the returned text still corresponds exactly to that token.
+  PushResult PushWithTokenAlignment(std::string_view fragment);
 
   /// Flush any pending safe suffix at normal end-of-stream.
   std::string Flush();

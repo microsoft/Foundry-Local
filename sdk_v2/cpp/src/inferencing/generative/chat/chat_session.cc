@@ -140,10 +140,14 @@ bool PushDecodedFragment(const std::string& fragment,
     return false;
   }
 
-  auto filtered = stop_filter->Push(fragment);
-  if (!filtered.empty()) {
-    // Filtering may combine or shorten decoded token fragments, so the current token ID is no longer aligned.
-    process_segments(splitter.Push(filtered));
+  auto filtered = stop_filter->PushWithTokenAlignment(fragment);
+  if (!filtered.text.empty()) {
+    if (filtered.token_aligned && token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, std::move(filtered.text)));
+    } else {
+      // Filtering combined or shortened decoded token fragments, so the current token ID is no longer aligned.
+      process_segments(splitter.Push(filtered.text));
+    }
   }
 
   return stop_filter->matched();

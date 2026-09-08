@@ -10,7 +10,10 @@
 namespace fl {
 namespace {
 
-size_t ParsePositiveSize(const nlohmann::json& object, const char* name, size_t default_value) {
+size_t ParsePositiveSize(const nlohmann::json& object,
+                         const char* object_path,
+                         const char* name,
+                         size_t default_value) {
   if (!object.contains(name)) {
     return default_value;
   }
@@ -18,13 +21,13 @@ size_t ParsePositiveSize(const nlohmann::json& object, const char* name, size_t 
   const auto& value = object[name];
   if (!value.is_number_integer()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             std::string("genai_config.json engine.") + name + " must be a positive integer");
+             std::string("genai_config.json ") + object_path + "." + name + " must be a positive integer");
   }
 
   const auto parsed = value.get<int64_t>();
   if (parsed <= 0 || static_cast<uint64_t>(parsed) > std::numeric_limits<size_t>::max()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             std::string("genai_config.json engine.") + name + " must be a positive integer");
+             std::string("genai_config.json ") + object_path + "." + name + " must be a positive integer");
   }
 
   return static_cast<size_t>(parsed);
@@ -166,7 +169,11 @@ GenAIConfig GenAIConfig::LoadFromFile(const std::string& path) {
     config.search = std::move(search);
   }
 
-  if (j.contains("engine") && j["engine"].is_object()) {
+  if (j.contains("engine") && !j["engine"].is_object()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "genai_config.json engine must be an object");
+  }
+
+  if (j.contains("engine")) {
     const auto& je = j["engine"];
     Engine engine;
 
@@ -178,10 +185,11 @@ GenAIConfig GenAIConfig::LoadFromFile(const std::string& path) {
 
       const auto& batching = je["dynamic_batching"];
       Engine::DynamicBatching dynamic_batching;
-      dynamic_batching.max_batch_size =
-          ParsePositiveSize(batching, "max_batch_size", dynamic_batching.max_batch_size);
+      dynamic_batching.max_batch_size = ParsePositiveSize(
+          batching, "engine.dynamic_batching", "max_batch_size", dynamic_batching.max_batch_size);
       dynamic_batching.max_scheduled_tokens =
-          ParsePositiveSize(batching, "max_scheduled_tokens", dynamic_batching.max_scheduled_tokens);
+          ParsePositiveSize(batching, "engine.dynamic_batching", "max_scheduled_tokens",
+                            dynamic_batching.max_scheduled_tokens);
       engine.dynamic_batching = dynamic_batching;
     }
 
@@ -193,8 +201,8 @@ GenAIConfig GenAIConfig::LoadFromFile(const std::string& path) {
 
       const auto& batching = je["static_batching"];
       Engine::StaticBatching static_batching;
-      static_batching.max_batch_size =
-          ParsePositiveSize(batching, "max_batch_size", static_batching.max_batch_size);
+      static_batching.max_batch_size = ParsePositiveSize(
+          batching, "engine.static_batching", "max_batch_size", static_batching.max_batch_size);
       engine.static_batching = static_batching;
     }
 
