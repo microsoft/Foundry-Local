@@ -115,7 +115,9 @@ std::optional<ResponseChainContext> ResponseStore::BuildChainContext(const std::
     context.push_back(std::move(replay));
   }
 
-  // Requesting the chain is a use of every entry in it. list::splice keeps the collected iterators valid.
+  // Touch oldest-first so the requested endpoint finishes at the front as the most-recent entry. Losing any ancestor
+  // breaks the chain, but evicting the endpoint first would strand every ancestor without preserving continuation.
+  // list::splice keeps the collected iterators valid.
   for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
     TouchLocked(*hop);
   }
@@ -127,6 +129,7 @@ bool ResponseStore::TouchChain(const std::string& response_id) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   auto chain = WalkChainLocked(response_id);
+  // Touch oldest-first so the requested endpoint finishes as the most-recent entry.
   for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
     TouchLocked(*hop);
   }
