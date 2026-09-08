@@ -106,18 +106,20 @@ TEST(ChatSessionDecisionTest, PreAppendRebuildIsUnconditionalForStaticEngine) {
                                                          /*guidance_payload_changed=*/false,
                                                          /*retained_generation_settings_changed=*/false));
 
-  // Settings baked into retained state invalidate on every backend: an Engine request snapshots them for all turns.
-  for (ChatBackendKind kind : {ChatBackendKind::kGenerator, ChatBackendKind::kDynamicEngine}) {
-    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/true,
-                                                           /*guidance_payload_changed=*/false,
-                                                           /*retained_generation_settings_changed=*/false));
-    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/false,
-                                                           /*guidance_payload_changed=*/true,
-                                                           /*retained_generation_settings_changed=*/false));
-    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/false,
-                                                           /*guidance_payload_changed=*/false,
-                                                           /*retained_generation_settings_changed=*/true));
-  }
+  // The caller reports only options baked into the selected backend. These changes rebuild a classic Generator;
+  // dynamic Engine settings are per-turn and therefore reach this helper as unchanged.
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/true,
+                                                         /*guidance_payload_changed=*/false,
+                                                         /*retained_generation_settings_changed=*/false));
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/false,
+                                                         /*guidance_payload_changed=*/true,
+                                                         /*retained_generation_settings_changed=*/false));
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/false,
+                                                         /*guidance_payload_changed=*/false,
+                                                         /*retained_generation_settings_changed=*/true));
 }
 
 TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSemantics) {

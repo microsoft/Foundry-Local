@@ -86,8 +86,8 @@ struct SearchOptions {
   /// with a value other than "auto", "none", or "required".
   static std::optional<flToolChoice> ParseToolChoice(const KeyValuePairs& params);
 
-  /// Whether settings baked into retained generator/request state match another turn.
-  bool HasSameRetainedGenerationSettings(const SearchOptions& other) const;
+  /// Whether settings baked into retained backend state match another turn.
+  bool HasSameRetainedGenerationSettings(const SearchOptions& other, ChatBackendKind backend_kind) const;
 };
 
 /// Return the explicit or default output-token limit for a text generation turn.

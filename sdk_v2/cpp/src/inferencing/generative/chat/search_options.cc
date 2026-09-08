@@ -373,11 +373,18 @@ std::optional<flToolChoice> SearchOptions::ParseToolChoice(const KeyValuePairs& 
            "Invalid value for tool_choice: '" + value + "'. Expected 'auto', 'none', or 'required'.");
 }
 
-bool SearchOptions::HasSameRetainedGenerationSettings(const SearchOptions& other) const {
+bool SearchOptions::HasSameRetainedGenerationSettings(const SearchOptions& other,
+                                                      ChatBackendKind backend_kind) const {
+  if (backend_kind != ChatBackendKind::kGenerator) {
+    // Engine-supported settings are supplied on each BeginTurn. Static Engine state is rebuilt unconditionally.
+    return true;
+  }
+
   return temperature == other.temperature && top_p == other.top_p && top_k == other.top_k &&
-         frequency_penalty == other.frequency_penalty && presence_penalty == other.presence_penalty &&
-         seed == other.seed && do_sample == other.do_sample && early_stopping == other.early_stopping &&
-         extra == other.extra;
+         frequency_penalty.value_or(0.0f) == other.frequency_penalty.value_or(0.0f) &&
+         presence_penalty.value_or(0.0f) == other.presence_penalty.value_or(0.0f) &&
+         seed == other.seed && do_sample == other.do_sample &&
+         early_stopping.value_or(false) == other.early_stopping.value_or(false) && extra == other.extra;
 }
 
 }  // namespace fl

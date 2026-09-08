@@ -572,13 +572,15 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         cached_tool_ctx_.guidance_type != turn_tool_ctx.guidance_type ||
         cached_tool_ctx_.guidance_data != turn_tool_ctx.guidance_data;
 
-    // User guidance is a finite grammar even when tool output is not required. Rebuild after such a turn because
-    // completion latches IsDone(), and rebuild whenever the explicit schema or any retained search setting changes.
+    // Classic Generator guidance and search settings are fixed at creation. Dynamic Engine options are supplied on
+    // each BeginTurn, while the static Engine always rebuilds below because it cannot safely retain shared state.
+    const bool options_are_request_baked = backend_kind == ChatBackendKind::kGenerator;
     if (chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend(
             backend_kind,
-            prev_needs_guidance != curr_needs_guidance || prev_has_user_guidance,
-            guidance_payload_changed,
-            !cached_search_options_.HasSameRetainedGenerationSettings(effective_options))) {
+            options_are_request_baked &&
+                (prev_needs_guidance != curr_needs_guidance || prev_has_user_guidance),
+            options_are_request_baked && guidance_payload_changed,
+            !cached_search_options_.HasSameRetainedGenerationSettings(effective_options, backend_kind))) {
       // The branch below rebuilds from full history.
       cached_generator_.reset();
       cached_tool_ctx_ = {};

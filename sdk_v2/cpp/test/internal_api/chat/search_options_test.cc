@@ -44,19 +44,28 @@ TEST(SearchOptionsParsingTest, ResolvesDefaultAndExplicitOutputLimits) {
   EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit), 64);
 }
 
-TEST(SearchOptionsParsingTest, RetainedGenerationSettingsIgnorePerTurnOptions) {
+TEST(SearchOptionsParsingTest, RetainedGenerationSettingsAreBackendAware) {
   SearchOptions first;
   first.temperature = 0.5f;
+  first.seed = 1;
   first.max_output_tokens = 16;
   first.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_AUTO;
 
   SearchOptions second = first;
   second.max_output_tokens = 64;
   second.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
-  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second));
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
 
   second.temperature = 1.0f;
-  EXPECT_FALSE(first.HasSameRetainedGenerationSettings(second));
+  second.seed = 2;
+  EXPECT_FALSE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kDynamicEngine));
+
+  second = first;
+  second.frequency_penalty = 0.0f;
+  second.presence_penalty = 0.0f;
+  second.early_stopping = false;
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
 }
 
 TEST(SearchOptionsParsingTest, StopStringsRoundTripWithoutReplacingEarlyStopping) {
