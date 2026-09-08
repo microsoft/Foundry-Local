@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "inferencing/generative/chat/search_options.h"
 #include "exception.h"
+#include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/toolcalling/grammar.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 
@@ -9,8 +10,31 @@
 #include <ort_genai.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fl {
+
+namespace {
+
+void ValidateTemperature(float temperature) {
+  if (!(temperature >= 0.0f && temperature <= 2.0f)) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "temperature must be in the range [0.0, 2.0]");
+  }
+}
+
+void ValidateTopP(float top_p) {
+  if (!std::isfinite(top_p) || top_p < 0.0f || top_p > 1.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "top_p must be finite and in the range [0.0, 1.0]");
+  }
+}
+
+void ValidateTopK(int top_k) {
+  if (top_k < 0) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "top_k must be 0 or greater");
+  }
+}
+
+}  // namespace
 
 int ResolveMaxOutputTokens(const SearchOptions& options, int default_max_output_tokens) {
   const int max_output = options.max_output_tokens.value_or(default_max_output_tokens);
@@ -21,7 +45,20 @@ int ResolveMaxOutputTokens(const SearchOptions& options, int default_max_output_
   return max_output;
 }
 
-void ApplyGuidanceOptions(const ToolCallContext& tool_ctx, OgaGeneratorParams& gen_params) {
+int GetModelMaxContextLength(const GenAIConfig& config) {
+  int model_max_length = 0;
+  if (config.search.has_value()) {
+    model_max_length = config.search->max_length;
+  }
+
+  if (model_max_length <= 0) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model genai_config.json is missing search.max_length");
+  }
+
+  return model_max_length;
+}
+
+std::optional<TurnGuidanceOptions> ResolveTurnGuidanceOptions(const ToolCallContext& tool_ctx) {
   std::string guidance_type;
   std::string guidance_data;
 
@@ -42,8 +79,111 @@ void ApplyGuidanceOptions(const ToolCallContext& tool_ctx, OgaGeneratorParams& g
 
   const bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
   if (!guidance_type.empty() && !guidance_data.empty() && tool_call_only) {
+    return TurnGuidanceOptions{std::move(guidance_type), std::move(guidance_data)};
+  }
+
+  return std::nullopt;
+}
+
+SamplingPlan ResolveSamplingPlan(const SearchOptions& options) {
+  if (options.temperature.has_value()) {
+    ValidateTemperature(*options.temperature);
+  }
+
+  if (options.top_p.has_value()) {
+    ValidateTopP(*options.top_p);
+  }
+
+  if (options.top_k.has_value()) {
+    ValidateTopK(*options.top_k);
+  }
+
+  SamplingPlan plan;
+  plan.do_sample = options.do_sample;
+  if (!plan.do_sample.has_value() && options.temperature.has_value()) {
+    plan.do_sample = *options.temperature > 0.0f;
+  }
+  plan.temperature = options.temperature;
+  plan.top_p = options.top_p;
+  plan.top_k = options.top_k;
+  // Mirrors EffectiveTurnPolicy::IsGreedy() restricted to what the caller actually spelled out. The model's own
+  // search defaults can force greedy too, but Foundry cannot observe them, so only the caller's settings are used.
+  plan.greedy = plan.do_sample == false || options.temperature == 0.0f || options.top_k == 1;
+
+  if (!plan.greedy) {
+    return plan;
+  }
+
+  // Drop only the explicitly set scalars a greedy turn would ignore, matching ValidateTurnPolicy's contradiction
+  // rules. Neutral values are kept because honoring them exactly is what a greedy turn already does: temperature 0
+  // (and 1, which rescales nothing), top_p 0 or 1, and top_k 0 or 1.
+  if (plan.temperature.has_value() && *plan.temperature != 0.0f && *plan.temperature != 1.0f) {
+    plan.temperature.reset();
+  }
+
+  if (plan.top_p.has_value() && *plan.top_p > 0.0f && *plan.top_p < 1.0f) {
+    plan.top_p.reset();
+  }
+
+  if (plan.top_k.has_value() && *plan.top_k > 1) {
+    plan.top_k.reset();
+  }
+
+  return plan;
+}
+
+bool ShouldForwardStopSequencesToEngine(ChatBackendKind backend_kind) {
+  return backend_kind == ChatBackendKind::kDynamicEngine;
+}
+
+bool SupportsPerTurnSeed(ChatBackendKind backend_kind) {
+  return backend_kind == ChatBackendKind::kDynamicEngine;
+}
+
+EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
+                                                 const ToolCallContext& tool_ctx,
+                                                 ChatBackendKind backend_kind,
+                                                 int default_max_output_tokens) {
+  EngineTurnOptionsPlan plan;
+  plan.max_generated_tokens = ResolveMaxOutputTokens(options, default_max_output_tokens);
+  plan.sampling = ResolveSamplingPlan(options);
+
+  // Preserve the existing Foundry/OpenAI mapping used by the Generator path. Zero is OpenAI's neutral value, so it
+  // must not overwrite a model-authored repetition penalty with ORT GenAI's invalid value zero.
+  if (options.frequency_penalty.has_value() && *options.frequency_penalty != 0.0f) {
+    if (!std::isfinite(*options.frequency_penalty) || *options.frequency_penalty <= 0.0f) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               "frequency_penalty must be finite and greater than zero when specified");
+    }
+
+    plan.repetition_penalty = *options.frequency_penalty;
+  }
+
+  // A per-turn seed is the only seed channel once Requests carry no generator params, and upstream refuses one
+  // outside dynamic batching. Reject instead of dropping it: a caller asking for reproducible output must not be
+  // told the request succeeded when the seed was never applied.
+  if (options.seed.has_value()) {
+    if (!SupportsPerTurnSeed(backend_kind)) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               "seed is not supported by this model's static-batching Engine backend; "
+               "a per-turn seed requires an Engine configured for dynamic batching");
+    }
+
+    plan.seed = *options.seed;
+  }
+
+  if (ShouldForwardStopSequencesToEngine(backend_kind)) {
+    plan.stop_sequences = options.stop_sequences;
+  }
+
+  plan.guidance = ResolveTurnGuidanceOptions(tool_ctx);
+  return plan;
+}
+
+void ApplyGuidanceOptions(const ToolCallContext& tool_ctx, OgaGeneratorParams& gen_params) {
+  if (const auto guidance = ResolveTurnGuidanceOptions(tool_ctx)) {
     try {
-      gen_params.SetGuidance(guidance_type.c_str(), guidance_data.c_str());
+      gen_params.SetGuidance(guidance->type.c_str(), guidance->data.c_str());
     } catch (const std::runtime_error&) {
       // Some model/runtime combinations do not implement guidance. Preserve the existing unguided behavior.
     }
@@ -57,15 +197,7 @@ int ApplySearchOptions(const SearchOptions& options,
                        ExecutionProvider ep,
                        bool use_full_context,
                        int default_max_output_tokens) {
-  // Determine model's max context length from genai_config.json search.max_length
-  int model_max_length = 0;
-  if (config.search.has_value()) {
-    model_max_length = config.search->max_length;
-  }
-
-  if (model_max_length <= 0) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model genai_config.json is missing search.max_length");
-  }
+  const int model_max_length = GetModelMaxContextLength(config);
 
   // genai_config.json's search.max_length (read above) is the source of truth for the total input+output budget.
   // The catalog's maxOutputTokens is informational metadata only and is intentionally NOT used to clamp generation:
@@ -91,33 +223,34 @@ int ApplySearchOptions(const SearchOptions& options,
                                  : std::min(model_max_length, total_required);
   gen_params.SetSearchOption("max_length", static_cast<double>(effective_max_length));
 
-  // Temperature
-  if (options.temperature.has_value()) {
-    const float temperature = *options.temperature;
-    if (!(temperature >= 0.0f && temperature <= 2.0f)) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "temperature must be in the range [0.0, 2.0]");
+  // One shared normalization for every backend: the same combination is forwarded to a classic generator, to an
+  // Engine request built from params, and to per-turn Engine options.
+  const SamplingPlan sampling = ResolveSamplingPlan(options);
+
+  if (sampling.temperature.has_value()) {
+    gen_params.SetSearchOption("temperature", static_cast<double>(*sampling.temperature));
+  }
+
+  if (sampling.top_p.has_value()) {
+    gen_params.SetSearchOption("top_p", static_cast<double>(*sampling.top_p));
+  }
+
+  if (sampling.top_k.has_value()) {
+    gen_params.SetSearchOption("top_k", static_cast<double>(*sampling.top_k));
+  }
+
+  // Preserve the established Foundry mapping while treating OpenAI's neutral zero as no override. ORT GenAI uses
+  // multiplicative repetition_penalty semantics and rejects values at or below zero.
+  if (options.frequency_penalty.has_value() && *options.frequency_penalty != 0.0f) {
+    if (!std::isfinite(*options.frequency_penalty) || *options.frequency_penalty <= 0.0f) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               "frequency_penalty must be finite and greater than zero when specified");
     }
 
-    gen_params.SetSearchOption("temperature", static_cast<double>(temperature));
-  }
-
-  // top_p
-  if (options.top_p.has_value()) {
-    gen_params.SetSearchOption("top_p", static_cast<double>(*options.top_p));
-  }
-
-  // top_k
-  if (options.top_k.has_value()) {
-    gen_params.SetSearchOption("top_k", static_cast<double>(*options.top_k));
-  }
-
-  // Frequency penalty → repetition_penalty in ORT GenAI
-  if (options.frequency_penalty.has_value()) {
     gen_params.SetSearchOption("repetition_penalty", static_cast<double>(*options.frequency_penalty));
   }
 
-  // Presence penalty → diversity_penalty in ORT GenAI
-  if (options.presence_penalty.has_value()) {
+  if (options.presence_penalty.has_value() && *options.presence_penalty != 0.0f) {
     gen_params.SetSearchOption("diversity_penalty", static_cast<double>(*options.presence_penalty));
   }
 
@@ -126,17 +259,13 @@ int ApplySearchOptions(const SearchOptions& options,
     gen_params.SetSearchOption("random_seed", static_cast<double>(*options.seed));
   }
 
-  // do_sample: if temperature is set and > 0, enable sampling. If temperature == 0, greedy.
-  if (options.do_sample.has_value()) {
-    gen_params.SetSearchOptionBool("do_sample", *options.do_sample);
-  } else if (options.temperature.has_value()) {
-    gen_params.SetSearchOptionBool("do_sample", *options.temperature > 0.0f);
-  } else {
-    // Default: enable sampling (matches C# behavior)
-    gen_params.SetSearchOptionBool("do_sample", true);
+  // Preserve the model default when neither do_sample nor temperature was supplied. An explicit temperature retains
+  // the established Foundry behavior of selecting sampling above zero and greedy decoding at zero.
+  if (sampling.do_sample.has_value()) {
+    gen_params.SetSearchOptionBool("do_sample", *sampling.do_sample);
   }
 
-  // Early stopping — set when stop sequences are present (matches C# behavior)
+  // Early stopping is the legacy generator-side boolean, independent from decoded stop strings.
   if (options.early_stopping.value_or(false)) {
     gen_params.SetSearchOptionBool("early_stopping", true);
   }
@@ -192,8 +321,8 @@ SearchOptions SearchOptions::FromParameters(const KeyValuePairs& params) {
   };
 
   opts.temperature = try_float(FOUNDRY_LOCAL_PARAM_TEMPERATURE);
-  if (opts.temperature.has_value() && !(*opts.temperature >= 0.0f && *opts.temperature <= 2.0f)) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "temperature must be in the range [0.0, 2.0]");
+  if (opts.temperature.has_value()) {
+    ValidateTemperature(*opts.temperature);
   }
 
   opts.top_p = try_float(FOUNDRY_LOCAL_PARAM_TOP_P);
@@ -202,6 +331,7 @@ SearchOptions SearchOptions::FromParameters(const KeyValuePairs& params) {
   opts.frequency_penalty = try_float(FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY);
   opts.presence_penalty = try_float(FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY);
   opts.seed = try_int(FOUNDRY_LOCAL_PARAM_SEED);
+  opts.stop_sequences = LoadStopStringsOption(params);
 
   auto try_bool = [&](const std::string& key) -> std::optional<bool> {
     auto it = params.find(key);

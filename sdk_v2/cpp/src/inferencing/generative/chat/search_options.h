@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 // Forward declarations — avoid pulling ort_genai.h into the header
 struct OgaGeneratorParams;
@@ -18,6 +19,41 @@ struct OgaGeneratorParams;
 namespace fl {
 
 struct ToolCallContext;
+
+struct TurnGuidanceOptions {
+  std::string type;
+  std::string data;
+};
+
+/// Caller-expressed sampling settings, normalized to a combination ORT GenAI accepts.
+///
+/// ORT GenAI resolves a turn as `model search defaults + explicit overrides` and calls the result greedy when
+/// `!do_sample || top_k == 1 || temperature == 0` (`Generators::EffectiveTurnPolicy::IsGreedy`). A greedy turn draws
+/// from no distribution, so `Generators::ValidateTurnPolicy` rejects any *explicitly set* scalar it would ignore: a
+/// temperature other than 0 or 1, a top_p strictly inside (0, 1), or a top_k above 1. Scalars the caller never set are
+/// left unset here so the model's own defaults keep deciding — materializing a Foundry default would silently override
+/// model policy and can itself be rejected upstream.
+struct SamplingPlan {
+  std::optional<bool> do_sample;
+  std::optional<float> temperature;
+  std::optional<float> top_p;
+  std::optional<int> top_k;
+
+  /// True when the caller's own settings already force top-logit selection.
+  bool greedy = false;
+};
+
+/// Per-turn Engine settings for the newer ORT GenAI `OgaTurnOptions` surface.
+/// Only fields upstream actually implements are represented; anything absent stays at the model's own default for
+/// that turn (upstream: "an unset option means use the model-configured default for this Turn").
+struct EngineTurnOptionsPlan {
+  int max_generated_tokens = 0;
+  SamplingPlan sampling;
+  std::optional<float> repetition_penalty;
+  std::optional<int> seed;
+  std::vector<std::string> stop_sequences;
+  std::optional<TurnGuidanceOptions> guidance;
+};
 
 /// Parameters extracted from a request that map to ORT GenAI search options.
 /// Decoupled from any specific request type so both C API and C++ API can use it.
@@ -31,6 +67,7 @@ struct SearchOptions {
   std::optional<int> seed;
   std::optional<bool> do_sample;
   std::optional<bool> early_stopping;
+  std::vector<std::string> stop_sequences;
 
   /// Controls whether the model is allowed/required to emit tool calls for this turn.
   /// Wire string ("auto"/"none"/"required") is parsed to the typed enum at the API boundary;
@@ -56,6 +93,34 @@ struct SearchOptions {
 
 /// Return the explicit or default output-token limit for a text generation turn.
 int ResolveMaxOutputTokens(const SearchOptions& options, int default_max_output_tokens = 2048);
+
+/// Return the model's total context window from genai_config.json.
+int GetModelMaxContextLength(const GenAIConfig& config);
+
+/// Resolve the guidance configuration that should apply to a single tool-only turn.
+std::optional<TurnGuidanceOptions> ResolveTurnGuidanceOptions(const ToolCallContext& tool_ctx);
+
+/// Normalize caller-expressed sampling settings for one turn. See SamplingPlan.
+/// Throws fl::Exception when a value is outside the range ORT GenAI accepts for any turn.
+SamplingPlan ResolveSamplingPlan(const SearchOptions& options);
+
+/// Whether Engine turn options may carry stop strings for this backend.
+/// Upstream rejects them outside dynamic batching ("Stop strings require an Engine configured for dynamic
+/// batching."), so OpenAI `stop` stays host-filtered on a static Engine.
+bool ShouldForwardStopSequencesToEngine(ChatBackendKind backend_kind);
+
+/// Whether Engine turn options may carry a per-turn seed for this backend.
+/// Upstream rejects one outside dynamic batching ("A per-turn seed requires an Engine configured for dynamic
+/// batching."), and there is no request-level seed on the newer no-params `CreateRequest`.
+bool SupportsPerTurnSeed(ChatBackendKind backend_kind);
+
+/// Resolve SearchOptions + ToolCallContext into the per-turn Engine settings used by newer OGA headers.
+/// Throws fl::Exception when the request asks for something this backend cannot honor per turn (for example a seed
+/// on a static-batching Engine), so it is rejected at the Foundry boundary instead of being silently dropped.
+EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
+                                                 const ToolCallContext& tool_ctx,
+                                                 ChatBackendKind backend_kind,
+                                                 int default_max_output_tokens = 2048);
 
 /// Apply search options to OgaGeneratorParams.
 /// Validates token budget (input + output vs model max_length from config).

@@ -13,6 +13,7 @@ namespace fl {
 class GenAIModelInstance;
 struct MessageItem;
 struct SearchOptions;
+struct ToolCallContext;
 
 struct ChatTurnUsage {
   int prompt_tokens = 0;
@@ -58,7 +59,7 @@ class ChatGenerator {
   /// Append a new conversational turn to retained model state.
   virtual int AppendMessages(const std::vector<MessageItem>& new_messages,
                              GenAIModelInstance& model,
-                             const std::string& tools_json,
+                             const ToolCallContext& tool_ctx,
                              const SearchOptions& options) = 0;
 
   /// Returns whether this backend can rewind retained model state directly.

@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #pragma once
 
@@ -17,6 +17,40 @@ namespace fl {
 
 class GenAIModelInstance;
 class ChatGenerator;
+
+namespace chat_session_internal {
+
+/// Resolve the final finish reason for one generated turn.
+/// Complete tool calls win over a later host-side stop-string match because the
+/// structured tool-call protocol is the durable caller-visible outcome.
+flFinishReason ResolveGeneratedFinishReason(bool canceled,
+                                            bool has_tool_calls,
+                                            bool stop_sequence_matched,
+                                            std::optional<flFinishReason> backend_finish_reason,
+                                            int completion_tokens,
+                                            std::optional<int> max_output_tokens);
+
+/// Whether the retained generator must be rebuilt from full history before appending this turn.
+///
+/// Guidance is baked into a classic generator at creation time, and ORT GenAI only allows continuous decoding on a
+/// static-batching Engine while exactly one request is resident in the batch
+/// (`Engine::ValidateRequestCanContinue`: "Continuous decoding requires exactly one resident request in a static
+/// engine batch"). Foundry sizes a static Engine from `engine.static_batching.max_batch_size` and lets a model host
+/// several conversations, so it can never prove that precondition — a static Engine always rebuilds.
+bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
+                                                bool guidance_requirement_changed,
+                                                bool guidance_payload_changed,
+                                                bool retained_generation_settings_changed);
+
+/// Whether retained backend state must be discarded after a successful turn commits.
+/// Host-side stop filtering can leave retained state ahead of committed history, so
+/// stop matches invalidate even when the current turn still succeeds.
+bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
+                                                                bool grammar_was_active,
+                                                                bool reasoning_was_active,
+                                                                bool stop_sequence_matched);
+
+}  // namespace chat_session_internal
 
 /// A chat session that maintains conversation history across turns.
 /// Designed for multi-turn conversations where message history accumulates
@@ -92,6 +126,7 @@ class ChatSession : public Session {
   /// in the final response.
   void ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
                               const SearchOptions& effective_options, bool canceled,
+                              bool stop_sequence_matched,
                               Response& response, int prompt_tokens, int total_tokens,
                               std::vector<ParsedToolCall> pre_parsed_calls = {},
                               std::optional<flFinishReason> backend_finish_reason = std::nullopt);

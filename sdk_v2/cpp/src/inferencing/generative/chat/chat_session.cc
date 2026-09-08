@@ -5,9 +5,10 @@
 
 #include "contracts/chat_completions.h"
 #include "contracts/chat_completions_converter.h"
-#include "inferencing/generative/chat/onnx_engine_chat_generator.h"
 #include "inferencing/generative/chat/onnx_chat_generator.h"
+#include "inferencing/generative/chat/onnx_engine_chat_generator.h"
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
+#include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/genai_model_instance.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/generative/toolcalling/tool_call_stream_accumulator.h"
@@ -15,8 +16,8 @@
 #include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/text_item.h"
-#include "items/tool_result_item.h"
 #include "items/tool_call_item.h"
+#include "items/tool_result_item.h"
 #include "model.h"
 #include "utils.h"
 
@@ -61,7 +62,92 @@ std::unique_ptr<ChatGenerator> CreateTextChatGenerator(const std::vector<Message
   return OnnxChatGenerator::Create(messages, options, model, tool_ctx, use_full_context);
 }
 
+template <typename SegmentProcessor>
+bool PushDecodedFragment(const std::string& fragment,
+                         StopStringFilter& stop_filter,
+                         ReasoningStreamSplitter& splitter,
+                         std::string& filtered_text,
+                         SegmentProcessor&& process_segments) {
+  if (fragment.empty() || stop_filter.matched()) {
+    return stop_filter.matched();
+  }
+
+  auto filtered = stop_filter.Push(fragment);
+  if (!filtered.empty()) {
+    filtered_text += filtered;
+    process_segments(splitter.Push(filtered));
+  }
+
+  return stop_filter.matched();
+}
+
+template <typename SegmentProcessor>
+void FlushDecodedStream(StopStringFilter& stop_filter,
+                        ReasoningStreamSplitter& splitter,
+                        std::string& filtered_text,
+                        SegmentProcessor&& process_segments) {
+  if (!stop_filter.matched()) {
+    auto tail = stop_filter.Flush();
+    if (!tail.empty()) {
+      filtered_text += tail;
+      process_segments(splitter.Push(tail));
+    }
+  }
+
+  process_segments(splitter.Flush());
+}
+
 }  // namespace
+
+namespace chat_session_internal {
+
+flFinishReason ResolveGeneratedFinishReason(bool canceled,
+                                            bool has_tool_calls,
+                                            bool stop_sequence_matched,
+                                            std::optional<flFinishReason> backend_finish_reason,
+                                            int completion_tokens,
+                                            std::optional<int> max_output_tokens) {
+  if (canceled) {
+    return FOUNDRY_LOCAL_FINISH_NONE;
+  }
+
+  if (has_tool_calls) {
+    return FOUNDRY_LOCAL_FINISH_TOOL_CALLS;
+  }
+
+  if (stop_sequence_matched) {
+    return FOUNDRY_LOCAL_FINISH_STOP;
+  }
+
+  if (backend_finish_reason.has_value()) {
+    return *backend_finish_reason;
+  }
+
+  if (const int max_output = max_output_tokens.value_or(0);
+      max_output > 0 && completion_tokens >= max_output) {
+    return FOUNDRY_LOCAL_FINISH_LENGTH;
+  }
+
+  return FOUNDRY_LOCAL_FINISH_STOP;
+}
+
+bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
+                                                bool guidance_requirement_changed,
+                                                bool guidance_payload_changed,
+                                                bool retained_generation_settings_changed) {
+  return guidance_requirement_changed || guidance_payload_changed || retained_generation_settings_changed ||
+         backend_kind == ChatBackendKind::kStaticEngine;
+}
+
+bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
+                                                                bool grammar_was_active,
+                                                                bool reasoning_was_active,
+                                                                bool stop_sequence_matched) {
+  return stop_sequence_matched || reasoning_was_active || grammar_was_active ||
+         backend_kind == ChatBackendKind::kStaticEngine;
+}
+
+}  // namespace chat_session_internal
 
 ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry)
     : Session(catalog_model, logger, telemetry), logger_(logger), model_(model) {
@@ -335,6 +421,7 @@ static std::vector<TextSegment> SplitReasoningContent(const std::string& text,
 
 void ChatSession::ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
                                          const SearchOptions& effective_options, bool canceled,
+                                         bool stop_sequence_matched,
                                          Response& response, int prompt_tokens, int total_tokens,
                                          std::vector<ParsedToolCall> pre_parsed_calls,
                                          std::optional<flFinishReason> backend_finish_reason) {
@@ -395,21 +482,9 @@ void ChatSession::ProcessGeneratedOutput(std::string text, const ToolCallContext
     response.items.push_back(std::move(output_item));
   }
 
-  if (canceled) {
-    response.finish_reason = FOUNDRY_LOCAL_FINISH_NONE;
-  } else if (has_tool_calls) {
-    response.finish_reason = FOUNDRY_LOCAL_FINISH_TOOL_CALLS;
-  } else if (backend_finish_reason.has_value()) {
-    response.finish_reason = *backend_finish_reason;
-  } else {
-    int max_output = effective_options.max_output_tokens.value_or(0);
-
-    if (max_output > 0 && completion_tokens >= max_output) {
-      response.finish_reason = FOUNDRY_LOCAL_FINISH_LENGTH;
-    } else {
-      response.finish_reason = FOUNDRY_LOCAL_FINISH_STOP;
-    }
-  }
+  response.finish_reason = chat_session_internal::ResolveGeneratedFinishReason(
+      canceled, has_tool_calls, stop_sequence_matched, backend_finish_reason, completion_tokens,
+      effective_options.max_output_tokens);
 
   response.usage.prompt_tokens = prompt_tokens;
   response.usage.completion_tokens = completion_tokens;
@@ -489,45 +564,38 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // Merge session-level and per-request options once for this turn.
   auto effective_kvp = MergedOptions(request.options);
   SearchOptions effective_options = SearchOptions::FromParameters(effective_kvp);
+  const ChatBackendKind backend_kind = Model().GetGenAIConfig().GetChatBackendKind();
 
   int prompt_tokens = 0;
   int pre_turn_token_count = 0;
   bool can_rewind_to_pre_turn = true;
 
-  if (cached_generator_ &&
-      !cached_search_options_.HasSameRetainedGenerationSettings(effective_options)) {
-    cached_generator_.reset();
-    cached_tool_ctx_ = {};
-  }
-
   if (cached_generator_) {
-    // Check if guidance requirements changed since the generator was created. Guidance (LARK grammar) is baked into
-    // the OGA generator at creation time and cannot be changed. If tool_choice went from "required" to "auto" (or
-    // vice versa), we must recreate the generator from full history.
+    // Guidance (LARK grammar) is baked into a classic generator at creation time, and an Engine request built from
+    // OgaGeneratorParams snapshots its search settings for every turn, so any change to either has to rebuild.
     auto turn_tool_ctx = cached_tool_ctx_;
     UpdateToolContextForTurn(request, turn_tool_ctx);
 
-    bool prev_needs_guidance = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
-    bool curr_needs_guidance = turn_tool_ctx.tool_output && !turn_tool_ctx.text_output;
+    const bool prev_needs_guidance = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
+    const bool curr_needs_guidance = turn_tool_ctx.tool_output && !turn_tool_ctx.text_output;
     const bool guidance_changed =
         cached_tool_ctx_.guidance_type != turn_tool_ctx.guidance_type ||
         cached_tool_ctx_.guidance_data != turn_tool_ctx.guidance_data;
 
-    const bool static_engine =
-        Model().GetGenAIConfig().GetChatBackendKind() == ChatBackendKind::kStaticEngine;
-    if (prev_needs_guidance != curr_needs_guidance || guidance_changed || static_engine) {
-      // Guidance requirements changed — invalidate. The branch below will rebuild from full history.
+    if (chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend(
+            backend_kind, prev_needs_guidance != curr_needs_guidance, guidance_changed,
+            !cached_search_options_.HasSameRetainedGenerationSettings(effective_options))) {
+      // The branch below rebuilds from full history.
       cached_generator_.reset();
       cached_tool_ctx_ = {};
     } else {
       // Continuous decoding: append only the new messages to the existing generator.
       pre_turn_token_count = cached_generator_->TokenCount();
       try {
-        prompt_tokens = cached_generator_->AppendMessages(new_messages, Model(), cached_tool_ctx_.tools_json,
-                                                          effective_options);
+        prompt_tokens = cached_generator_->AppendMessages(new_messages, Model(), turn_tool_ctx, effective_options);
 
         // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
-        UpdateToolContextForTurn(request, cached_tool_ctx_);
+        cached_tool_ctx_ = std::move(turn_tool_ctx);
       } catch (const OnnxChatEngine::ConversationEvictedError&) {
         cached_generator_.reset();
         cached_tool_ctx_ = {};
@@ -575,6 +643,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   std::string text;
   auto streaming_callback = CreateCallbackHandler(request);
   int output_tokens = 0;
+  StopStringFilter stop_filter(effective_options.stop_sequences);
+  bool stop_sequence_matched = false;
 
   // Splitter: only active for reasoning models. For non-reasoning models start_marker is empty and the splitter
   // degrades to a passthrough (every token becomes one DEFAULT segment), so the streaming path stays uniform.
@@ -647,9 +717,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     std::string token = cached_generator_->Decode();
     ++output_tokens;
 
-    if (!token.empty()) {
-      text += token;
-      emit_segments(splitter.Push(token));
+    if (PushDecodedFragment(token, stop_filter, splitter, text, emit_segments)) {
+      stop_sequence_matched = true;
+      break;
     }
 
     // Enforce max_output_tokens — with use_full_context the OGA max_length
@@ -661,10 +731,12 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   // End-of-stream: drain the reasoning splitter first so any final DEFAULT bytes feed into the tool accumulator,
   // then drain the tool accumulator.
-  emit_segments(splitter.Flush());
+  FlushDecodedStream(stop_filter, splitter, text, emit_segments);
   flush_accumulator();
 
   if (request.canceled) {
+    cached_generator_->Cancel();
+  } else if (stop_sequence_matched && !cached_generator_->IsDone()) {
     cached_generator_->Cancel();
   }
 
@@ -685,7 +757,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     }
   }
 
-  ProcessGeneratedOutput(std::move(text), cached_tool_ctx_, effective_options, request.canceled,
+  ProcessGeneratedOutput(std::move(text), cached_tool_ctx_, effective_options, request.canceled, stop_sequence_matched,
                          response, prompt_tokens, total_tokens, std::move(streamed_tool_calls),
                          backend_finish_reason);
 
@@ -696,24 +768,21 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   // Commit input messages + assistant reply to history only on success (not cancelled)
   if (!request.canceled) {
+    const bool grammar_was_active = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
+    const bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
+    const bool discard_after_success =
+        chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+            backend_kind, grammar_was_active, reasoning_was_active, stop_sequence_matched);
+
     // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
     // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
     // return true on the next turn. Invalidate after any grammar-guided generation so the next turn rebuilds.
     //
     // Reasoning models (qwen3, etc.) also need invalidation: continuous decoding leaves prior <think> tokens in the KV
     // cache and the model fails to close subsequent reasoning blocks. The chat template strips prior </think> content
-    // when re-applied to history, so a rebuild restores correct behavior. This matches C#, which always applies the
-    // full template per turn.
-    bool grammar_was_active = cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output;
-    bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
-
-    const bool static_engine =
-        Model().GetGenAIConfig().GetChatBackendKind() == ChatBackendKind::kStaticEngine;
-    if (grammar_was_active || reasoning_was_active || static_engine) {
-      cached_generator_.reset();
-      cached_tool_ctx_ = {};
-    }
-
+    // when re-applied to history, so a rebuild restores correct behavior. Host-side stop filtering also forces a
+    // rebuild: the retained backend state still contains the matched stop token (or a latched cancellation for the
+    // classic generator), while committed history stores the filtered assistant text.
     CommitTurn(std::move(new_messages), response, pre_turn_token_count, total_tokens,
                can_rewind_to_pre_turn);
 
@@ -721,7 +790,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     // rebuilds from history. AppendMessages cannot extend a media-decoded
     // sequence; trying to do so would silently feed text into a state that
     // includes media-derived tokens.
-    if (media_turn) {
+    if (discard_after_success || media_turn) {
       cached_generator_.reset();
       cached_tool_ctx_ = {};
     }
@@ -886,19 +955,21 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
 
   // Generate token-by-token
   std::string text;
+  StopStringFilter stop_filter(options.stop_sequences);
+  bool stop_sequence_matched = false;
   while (!generator->IsDone() && !original_request.canceled) {
     generator->GenerateNextToken();
     std::string token = generator->Decode();
 
-    if (!token.empty()) {
-      text += token;
-      process_segments(splitter.Push(token));
+    if (PushDecodedFragment(token, stop_filter, splitter, text, process_segments)) {
+      stop_sequence_matched = true;
+      break;
     }
   }
 
   // Drain any buffered partial-marker bytes at end-of-stream. Reasoning splitter first so any final DEFAULT bytes
   // feed into the tool accumulator; then drain the tool accumulator.
-  process_segments(splitter.Flush());
+  FlushDecodedStream(stop_filter, splitter, text, process_segments);
   {
     auto out = tool_accumulator.Flush();
     emit_visible_text(std::move(out.visible_text));
@@ -906,6 +977,8 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   }
 
   if (original_request.canceled) {
+    generator->Cancel();
+  } else if (stop_sequence_matched && !generator->IsDone()) {
     generator->Cancel();
   }
 
@@ -920,7 +993,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   // Process the generated output into response items (MessageItem, ToolCallItem, etc.)
   // This also updates finish_reason, and usage on the response. Streamed-parsed tool calls are reused so call_ids
   // stay stable across stream deltas and the final ChatCompletionResponse.
-  ProcessGeneratedOutput(std::move(text), tool_ctx, options, original_request.canceled,
+  ProcessGeneratedOutput(std::move(text), tool_ctx, options, original_request.canceled, stop_sequence_matched,
                          response, prompt_tokens, total_tokens, std::move(streamed_tool_calls),
                          backend_finish_reason);
 

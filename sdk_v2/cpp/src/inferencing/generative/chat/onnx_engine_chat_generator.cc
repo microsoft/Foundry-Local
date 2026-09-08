@@ -119,21 +119,33 @@ void OnnxEngineChatGenerator::Cancel() {
 
 int OnnxEngineChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
                                             GenAIModelInstance& model,
-                                            const std::string& tools_json,
+                                            const ToolCallContext& tool_ctx,
                                             const SearchOptions& options) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
   }
 
-  auto prompt = BuildChatContinuationPrompt(new_messages, model, tools_json);
+  auto prompt = BuildChatContinuationPrompt(new_messages, model, tool_ctx.tools_json);
   auto sequences = EncodePrompt(prompt, model);
   const int count = static_cast<int>(sequences->SequenceCount(0));
   const auto* data = sequences->SequenceData(0);
-  engine_.BeginTurn(conversation_, std::span<const int32_t>(data, static_cast<size_t>(count)),
-                    ResolveMaxOutputTokens(options));
+  const std::span<const int32_t> input_ids(data, static_cast<size_t>(count));
+
+  // The continuation prompt is never decoded — only tokens the Engine generates reach the decoder.
+  engine_generator_internal::AdmitTurnThenResetDecoder(
+      [&] { engine_.BeginTurn(conversation_, input_ids, options, tool_ctx); },
+      [&] { ResetTurnDecoder(); });
+
   prompt_token_count_ = count;
   cancelled_ = false;
   return count;
+}
+
+void OnnxEngineChatGenerator::ResetTurnDecoder() {
+  // OgaTokenizerStream has no reset, and a stream that ended mid-code-point (or mid-BPE-merge) would otherwise
+  // corrupt the first chunk of the next turn. Drop any token the previous turn left undecoded for the same reason.
+  current_token_.reset();
+  stream_ = model_.GetPreprocessor().CreateTokenizerStream();
 }
 
 void OnnxEngineChatGenerator::RewindTo(int /*token_count*/) {
@@ -171,8 +183,8 @@ std::unique_ptr<OnnxEngineChatGenerator> OnnxEngineChatGenerator::Create(
   auto conversation = engine->CreateConversation(options, tool_ctx, prompt_token_count);
   try {
     const auto* data = sequences->SequenceData(0);
-    engine->BeginTurn(conversation, std::span<const int32_t>(data, static_cast<size_t>(prompt_token_count)),
-                      ResolveMaxOutputTokens(options));
+    engine->BeginTurn(conversation, std::span<const int32_t>(data, static_cast<size_t>(prompt_token_count)), options,
+                      tool_ctx);
 
     return std::unique_ptr<OnnxEngineChatGenerator>(
         new OnnxEngineChatGenerator(*engine, std::move(conversation), std::move(stream), model,

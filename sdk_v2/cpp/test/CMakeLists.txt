@@ -27,6 +27,7 @@ add_executable(foundry_local_tests
     internal_api/chat/chat_session_test.cc
     internal_api/chat/chat_template_test.cc
     internal_api/chat/onnx_chat_generator_vision_test.cc
+    internal_api/chat/stop_strings_test.cc
     internal_api/chat_completions_test.cc
     internal_api/chat_completions_converter_test.cc
     internal_api/configuration_test.cc

@@ -111,6 +111,62 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
 find_package(OnnxRuntime REQUIRED)
 
+include(CheckCXXSourceCompiles)
+
+set(CMAKE_REQUIRED_LIBRARIES OnnxRuntimeGenAI::OnnxRuntimeGenAI)
+unset(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS CACHE)
+unset(FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS CACHE)
+check_cxx_source_compiles("
+#include <cstddef>
+#include <cstdint>
+
+#include <ort_genai.h>
+
+void ProbeFullTurnOptions(OgaTurnOptions& options, const char* const* values, size_t count) {
+    options.SetMaxGeneratedTokens(static_cast<uint64_t>(1));
+    options.SetDoSample(true);
+    options.SetTemperature(0.0f);
+    options.SetTopP(0.0f);
+    options.SetTopK(1);
+    options.SetRepetitionPenalty(1.0f);
+    options.SetSeed(static_cast<uint64_t>(1));
+    auto stop_strings = OgaStringArray::Create(values, count);
+    options.SetStopStrings(*stop_strings);
+    options.SetGuidance(\"\", \"\");
+}
+
+int main(int argc, char** argv) {
+    const char* values[] = {argv[0]};
+    auto* options = reinterpret_cast<OgaTurnOptions*>(argv[argc - 1]);
+    ProbeFullTurnOptions(*options, values, 1);
+    return 0;
+}
+" FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS)
+check_cxx_source_compiles("
+#include <ort_genai.h>
+
+std::unique_ptr<OgaRequest> ProbeCreateRequestWithoutParams(
+    OgaEngine& engine, OgaRequestOptions* options) {
+    return engine.CreateRequest(options);
+}
+
+int main(int argc, char** argv) {
+    auto* engine = reinterpret_cast<OgaEngine*>(argv[argc - 1]);
+    auto* options = reinterpret_cast<OgaRequestOptions*>(argv[0]);
+    return ProbeCreateRequestWithoutParams(*engine, options) ? 0 : 1;
+}
+" FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS)
+unset(CMAKE_REQUIRED_LIBRARIES)
+
+if(FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS AND NOT FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS)
+    message(FATAL_ERROR
+        "Detected OgaEngine::CreateRequest(OgaRequestOptions*) without the full OgaTurnOptions "
+        "per-turn API used by Foundry Local retained Engine turns. This combination would drop "
+        "explicit sampling, stop-string, seed, and guidance settings. Use matched ORT GenAI "
+        "headers and libraries from either before or after the per-turn API change."
+    )
+endif()
+
 # WinML EP Catalog — Windows-only, for hardware EP discovery and download. The
 # WinML 2.x runtime is reg-free, delay-loaded, and degrades gracefully when the
 # DLL is absent, so it is always included on Windows; other platforms skip it.
@@ -247,6 +303,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/generative/toolcalling/tool_call_utils.cc
     src/inferencing/generative/toolcalling/grammar.cc
     src/inferencing/generative/chat/search_options.cc
+    src/inferencing/generative/chat/stop_strings.cc
     src/inferencing/predictive/inference_session.cc
     src/inferencing/predictive/tensor.cc
     src/manager.cc
@@ -295,6 +352,11 @@ list(APPEND FOUNDRY_LOCAL_SOURCES ${FOUNDRY_LOCAL_PUBLIC_HEADERS})
 #   PUBLIC  for the static lib (consumers must link the transitive deps)
 # --------------------------------------------------------------------------
 function(foundry_local_configure_target TARGET LINK_SCOPE)
+    string(CONCAT FOUNDRY_LOCAL_OGA_CREATE_REQUEST_WITHOUT_PARAMS_DEFINE
+        "FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS="
+        "$<BOOL:${FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS}>"
+    )
+
     target_compile_options(${TARGET} PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
 
     target_include_directories(${TARGET}
@@ -351,7 +413,10 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
     endif()
     target_compile_definitions(
         ${TARGET}
-        PRIVATE FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS=$<BOOL:${FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS}>
+        PRIVATE
+            FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS=$<BOOL:${FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS}>
+            FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS=$<BOOL:${FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS}>
+            ${FOUNDRY_LOCAL_OGA_CREATE_REQUEST_WITHOUT_PARAMS_DEFINE}
     )
 
     if(FOUNDRY_LOCAL_BUILD_SERVICE)

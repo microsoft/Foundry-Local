@@ -11,8 +11,96 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace fl {
+
+namespace {
+
+constexpr int kDefaultTextMaxOutputTokens = 2048;
+
+#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
+// Only options the caller expressed are set. Upstream treats an unset turn option as "use the model-configured
+// default for this Turn", so forwarding a Foundry-invented default would silently override model policy — and an
+// explicit do_sample=true is rejected outright when the model's own defaults still resolve the turn to greedy.
+void ApplyEngineTurnOptions(const EngineTurnOptionsPlan& plan, OgaTurnOptions& options) {
+  options.SetMaxGeneratedTokens(static_cast<uint64_t>(plan.max_generated_tokens));
+
+  if (plan.sampling.do_sample.has_value()) {
+    options.SetDoSample(*plan.sampling.do_sample);
+  }
+
+  if (plan.sampling.temperature.has_value()) {
+    options.SetTemperature(*plan.sampling.temperature);
+  }
+
+  if (plan.sampling.top_p.has_value()) {
+    options.SetTopP(*plan.sampling.top_p);
+  }
+
+  if (plan.sampling.top_k.has_value()) {
+    options.SetTopK(*plan.sampling.top_k);
+  }
+
+  if (plan.repetition_penalty.has_value()) {
+    options.SetRepetitionPenalty(*plan.repetition_penalty);
+  }
+
+  if (plan.seed.has_value()) {
+    options.SetSeed(static_cast<uint64_t>(*plan.seed));
+  }
+
+  if (!plan.stop_sequences.empty()) {
+    std::vector<const char*> raw_stop_strings;
+    raw_stop_strings.reserve(plan.stop_sequences.size());
+    for (const auto& stop : plan.stop_sequences) {
+      raw_stop_strings.push_back(stop.c_str());
+    }
+
+    auto stop_strings = OgaStringArray::Create(raw_stop_strings.data(), raw_stop_strings.size());
+    options.SetStopStrings(*stop_strings);
+  }
+
+  if (plan.guidance.has_value()) {
+    options.SetGuidance(plan.guidance->type.c_str(), plan.guidance->data.c_str());
+  }
+}
+#endif
+
+std::unique_ptr<OgaRequest> CreateEngineRequest(OgaEngine& engine,
+                                                GenAIModelInstance& model,
+                                                const SearchOptions& options,
+                                                const ToolCallContext& tool_ctx,
+                                                int input_token_count,
+                                                OgaRequestOptions* request_options) {
+#if defined(FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS) && \
+    FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS
+#if !defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) || !FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
+#error "CreateRequest(OgaRequestOptions*) requires full per-turn OgaTurnOptions support"
+#endif
+  (void)model;
+  (void)options;
+  (void)tool_ctx;
+  (void)input_token_count;
+  return engine.CreateRequest(request_options);
+#else
+  auto params = OgaGeneratorParams::Create(model.GetOgaModel());
+
+#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
+  (void)options;
+  (void)tool_ctx;
+  (void)input_token_count;
+  return engine.CreateRequest(*params, request_options);
+#else
+  ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *params, model.EP(),
+                     /*use_full_context=*/true);
+  ApplyGuidanceOptions(tool_ctx, *params);
+  return engine.CreateRequest(*params, request_options);
+#endif
+#endif
+}
+
+}  // namespace
 
 struct OnnxChatEngine::NativeConversation {
   std::unique_ptr<OgaRequest> request;
@@ -53,11 +141,11 @@ std::shared_ptr<OnnxChatEngine::Conversation> OnnxChatEngine::CreateConversation
 
   Enqueue(
       [this, conversation, options, tool_ctx, input_token_count, completion]() {
-        auto params = OgaGeneratorParams::Create(model_.GetOgaModel());
-        ApplySearchOptions(options, input_token_count, model_.GetGenAIConfig(), *params, model_.EP(),
-                           /*use_full_context=*/true);
-        ApplyGuidanceOptions(tool_ctx, *params);
-        auto request = engine_->CreateRequest(*params);
+        auto request_options = OgaRequestOptions::Create();
+        request_options->SetMaxSessionTokens(static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig())));
+
+        auto request = CreateEngineRequest(*engine_, model_, options, tool_ctx, input_token_count,
+                                           request_options.get());
         conversations_.emplace(conversation.get(),
                                std::make_unique<NativeConversation>(
                                    NativeConversation{std::move(request), conversation}));
@@ -71,7 +159,8 @@ std::shared_ptr<OnnxChatEngine::Conversation> OnnxChatEngine::CreateConversation
 
 uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversation,
                                    std::span<const int32_t> input_ids,
-                                   std::optional<int> max_output_tokens) {
+                                   const SearchOptions& options,
+                                   const ToolCallContext& tool_ctx) {
   if (input_ids.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "Engine turn input must not be empty");
   }
@@ -81,26 +170,45 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
   auto ready = completion->get_future();
 
   Enqueue(
-      [this, conversation, tokens = std::move(tokens), max_output_tokens, completion]() {
+      [this, conversation, tokens = std::move(tokens), options, tool_ctx, completion]() {
         auto& native = FindNative(conversation);
-        std::unique_ptr<OgaTurnOptions> options;
-        if (max_output_tokens.has_value()) {
-          options = native.request->CreateTurnOptions();
-          options->SetMaxGeneratedTokens(static_cast<uint64_t>(*max_output_tokens));
-        }
+        auto turn_options = native.request->CreateTurnOptions();
+        size_t existing_tokens = 0;
 
         {
           std::lock_guard<std::mutex> lock(conversation->mutex);
           if (!conversation->turn_finished) {
             throw std::runtime_error("Cannot begin an Engine turn while another turn is active.");
           }
+          existing_tokens = conversation->sequence_length;
           conversation->tokens.clear();
           conversation->error = nullptr;
           conversation->result = {};
           conversation->turn_finished = false;
         }
 
-        const uint64_t turn_id = native.request->BeginTurn(tokens.data(), tokens.size(), options.get());
+#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
+        auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, model_.GetGenAIConfig().GetChatBackendKind(),
+                                               kDefaultTextMaxOutputTokens);
+        const uint64_t total_required = static_cast<uint64_t>(existing_tokens) + static_cast<uint64_t>(tokens.size()) +
+                                        static_cast<uint64_t>(plan.max_generated_tokens);
+        const uint64_t model_max_tokens = static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig()));
+        if (total_required > model_max_tokens) {
+          FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                   "request requires " + std::to_string(total_required) + " total tokens (" +
+                       std::to_string(existing_tokens) + " existing + " + std::to_string(tokens.size()) +
+                       " input + " + std::to_string(plan.max_generated_tokens) +
+                       " output), which exceeds the model's maximum context length of " +
+                       std::to_string(model_max_tokens) + " tokens");
+        }
+
+        ApplyEngineTurnOptions(plan, *turn_options);
+#else
+        turn_options->SetMaxGeneratedTokens(static_cast<uint64_t>(ResolveMaxOutputTokens(
+            options, kDefaultTextMaxOutputTokens)));
+#endif
+
+        const uint64_t turn_id = native.request->BeginTurn(tokens.data(), tokens.size(), turn_options.get());
         {
           std::lock_guard<std::mutex> lock(conversation->mutex);
           conversation->turn_id = turn_id;

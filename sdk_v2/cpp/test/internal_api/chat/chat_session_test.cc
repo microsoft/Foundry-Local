@@ -7,6 +7,7 @@
 #include "inferencing/generative/chat/chat_session.h"
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
+#include "inferencing/generative/chat/onnx_engine_chat_generator.h"
 #include "inferencing/generative/chat/search_options.h"
 #include "items/audio_item.h"
 #include "items/image_item.h"
@@ -25,6 +26,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -76,6 +78,97 @@ class EngineModelStaging {
 };
 
 }  // namespace
+
+TEST(ChatSessionDecisionTest, FinishReasonPrefersParsedToolCallsOverHostStop) {
+  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
+                /*canceled=*/false, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
+                FOUNDRY_LOCAL_FINISH_STOP, /*completion_tokens=*/8, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+}
+
+TEST(ChatSessionDecisionTest, PreAppendRebuildIsUnconditionalForStaticEngine) {
+  using chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend;
+
+  // A dynamic Engine or classic generator may continue when nothing that is baked into retained state changed.
+  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                          /*guidance_requirement_changed=*/false,
+                                                          /*guidance_payload_changed=*/false,
+                                                          /*retained_generation_settings_changed=*/false));
+  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kDynamicEngine,
+                                                          /*guidance_requirement_changed=*/false,
+                                                          /*guidance_payload_changed=*/false,
+                                                          /*retained_generation_settings_changed=*/false));
+
+  // Upstream only allows static-batch continuation while exactly one request is resident, which Foundry cannot
+  // guarantee, so a static Engine always rebuilds regardless of what else changed.
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kStaticEngine,
+                                                         /*guidance_requirement_changed=*/false,
+                                                         /*guidance_payload_changed=*/false,
+                                                         /*retained_generation_settings_changed=*/false));
+
+  // Settings baked into retained state invalidate on every backend: an Engine request snapshots them for all turns.
+  for (ChatBackendKind kind : {ChatBackendKind::kGenerator, ChatBackendKind::kDynamicEngine}) {
+    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/true,
+                                                           /*guidance_payload_changed=*/false,
+                                                           /*retained_generation_settings_changed=*/false));
+    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/false,
+                                                           /*guidance_payload_changed=*/true,
+                                                           /*retained_generation_settings_changed=*/false));
+    EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(kind, /*guidance_requirement_changed=*/false,
+                                                           /*guidance_payload_changed=*/false,
+                                                           /*retained_generation_settings_changed=*/true));
+  }
+}
+
+TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSemantics) {
+  using chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn;
+
+  EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+  EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kDynamicEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+
+  // A static Engine cannot be continued, and grammar/reasoning/host-side stop matches leave retained state ahead of
+  // the committed history on every backend.
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kStaticEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kDynamicEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kDynamicEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false));
+}
+
+TEST(EngineTurnDecoderTest, DecoderIsRefreshedOnlyAfterTheTurnIsAdmitted) {
+  int step = 0;
+  int admitted_at = 0;
+  int reset_at = 0;
+
+  engine_generator_internal::AdmitTurnThenResetDecoder([&] { admitted_at = ++step; }, [&] { reset_at = ++step; });
+
+  EXPECT_EQ(admitted_at, 1);
+  EXPECT_EQ(reset_at, 2);
+}
+
+TEST(EngineTurnDecoderTest, RejectedAdmissionLeavesTheDecoderUntouched) {
+  bool decoder_reset = false;
+  // Type-erased so the optimizer cannot prove the admission always throws and flag the reset call inside
+  // AdmitTurnThenResetDecoder as unreachable (MSVC C4702, which this build treats as an error).
+  const std::function<void()> reject_admission = [] { throw OnnxChatEngine::ConversationEvictedError(); };
+
+  EXPECT_THROW(
+      engine_generator_internal::AdmitTurnThenResetDecoder(reject_admission, [&] { decoder_reset = true; }),
+      OnnxChatEngine::ConversationEvictedError);
+
+  EXPECT_FALSE(decoder_reset);
+}
 
 // ===========================================================================
 // Integration test fixture: loads the shared test model once per suite

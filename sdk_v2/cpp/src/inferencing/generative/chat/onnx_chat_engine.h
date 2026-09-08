@@ -75,7 +75,8 @@ class OnnxChatEngine {
                                                    int input_token_count);
   uint64_t BeginTurn(const std::shared_ptr<Conversation>& conversation,
                      std::span<const int32_t> input_ids,
-                     std::optional<int> max_output_tokens);
+                     const SearchOptions& options,
+                     const ToolCallContext& tool_ctx);
   std::optional<int32_t> WaitForToken(const std::shared_ptr<Conversation>& conversation);
   bool IsTurnFinished(const std::shared_ptr<Conversation>& conversation) const;
   TurnResult GetTurnResult(const std::shared_ptr<Conversation>& conversation) const;

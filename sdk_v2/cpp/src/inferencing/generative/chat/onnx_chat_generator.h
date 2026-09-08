@@ -47,7 +47,7 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Returns the number of new prompt tokens appended.
   int AppendMessages(const std::vector<MessageItem>& new_messages,
                      GenAIModelInstance& model,
-                     const std::string& tools_json,
+                     const ToolCallContext& tool_ctx,
                      const SearchOptions& options) override;
 
   /// Rewind the generator to a previous token position.

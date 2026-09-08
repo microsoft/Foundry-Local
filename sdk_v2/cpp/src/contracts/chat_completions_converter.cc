@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "contracts/chat_completions_converter.h"
 
+#include "inferencing/generative/chat/stop_strings.h"
 #include "items/message_item.h"
 #include "items/tool_call_item.h"
 #include "items/tool_result_item.h"
@@ -212,11 +213,7 @@ void MapStopSequences(const ChatCompletionRequest& req, Request& session_request
     return;
   }
 
-  const auto& stop = *req.stop;
-  if ((stop.is_string() && !stop.get<std::string>().empty()) ||
-      (stop.is_array() && !stop.empty())) {
-    session_request.options["early_stopping"] = "true";
-  }
+  StoreStopStringsOption(NormalizeOpenAiStopStrings(*req.stop), session_request.options);
 }
 
 ChatCompletionResponse BuildResponse(const Response& response,

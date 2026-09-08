@@ -133,7 +133,7 @@ void OnnxChatGenerator::Cancel() {
 
 int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
                                       GenAIModelInstance& model,
-                                      const std::string& tools_json,
+                                      const ToolCallContext& tool_ctx,
                                       const SearchOptions& /*options*/) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
@@ -141,7 +141,7 @@ int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messag
 
   // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
   // produces the correct continuation tokens (e.g. <|im_end|>\n<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n)
-  std::string prompt = BuildChatPrompt(new_messages, model, tools_json);
+  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx.tools_json);
   auto sequences = EncodePrompt(prompt, model);
   int new_token_count = static_cast<int>(sequences->SequenceCount(0));
 
