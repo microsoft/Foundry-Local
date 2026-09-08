@@ -191,7 +191,15 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
       // The session already holds the conversation, but keep its stored hops warm: if this session is later evicted,
       // rebuilding the chain from the store is the only way to continue.
-      ctx_.response_store.TouchChain(*params.previous_response_id);
+      if (!ctx_.response_store.TouchChain(*params.previous_response_id)) {
+        tracker.SetStatus(ActionStatus::kClientError);
+        ctx_.logger.Log(LogLevel::Warning,
+                        fmt::format("Cannot preserve conversation from previous response {}",
+                                    *params.previous_response_id));
+        return ErrorResponse(Status::CODE_404, "Previous response not found",
+                             "Conversation history for '" + *params.previous_response_id +
+                                 "' is no longer available; resend the full conversation in 'input'");
+      }
     }
   }
 
@@ -769,8 +777,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> DeleteResponseHandler::han
 
   ctx_.logger.Log(LogLevel::Debug, fmt::format("DeleteResponse: responseId={}", std::string(id->c_str())));
 
-  bool deleted = ctx_.response_store.Delete(id->c_str());
-  if (!deleted) {
+  auto deleted_ids = ctx_.response_store.DeleteWithDependents(id->c_str());
+  if (deleted_ids.empty()) {
     nlohmann::json error_body = {
         {"error", {
                       {"message", "The response '" + std::string(id->c_str()) + "' does not exist."},
@@ -782,9 +790,11 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> DeleteResponseHandler::han
     return JsonResponse(Status::CODE_404, error_body);
   }
 
-  // Drop any cached ChatSession keyed on this response id so it stops pinning the model.
-  // A miss here is fine — chained calls with store=false never cache.
-  ctx_.session_manager.EvictCached(id->c_str());
+  // Every descendant contains the deleted response in its conversation. Drop their cached sessions too so deleted
+  // input cannot survive in a warm transcript after the store has purged it.
+  for (const auto& deleted_id : deleted_ids) {
+    ctx_.session_manager.EvictCached(deleted_id);
+  }
 
   nlohmann::json result = {
       {"id", std::string(id->c_str())},

@@ -628,6 +628,180 @@ TEST(ResponseStoreChainTest, RebuildingAChainKeepsTheRequestedEndpointMostRecent
             (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
 }
 
+TEST(ResponseStoreChainTest, AConversationLongerThanCapacityStillReconstructsFromItsRetainedTip) {
+  ResponseStore store;
+  constexpr int kHopCount = ResponseStore::kDefaultCapacity + 5;
+
+  std::string previous_id;
+  for (int i = 1; i <= kHopCount; ++i) {
+    const std::string id = "resp_" + std::to_string(i);
+    StoreHop(store, id, previous_id,
+             json::array({{{"type", "message"}, {"role", "user"}, {"content", "input_" + std::to_string(i)}}}),
+             json::array({{{"type", "message"},
+                           {"role", "assistant"},
+                           {"content", "output_" + std::to_string(i)}}}));
+    previous_id = id;
+  }
+
+  EXPECT_EQ(store.Size(), static_cast<size_t>(ResponseStore::kDefaultCapacity));
+  EXPECT_FALSE(store.Get("resp_1").has_value());
+  EXPECT_FALSE(store.Get("resp_5").has_value());
+
+  auto context = store.BuildChainContext(previous_id);
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), static_cast<size_t>(kHopCount));
+  for (int i = 1; i <= kHopCount; ++i) {
+    EXPECT_EQ((*context)[i - 1].input_items[0]["content"], "input_" + std::to_string(i));
+    EXPECT_EQ((*context)[i - 1].output_items[0]["content"], "output_" + std::to_string(i));
+  }
+}
+
+TEST(ResponseStoreChainTest, CompactedPrefixesAreSharedAcrossBranches) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "root"}}}), json::array());
+  StoreHop(store, "resp_left", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "left"}}}), json::array());
+  StoreHop(store, "resp_right", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "right"}}}), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  EXPECT_FALSE(store.Get("resp_root").has_value());
+
+  auto left = store.BuildChainContext("resp_left");
+  auto right = store.BuildChainContext("resp_right");
+  ASSERT_TRUE(left.has_value());
+  ASSERT_TRUE(right.has_value());
+  ASSERT_EQ(left->size(), 2u);
+  ASSERT_EQ(right->size(), 2u);
+  EXPECT_EQ((*left)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*left)[1].input_items[0]["content"], "left");
+  EXPECT_EQ((*right)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*right)[1].input_items[0]["content"], "right");
+}
+
+TEST(ResponseStoreChainTest, RepeatedCompactionExtendsOneBranchWithoutChangingItsSibling) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "root"}}}), json::array());
+  StoreHop(store, "resp_left", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "left"}}}), json::array());
+  StoreHop(store, "resp_right", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "right"}}}), json::array());
+  StoreHop(store, "resp_left_child", "resp_left",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "left_child"}}}), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  auto left = store.BuildChainContext("resp_left_child");
+  auto right = store.BuildChainContext("resp_right");
+  ASSERT_TRUE(left.has_value());
+  ASSERT_TRUE(right.has_value());
+  ASSERT_EQ(left->size(), 3u);
+  ASSERT_EQ(right->size(), 2u);
+  EXPECT_EQ((*left)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*left)[1].input_items[0]["content"], "left");
+  EXPECT_EQ((*left)[2].input_items[0]["content"], "left_child");
+  EXPECT_EQ((*right)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*right)[1].input_items[0]["content"], "right");
+}
+
+TEST(ResponseStoreChainTest, ReplacingARetainedHopPreservesItsCompactedAncestry) {
+  ResponseStore store(2);
+  StoreHop(store, "resp_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "root"}}}), json::array());
+  StoreHop(store, "resp_mid", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "old"}}}), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  StoreHop(store, "resp_mid", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "new"}}}), json::array());
+
+  auto context = store.BuildChainContext("resp_mid");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*context)[1].input_items[0]["content"], "new");
+}
+
+TEST(ResponseStoreChainTest, ReparentingARetainedHopDropsItsOldCompactedAncestry) {
+  ResponseStore store(3);
+  StoreHop(store, "old_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "old_root"}}}), json::array());
+  StoreHop(store, "moving", "old_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "old_child"}}}), json::array());
+  StoreHop(store, "new_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "new_root"}}}), json::array());
+  StoreHop(store, "other", "", json::array(), json::array());
+
+  StoreHop(store, "moving", "new_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "new_child"}}}), json::array());
+
+  auto context = store.BuildChainContext("moving");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0].input_items[0]["content"], "new_root");
+  EXPECT_EQ((*context)[1].input_items[0]["content"], "new_child");
+}
+
+TEST(ResponseStoreChainTest, DeletingACompactedHopPurgesEveryDependentBranch) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "secret"}}}), json::array());
+  StoreHop(store, "resp_left", "resp_root", json::array(), json::array());
+  StoreHop(store, "resp_right", "resp_root", json::array(), json::array());
+  StoreHop(store, "resp_unrelated", "", json::array(), json::array());
+
+  EXPECT_FALSE(store.Get("resp_root").has_value());
+  auto deleted = store.DeleteWithDependents("resp_root");
+  EXPECT_EQ(deleted, (std::vector<std::string>{"resp_right", "resp_left", "resp_root"}));
+  EXPECT_FALSE(store.Get("resp_left").has_value());
+  EXPECT_FALSE(store.Get("resp_right").has_value());
+  EXPECT_TRUE(store.Get("resp_unrelated").has_value());
+}
+
+TEST(ResponseStoreChainTest, DeletingAResidentAncestorReturnsAndPurgesEveryDependentId) {
+  ResponseStore store;
+  StoreHop(store, "resp_root", "", json::array(), json::array());
+  StoreHop(store, "resp_middle", "resp_root", json::array(), json::array());
+  StoreHop(store, "resp_tip", "resp_middle", json::array(), json::array());
+
+  auto deleted = store.DeleteWithDependents("resp_middle");
+
+  EXPECT_EQ(deleted, (std::vector<std::string>{"resp_tip", "resp_middle"}));
+  EXPECT_TRUE(store.Get("resp_root").has_value());
+  EXPECT_FALSE(store.Get("resp_middle").has_value());
+  EXPECT_FALSE(store.Get("resp_tip").has_value());
+}
+
+TEST(ResponseStoreChainTest, EvictionWalksPastANonRootLruEntry) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root",
+           "", json::array({{{"type", "message"}, {"role", "user"}, {"content", "root"}}}), json::array());
+  StoreHop(store, "resp_child", "resp_root",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "child"}}}), json::array());
+  ASSERT_TRUE(store.Get("resp_root").has_value());
+  StoreHop(store, "other_1", "", json::array(), json::array());
+  StoreHop(store, "other_2", "", json::array(), json::array());
+
+  EXPECT_FALSE(store.Get("resp_root").has_value());
+  auto context = store.BuildChainContext("resp_child");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*context)[1].input_items[0]["content"], "child");
+}
+
+TEST(ResponseStoreChainTest, CyclicEntriesCannotMonopolizeCapacity) {
+  ResponseStore store(2);
+  StoreHop(store, "cycle_a", "cycle_b", json::array(), json::array());
+  StoreHop(store, "cycle_b", "cycle_a", json::array(), json::array());
+  StoreHop(store, "healthy", "", json::array(), json::array());
+
+  EXPECT_EQ(store.Size(), 2u);
+  EXPECT_TRUE(store.Get("healthy").has_value());
+  EXPECT_FALSE(store.BuildChainContext("cycle_b").has_value());
+}
+
 TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {
   ResponseStore store;
   StoreHop(store, "resp_1", "",
@@ -668,6 +842,16 @@ TEST(ResponseStoreChainTest, MissingLinkCannotBeReconstructed) {
            json::array());
 
   EXPECT_FALSE(store.BuildChainContext("resp_2").has_value());
+}
+
+TEST(ResponseStoreChainTest, EvictingABrokenRootDoesNotTurnItsDescendantIntoATruncatedValidChain) {
+  ResponseStore store(2);
+  StoreHop(store, "resp_2", "missing_resp_1", json::array(), json::array());
+  StoreHop(store, "resp_3", "resp_2", json::array(), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  EXPECT_FALSE(store.Get("resp_2").has_value());
+  EXPECT_FALSE(store.BuildChainContext("resp_3").has_value());
 }
 
 TEST(ResponseStoreChainTest, UnknownResponseCannotBeReconstructed) {
