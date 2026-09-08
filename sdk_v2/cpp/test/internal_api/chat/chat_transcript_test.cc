@@ -335,13 +335,14 @@ TEST(AssistantTurnGuardTest, TextAfterACallEndsTheTurnOnce) {
   EXPECT_TRUE(guard.TurnEnded());
 }
 
-TEST(AssistantTurnGuardTest, WhitespaceBetweenCallsIsStillEmitted) {
-  // Models separate consecutive call blocks with a newline. Ending the turn on that would break parallel calls.
+TEST(AssistantTurnGuardTest, WhitespaceBetweenCallsIsDroppedWithoutEndingTheTurn) {
+  // Models separate consecutive call blocks with a newline. It is not visible content, and keeping it would move it
+  // before the calls during template projection.
   AssistantTurnGuard guard;
 
   guard.RecordToolCall();
-  EXPECT_EQ(guard.OfferVisibleText("\n"), TextDisposition::kEmit);
-  EXPECT_EQ(guard.OfferVisibleText("  \t "), TextDisposition::kEmit);
+  EXPECT_EQ(guard.OfferVisibleText("\n"), TextDisposition::kDropped);
+  EXPECT_EQ(guard.OfferVisibleText("  \t "), TextDisposition::kDropped);
   guard.RecordToolCall();
   EXPECT_FALSE(guard.TurnEnded());
 }
@@ -350,7 +351,7 @@ TEST(AssistantTurnGuardTest, AnEmptyTextEventNeverEndsTheTurn) {
   AssistantTurnGuard guard;
 
   guard.RecordToolCall();
-  EXPECT_EQ(guard.OfferVisibleText(""), TextDisposition::kEmit);
+  EXPECT_EQ(guard.OfferVisibleText(""), TextDisposition::kDropped);
   EXPECT_FALSE(guard.TurnEnded());
 }
 
@@ -497,13 +498,23 @@ TEST(TurnCanGenerateTest, AnEmptyInputContinuesAConversation) {
   EXPECT_TRUE(TurnCanGenerate({UserMessage("a"), MakeAssistant("A", {})}, {}));
 }
 
-TEST(TurnCanGenerateTest, NothingAtAllCannotGenerate) {
-  EXPECT_FALSE(TurnCanGenerate({}, {}));
-
-  // An assistant boundary is not content: it records that a turn happened and says nothing to answer.
+TEST(TurnCanGenerateTest, ReplayedAssistantBoundaryCountsAsConversationHistory) {
   TranscriptMessage boundary;
   boundary.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-  EXPECT_FALSE(TurnCanGenerate({boundary}, {}));
+
+  EXPECT_TRUE(TurnCanGenerate({boundary}, {}));
+}
+
+TEST(TurnCanGenerateTest, ReasoningAloneIsNotRespondableContent) {
+  TranscriptMessage reasoning;
+  reasoning.role = FOUNDRY_LOCAL_ROLE_USER;
+  reasoning.AppendReasoning("private");
+
+  EXPECT_FALSE(CarriesRespondableContent({reasoning}));
+}
+
+TEST(TurnCanGenerateTest, NothingAtAllCannotGenerate) {
+  EXPECT_FALSE(TurnCanGenerate({}, {}));
 }
 
 // ===========================================================================

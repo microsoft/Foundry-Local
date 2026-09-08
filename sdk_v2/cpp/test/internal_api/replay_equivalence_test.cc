@@ -247,8 +247,8 @@ TEST(ReplayEquivalenceTest, ATurnThatKeptTalkingAfterACallIsRejectedNotReordered
 }
 
 TEST(ReplayEquivalenceTest, WhitespaceBetweenCallsIsNotTextAfterACall) {
-  // Models separate consecutive call blocks with a newline. That says nothing about the order of events, so it must
-  // not be mistaken for post-call text and must not reject a perfectly ordinary parallel-call turn.
+  // Models separate consecutive call blocks with a newline. It must not end a parallel-call turn, but it is dropped
+  // because retaining it as visible content would move it before both calls during projection.
   ReplayTurn turn;
   turn.input_items = UserInputItem("Weather and time?");
   turn.output_items = json::array({OutputFunctionCall("call_1", "get_weather", R"({"city":"Seattle"})"),
@@ -261,6 +261,9 @@ TEST(ReplayEquivalenceTest, WhitespaceBetweenCallsIsNotTextAfterACall) {
 
   auto messages = ColdMessages({turn}, params);
   EXPECT_EQ(InputRejection(messages), std::nullopt);
+  ASSERT_GE(messages.size(), 2u);
+  EXPECT_TRUE(messages[1].VisibleText().empty());
+  EXPECT_EQ(messages[1].ToolCalls().size(), 2u);
 }
 
 TEST(ReplayEquivalenceTest, CallThenTextIsRejectedTheSameWayAsTextCallText) {

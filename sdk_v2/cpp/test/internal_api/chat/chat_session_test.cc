@@ -399,7 +399,8 @@ TEST_F(ChatSessionTest, SearchOptionsFromEmptyParameters) {
 namespace {
 
 /// Run one turn. `instructions` is the request-scoped system prefix; empty means none.
-Response RunTurnResponse(ChatSession& session, const std::string& user_text, const std::string& instructions) {
+Response RunTurnResponse(ChatSession& session, const std::string& user_text, const std::string& instructions,
+                         bool disable_tools = false) {
   Request request;
   if (!user_text.empty()) {
     request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, user_text));
@@ -407,6 +408,9 @@ Response RunTurnResponse(ChatSession& session, const std::string& user_text, con
 
   if (!instructions.empty()) {
     request.options.Add(kSystemPromptOption, instructions);
+  }
+  if (disable_tools) {
+    request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "none");
   }
 
   request.options.Add("max_output_tokens", "8");
@@ -489,6 +493,33 @@ TEST_F(ChatSessionTest, ChangedInstructionsRebuildTheGeneratorWithTheNewPrefix) 
   for (const auto& message : session.Transcript().Messages()) {
     EXPECT_NE(message.role, FOUNDRY_LOCAL_ROLE_SYSTEM) << "the system prefix must not be committed to history";
   }
+}
+
+TEST_F(ChatSessionTest, RemovingToolDefinitionsRebuildsWithTheCurrentToolSet) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  session.AddToolDefinition({"lookup", "Look up a value",
+                             R"({"type":"object","properties":{"key":{"type":"string"}}})"});
+
+  const std::string first_user = "Reply with the single word ok.";
+  const std::string second_user = "Reply with the single word done.";
+  auto first_response = RunTurnResponse(session, first_user, "", /*disable_tools=*/true);
+  ASSERT_TRUE(session.RemoveToolDefinition("lookup"));
+
+  const auto after_removal = RunTurn(session, second_user, "");
+
+  ChatSession rebuilt_session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  Request rebuilt_request;
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, first_user));
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, GetAssistantText(first_response)));
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, second_user));
+  rebuilt_request.options.Add("max_output_tokens", "8");
+  rebuilt_request.options.Add("temperature", "0");
+
+  Response rebuilt_response;
+  rebuilt_session.ProcessRequest(rebuilt_request, rebuilt_response);
+
+  EXPECT_EQ(after_removal.prompt_tokens, rebuilt_response.usage.prompt_tokens)
+      << "removing tools must rebuild with the same prompt a fresh session sees";
 }
 
 // ===========================================================================

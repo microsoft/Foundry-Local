@@ -425,8 +425,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // request after the session cache dropped it, so a continuation is rejected identically either way.
   auto media = CollectMediaInput(request);
   const bool media_turn = !media.Empty();
+  auto turn_tool_ctx = BuildToolCallContext(request);
   ValidateMediaTurn(media, inputs,
-                    {.session_has_history = !transcript_.Empty(), .tools_declared = !ToolDefinitions().empty()});
+                    {.session_has_history = !transcript_.Empty(), .tools_declared = turn_tool_ctx.HasTools()});
 
   // Merge session-level and per-request options once for this turn.
   auto effective_kvp = MergedOptions(request.options);
@@ -457,7 +458,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // A changed system prefix, an empty continuation, or tool activity all require rebuilding from complete history.
   // None can be appended as an independent suffix that preserves the prompt the model should see.
   if (cached_generator_ &&
-      (turn_system_prompt != system_prompt_ || inputs.empty() || CarriesToolActivity(inputs))) {
+      (turn_system_prompt != system_prompt_ || !cached_tool_ctx_.HasSameTools(turn_tool_ctx) || inputs.empty() ||
+       CarriesToolActivity(inputs))) {
     InvalidateCachedGenerator();
   }
 
@@ -501,7 +503,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     UpdateToolContextForTurn(request, cached_tool_ctx_);
   } else {
     // First request (or cache invalidated): create the generator from scratch.
-    auto tool_ctx = BuildToolCallContext(request);
+    auto tool_ctx = std::move(turn_tool_ctx);
 
     std::unique_ptr<OnnxChatGenerator> generator;
     if (media_turn) {
@@ -645,6 +647,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   int total_tokens = cached_generator_->TokenCount();
 
   auto assistant_message = MakeAssistantMessage(generated_events, logger_);
+  const bool generated_tool_calls = assistant_message.HasToolCalls();
 
   if (!request.canceled) {
     // Reject a generation whose calls cannot be correlated before it reaches the caller — a committed turn must never
@@ -692,7 +695,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
                          {pre_turn_token_count, total_tokens}, ingest.last_segment_start);
   turn_committed = true;
 
-  if (grammar_was_active || reasoning_was_active || media_turn || turn_guard.TurnEnded()) {
+  if (grammar_was_active || reasoning_was_active || media_turn || generated_tool_calls || turn_guard.TurnEnded()) {
     InvalidateCachedGenerator();
   }
 }
