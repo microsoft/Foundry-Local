@@ -83,7 +83,9 @@ std::vector<std::string> NormalizeStopStringsImpl(const nlohmann::json& stop_jso
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, label + " must be valid UTF-8");
     }
 
-    result.push_back(std::move(value));
+    if (std::find(result.begin(), result.end(), value) == result.end()) {
+      result.push_back(std::move(value));
+    }
   };
 
   if (stop_json.is_string()) {

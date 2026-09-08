@@ -122,12 +122,18 @@ TEST(StopStringFilterTest, HandlesUtf8StopStringsAcrossFragments) {
 
 TEST(StopStringFilterTest, StoreAndLoadRoundTripsInternalOption) {
   KeyValuePairs options;
-  StoreStopStringsOption({"END", "STOP"}, options);
+  StoreStopStringsOption({"END", "STOP", "END"}, options);
 
   EXPECT_EQ(LoadStopStringsOption(options), (std::vector<std::string>{"END", "STOP"}));
 
   StoreStopStringsOption({}, options);
   EXPECT_EQ(options.Find(kInternalStopStringsOptionKey), nullptr);
+}
+
+TEST(StopStringFilterTest, NormalizeOpenAiStopStringsDeduplicatesInCallerOrder) {
+  auto normalized = NormalizeOpenAiStopStrings(nlohmann::json::array({"STOP", "END", "STOP", "END"}));
+
+  EXPECT_EQ(normalized, (std::vector<std::string>{"STOP", "END"}));
 }
 
 TEST(StopStringFilterTest, NormalizeOpenAiStopStringsRejectsInvalidUtf8) {

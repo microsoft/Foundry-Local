@@ -202,7 +202,6 @@ TEST(EngineTurnOptionsPlanTest, DefaultsToMaxOutputLimitAndNoInventedSampling) {
   EXPECT_EQ(plan.max_generated_tokens, 2048);
   EXPECT_FALSE(plan.sampling.do_sample.has_value());
   EXPECT_FALSE(plan.sampling.temperature.has_value());
-  EXPECT_FALSE(plan.repetition_penalty.has_value());
   EXPECT_FALSE(plan.seed.has_value());
   EXPECT_TRUE(plan.stop_sequences.empty());
   EXPECT_FALSE(plan.guidance.has_value());
@@ -259,8 +258,7 @@ TEST(EngineTurnOptionsPlanTest, NeutralPenaltiesDoNotOverrideModelDefaults) {
   options.frequency_penalty = 0.0f;
   options.presence_penalty = 0.0f;
 
-  const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
-  EXPECT_FALSE(plan.repetition_penalty.has_value());
+  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine));
 }
 
 TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
@@ -273,6 +271,18 @@ TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
 
     EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine),
                  fl::Exception);
+  }
+}
+
+TEST(EngineTurnOptionsPlanTest, RejectsTrueEarlyStoppingAndAcceptsNeutralFalse) {
+  for (ChatBackendKind backend : {ChatBackendKind::kDynamicEngine, ChatBackendKind::kStaticEngine}) {
+    SearchOptions enabled;
+    enabled.early_stopping = true;
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(enabled, ToolCallContext{}, backend), fl::Exception);
+
+    SearchOptions disabled;
+    disabled.early_stopping = false;
+    EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(disabled, ToolCallContext{}, backend));
   }
 }
 
@@ -480,6 +490,16 @@ TEST_F(SearchOptionsTest, AllOptionsSetSimultaneously) {
 
   int max_length = ApplySearchOptions(opts, 20, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_EQ(max_length, 276);  // 20 + 256
+}
+
+TEST_F(SearchOptionsTest, EarlyStoppingRemainsSupportedByClassicGenerator) {
+  SearchOptions opts;
+  opts.early_stopping = true;
+  auto params = MakeParams();
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_TRUE(params->GetSearchBool("early_stopping"));
 }
 
 TEST_F(SearchOptionsTest, ZeroPenaltiesDoNotOverrideModelDefaults) {

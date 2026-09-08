@@ -160,6 +160,11 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  ChatBackendKind backend_kind,
                                                  int default_max_output_tokens) {
   ValidatePenalties(options);
+  if (options.early_stopping.value_or(false)) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "early_stopping is not supported by Engine backends; it is a legacy beam-search option and Engine "
+             "uses single-beam decoding");
+  }
 
   EngineTurnOptionsPlan plan;
   plan.max_generated_tokens = ResolveMaxOutputTokens(options, default_max_output_tokens);
@@ -265,7 +270,7 @@ int ApplySearchOptions(const SearchOptions& options,
     gen_params.SetSearchOptionBool("do_sample", *sampling.do_sample);
   }
 
-  // Early stopping is the legacy generator-side boolean, independent from decoded stop strings.
+  // Early stopping is the legacy beam-search policy, independent from decoded stop strings.
   if (options.early_stopping.value_or(false)) {
     gen_params.SetSearchOptionBool("early_stopping", true);
   }

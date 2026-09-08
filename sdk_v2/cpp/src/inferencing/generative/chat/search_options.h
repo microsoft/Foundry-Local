@@ -49,7 +49,6 @@ struct SamplingPlan {
 struct EngineTurnOptionsPlan {
   int max_generated_tokens = 0;
   SamplingPlan sampling;
-  std::optional<float> repetition_penalty;
   std::optional<int> seed;
   std::vector<std::string> stop_sequences;
   std::optional<TurnGuidanceOptions> guidance;
@@ -66,7 +65,7 @@ struct SearchOptions {
   std::optional<float> presence_penalty;   // Currently only the neutral value 0 is supported.
   std::optional<int> seed;
   std::optional<bool> do_sample;
-  std::optional<bool> early_stopping;
+  std::optional<bool> early_stopping;  // Legacy beam-search policy; unsupported by Engine backends.
   std::vector<std::string> stop_sequences;
 
   /// Controls whether the model is allowed/required to emit tool calls for this turn.

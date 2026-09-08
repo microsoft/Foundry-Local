@@ -41,10 +41,6 @@ void ApplyEngineTurnOptions(const EngineTurnOptionsPlan& plan, OgaTurnOptions& o
     options.SetTopK(*plan.sampling.top_k);
   }
 
-  if (plan.repetition_penalty.has_value()) {
-    options.SetRepetitionPenalty(*plan.repetition_penalty);
-  }
-
   if (plan.seed.has_value()) {
     options.SetSeed(static_cast<uint64_t>(*plan.seed));
   }
