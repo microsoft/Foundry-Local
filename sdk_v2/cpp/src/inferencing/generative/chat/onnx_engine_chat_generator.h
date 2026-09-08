@@ -17,25 +17,6 @@ namespace fl {
 
 class GenAIModelInstance;
 
-namespace engine_generator_internal {
-
-/// Admit a retained-conversation turn, then hand the turn a fresh token decoder.
-///
-/// ORT GenAI builds each turn's decoder (a `StopStringController` owning one `TokenizerStream`) before the admission
-/// attempt and installs it only in `Request::CommitTurnAdmission()`; `Request::RollbackTurnAdmission()` discards it
-/// and leaves whatever decoder the Request already had completely untouched. Foundry mirrors that ordering: a
-/// rejected `BeginTurn` (capacity eviction, token budget, an option this backend cannot honor) must leave the
-/// generator able to keep decoding the state it still has, while every admitted turn starts from a stream carrying
-/// no partial UTF-8/BPE bytes from the previous turn. Prompt and continuation tokens are never pushed through the
-/// decoder on either side — upstream observes generated tokens only.
-template <typename AdmitTurnFn, typename ResetDecoderFn>
-void AdmitTurnThenResetDecoder(AdmitTurnFn&& admit_turn, ResetDecoderFn&& reset_decoder) {
-  admit_turn();
-  reset_decoder();
-}
-
-}  // namespace engine_generator_internal
-
 /// ChatGenerator adapter for a conversation scheduled by a model-owned ORT GenAI Engine.
 class OnnxEngineChatGenerator final : public ChatGenerator {
  public:

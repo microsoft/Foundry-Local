@@ -135,10 +135,10 @@ int OnnxEngineChatGenerator::AppendMessages(const std::vector<MessageItem>& new_
   const auto* data = sequences->SequenceData(0);
   const std::span<const int32_t> input_ids(data, static_cast<size_t>(count));
 
-  // The continuation prompt is never decoded — only tokens the Engine generates reach the decoder.
-  engine_generator_internal::AdmitTurnThenResetDecoder(
-      [&] { engine_.BeginTurn(conversation_, input_ids, options, tool_ctx); },
-      [&] { ResetTurnDecoder(); });
+  // Keep the previous decoder intact if admission fails. Once admitted, start a fresh stream so partial UTF-8/BPE
+  // state from the prior turn cannot affect generated tokens; continuation-prompt tokens are never decoded.
+  engine_.BeginTurn(conversation_, input_ids, options, tool_ctx);
+  ResetTurnDecoder();
 
   prompt_token_count_ = count;
   cancelled_ = false;

@@ -7,7 +7,6 @@
 #include "inferencing/generative/chat/chat_session.h"
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
-#include "inferencing/generative/chat/onnx_engine_chat_generator.h"
 #include "inferencing/generative/chat/search_options.h"
 #include "items/audio_item.h"
 #include "items/image_item.h"
@@ -26,7 +25,6 @@
 
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <future>
 #include <memory>
 #include <string>
@@ -215,30 +213,6 @@ TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSema
       ChatBackendKind::kGenerator,
       /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/true));
-}
-
-TEST(EngineTurnDecoderTest, DecoderIsRefreshedOnlyAfterTheTurnIsAdmitted) {
-  int step = 0;
-  int admitted_at = 0;
-  int reset_at = 0;
-
-  engine_generator_internal::AdmitTurnThenResetDecoder([&] { admitted_at = ++step; }, [&] { reset_at = ++step; });
-
-  EXPECT_EQ(admitted_at, 1);
-  EXPECT_EQ(reset_at, 2);
-}
-
-TEST(EngineTurnDecoderTest, RejectedAdmissionLeavesTheDecoderUntouched) {
-  bool decoder_reset = false;
-  // Type-erased so the optimizer cannot prove the admission always throws and flag the reset call inside
-  // AdmitTurnThenResetDecoder as unreachable (MSVC C4702, which this build treats as an error).
-  const std::function<void()> reject_admission = [] { throw OnnxChatEngine::ConversationEvictedError(); };
-
-  EXPECT_THROW(
-      engine_generator_internal::AdmitTurnThenResetDecoder(reject_admission, [&] { decoder_reset = true; }),
-      OnnxChatEngine::ConversationEvictedError);
-
-  EXPECT_FALSE(decoder_reset);
 }
 
 // ===========================================================================
