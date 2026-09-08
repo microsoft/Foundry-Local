@@ -600,6 +600,20 @@ TEST(ResponseStoreChainTest, ReconstructsToolCallAndResultAcrossMultipleHops) {
   EXPECT_EQ((*context)[1].output_items[0]["role"], "assistant");
 }
 
+TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root", "", json::array(), json::array());
+  StoreHop(store, "resp_tip", "resp_root", json::array(), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  ASSERT_TRUE(store.TouchChain("resp_tip"));
+  StoreHop(store, "resp_new", "", json::array(), json::array());
+
+  EXPECT_TRUE(store.Get("resp_tip").has_value());
+  EXPECT_TRUE(store.Get("resp_root").has_value());
+  EXPECT_FALSE(store.Get("resp_other").has_value());
+}
+
 TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {
   ResponseStore store;
   StoreHop(store, "resp_1", "",

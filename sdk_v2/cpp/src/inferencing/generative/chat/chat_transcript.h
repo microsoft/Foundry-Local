@@ -196,9 +196,8 @@ bool CarriesToolActivity(const std::vector<TranscriptMessage>& messages);
 
 /// True when `text` is empty or contains nothing but whitespace.
 ///
-/// Shared by the transcript's ordering invariant and by generation: whitespace between or after tool calls says
-/// nothing about the order of events (models routinely separate call blocks with a newline), so both sides must
-/// agree on what counts as visible text.
+/// Shared by the transcript's ordering invariant and by generation. Whitespace after a tool call does not end the
+/// turn, but it is dropped because projecting it as visible content would move it before the call.
 bool IsWhitespaceOnly(std::string_view text);
 
 /// True when any message is a prior assistant turn or a tool result — the conversation already has history behind
@@ -265,8 +264,8 @@ enum class TextDisposition {
 ///
 /// The rule is ValidateRenderableTurn's, applied while events arrive: once the turn has issued a tool call, visible
 /// text can no longer be represented, because the chat-template schema would replay it before the call. Such text is
-/// dropped and ends the turn — the caller keeps the calls and a `tool_calls` finish reason. Whitespace is still
-/// emitted: models separate consecutive call blocks with a newline, and that says nothing about the order of events.
+/// dropped and ends the turn — the caller keeps the calls and a `tool_calls` finish reason. Whitespace is dropped
+/// without ending the turn, so models can still emit subsequent parallel call blocks without replay reordering it.
 ///
 /// Seeded with the calls of an assistant prefill the reply will merge into (see AssistantPrefillForReply): the
 /// prefill and the reply become one message, so the prefill's calls close this turn's visible text too.
@@ -285,8 +284,12 @@ class AssistantTurnGuard {
       return TextDisposition::kDropped;
     }
 
-    if (!calls_issued_ || IsWhitespaceOnly(text)) {
+    if (!calls_issued_) {
       return TextDisposition::kEmit;
+    }
+
+    if (IsWhitespaceOnly(text)) {
+      return TextDisposition::kDropped;
     }
 
     ended_ = true;

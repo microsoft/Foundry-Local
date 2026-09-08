@@ -197,6 +197,9 @@ void MergeAssistantTurn(TranscriptMessage& open, TranscriptMessage&& next) {
   for (auto& entry : next.entries) {
     switch (entry.kind) {
       case TranscriptEntry::Kind::kText:
+        if (open.HasToolCalls() && IsWhitespaceOnly(entry.text)) {
+          break;
+        }
         open.AppendText(std::move(entry.text));
         break;
       case TranscriptEntry::Kind::kReasoning:
@@ -335,12 +338,13 @@ bool CarriesPriorTurnHistory(const std::vector<TranscriptMessage>& messages) {
 
 bool CarriesRespondableContent(const std::vector<TranscriptMessage>& messages) {
   return std::any_of(messages.begin(), messages.end(), [](const TranscriptMessage& message) {
-    return !message.entries.empty();
+    return !message.VisibleText().empty() || message.HasToolCalls() || message.role == FOUNDRY_LOCAL_ROLE_TOOL;
   });
 }
 
 bool TurnCanGenerate(const std::vector<TranscriptMessage>& inputs, const TurnContent& context) {
-  return context.media || context.history || context.system_prefix || CarriesRespondableContent(inputs);
+  return context.media || context.history || context.system_prefix || CarriesPriorTurnHistory(inputs) ||
+         CarriesRespondableContent(inputs);
 }
 
 const TranscriptMessage* AssistantPrefillForReply(const std::vector<TranscriptMessage>& inputs, size_t merge_floor) {

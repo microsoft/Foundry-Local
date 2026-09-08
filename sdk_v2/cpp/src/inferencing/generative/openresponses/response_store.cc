@@ -116,8 +116,8 @@ std::optional<ResponseChainContext> ResponseStore::BuildChainContext(const std::
   }
 
   // Requesting the chain is a use of every entry in it. list::splice keeps the collected iterators valid.
-  for (auto& hop : chain) {
-    TouchLocked(hop);
+  for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
+    TouchLocked(*hop);
   }
 
   return context;
@@ -127,8 +127,8 @@ bool ResponseStore::TouchChain(const std::string& response_id) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   auto chain = WalkChainLocked(response_id);
-  for (auto& hop : chain) {
-    TouchLocked(hop);
+  for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
+    TouchLocked(*hop);
   }
 
   return !chain.empty();
