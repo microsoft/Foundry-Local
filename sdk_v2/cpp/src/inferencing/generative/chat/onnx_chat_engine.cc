@@ -19,7 +19,6 @@ namespace {
 
 constexpr int kDefaultTextMaxOutputTokens = 2048;
 
-#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
 // Only options the caller expressed are set. Upstream treats an unset turn option as "use the model-configured
 // default for this Turn", so forwarding a Foundry-invented default would silently override model policy — and an
 // explicit do_sample=true is rejected outright when the model's own defaults still resolve the turn to greedy.
@@ -65,40 +64,6 @@ void ApplyEngineTurnOptions(const EngineTurnOptionsPlan& plan, OgaTurnOptions& o
     options.SetGuidance(plan.guidance->type.c_str(), plan.guidance->data.c_str());
   }
 }
-#endif
-
-std::unique_ptr<OgaRequest> CreateEngineRequest(OgaEngine& engine,
-                                                GenAIModelInstance& model,
-                                                const SearchOptions& options,
-                                                const ToolCallContext& tool_ctx,
-                                                int input_token_count,
-                                                OgaRequestOptions* request_options) {
-#if defined(FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS) && \
-    FOUNDRY_LOCAL_OGA_ENGINE_CREATE_REQUEST_WITHOUT_PARAMS
-#if !defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) || !FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
-#error "CreateRequest(OgaRequestOptions*) requires full per-turn OgaTurnOptions support"
-#endif
-  (void)model;
-  (void)options;
-  (void)tool_ctx;
-  (void)input_token_count;
-  return engine.CreateRequest(request_options);
-#else
-  auto params = OgaGeneratorParams::Create(model.GetOgaModel());
-
-#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
-  (void)options;
-  (void)tool_ctx;
-  (void)input_token_count;
-  return engine.CreateRequest(*params, request_options);
-#else
-  ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *params, model.EP(),
-                     /*use_full_context=*/true);
-  ApplyGuidanceOptions(tool_ctx, *params);
-  return engine.CreateRequest(*params, request_options);
-#endif
-#endif
-}
 
 }  // namespace
 
@@ -134,18 +99,17 @@ OnnxChatEngine::~OnnxChatEngine() {
 }
 
 std::shared_ptr<OnnxChatEngine::Conversation> OnnxChatEngine::CreateConversation(
-    const SearchOptions& options, const ToolCallContext& tool_ctx, int input_token_count) {
+    const SearchOptions&, const ToolCallContext&, int) {
   auto conversation = std::shared_ptr<Conversation>(new Conversation());
   auto completion = std::make_shared<std::promise<void>>();
   auto ready = completion->get_future();
 
   Enqueue(
-      [this, conversation, options, tool_ctx, input_token_count, completion]() {
+      [this, conversation, completion]() {
         auto request_options = OgaRequestOptions::Create();
         request_options->SetMaxSessionTokens(static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig())));
 
-        auto request = CreateEngineRequest(*engine_, model_, options, tool_ctx, input_token_count,
-                                           request_options.get());
+        auto request = engine_->CreateRequest(request_options.get());
         conversations_.emplace(conversation.get(),
                                std::make_unique<NativeConversation>(
                                    NativeConversation{std::move(request), conversation}));
@@ -187,7 +151,6 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
           conversation->turn_finished = false;
         }
 
-#if defined(FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS) && FOUNDRY_LOCAL_OGA_HAS_FULL_TURN_OPTIONS
         auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, model_.GetGenAIConfig().GetChatBackendKind(),
                                                kDefaultTextMaxOutputTokens);
         const uint64_t total_required = static_cast<uint64_t>(existing_tokens) + static_cast<uint64_t>(tokens.size()) +
@@ -203,10 +166,6 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
         }
 
         ApplyEngineTurnOptions(plan, *turn_options);
-#else
-        turn_options->SetMaxGeneratedTokens(static_cast<uint64_t>(ResolveMaxOutputTokens(
-            options, kDefaultTextMaxOutputTokens)));
-#endif
 
         const uint64_t turn_id = native.request->BeginTurn(tokens.data(), tokens.size(), turn_options.get());
         {

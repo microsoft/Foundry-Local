@@ -51,8 +51,6 @@ class OnnxEngineChatGenerator final : public ChatGenerator {
                      GenAIModelInstance& model,
                      const ToolCallContext& tool_ctx,
                      const SearchOptions& options) override;
-  bool CanRewind() const override { return false; }
-  void RewindTo(int token_count) override;
   std::optional<ChatTurnUsage> GetTurnUsage() const override;
 
   static std::unique_ptr<OnnxEngineChatGenerator> Create(

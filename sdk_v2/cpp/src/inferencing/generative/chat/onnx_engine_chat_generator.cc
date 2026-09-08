@@ -148,11 +148,6 @@ void OnnxEngineChatGenerator::ResetTurnDecoder() {
   stream_ = model_.GetPreprocessor().CreateTokenizerStream();
 }
 
-void OnnxEngineChatGenerator::RewindTo(int /*token_count*/) {
-  FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-           "Engine request rewind is unavailable; recreate the request from retained conversation history");
-}
-
 std::optional<ChatTurnUsage> OnnxEngineChatGenerator::GetTurnUsage() const {
   const auto result = engine_.GetTurnResult(conversation_);
   return ChatTurnUsage{

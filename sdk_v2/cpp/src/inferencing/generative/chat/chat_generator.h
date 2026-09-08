@@ -63,10 +63,10 @@ class ChatGenerator {
                              const SearchOptions& options) = 0;
 
   /// Returns whether this backend can rewind retained model state directly.
-  virtual bool CanRewind() const = 0;
+  virtual bool CanRewind() const { return false; }
 
   /// Rewind retained model state to a prior token position.
-  virtual void RewindTo(int token_count) = 0;
+  virtual void RewindTo(int token_count);
 
   /// Return exact usage for the most recently completed turn when the backend exposes it.
   virtual std::optional<ChatTurnUsage> GetTurnUsage() const;
