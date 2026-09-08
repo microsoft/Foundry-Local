@@ -24,6 +24,7 @@ struct ReasoningMarkers {
   std::string end;
   std::vector<int32_t> start_token_ids;
   std::vector<int32_t> end_token_ids;
+  bool start_token_is_published = false;
 
   bool Configured() const noexcept { return !start.empty() && !end.empty(); }
 };
@@ -48,6 +49,45 @@ inline std::optional<size_t> LastTokenSequenceIndex(std::span<const int32_t> tok
 
 }  // namespace reasoning_detail
 
+/// One reasoning marker as the model publishes it: the token ID the tokenizer reports, and the text that ID decodes
+/// to. Either may be absent — a model that defines no marker publishes neither, and a tokenizer that skips special
+/// tokens can decode a valid ID to an empty string.
+struct PublishedMarker {
+  std::optional<int32_t> id;
+  std::string text;
+};
+
+inline bool UsesPublishedToken(const std::string& marker, const PublishedMarker& published) {
+  return !marker.empty() && published.id.has_value() && published.text == marker;
+}
+
+/// Token IDs that represent `marker` in generated output, or an empty sequence when they cannot be established.
+///
+/// The marker *string* can be overridden per request, while the ID the model publishes always describes the model's
+/// own marker. Pairing an overridden string with the published ID would match a completely different token: the
+/// splitter would flip its reasoning state on a token that is not the boundary, leaking the scratchpad into the
+/// visible answer or hiding the answer inside it. So the published ID is used only when it is proven to be this
+/// marker — when it decodes to exactly the marker text — and otherwise the IDs are derived from the marker text
+/// itself with the model's own encoder.
+///
+/// `encode` maps text to the token IDs it encodes to and must return an empty sequence when it cannot (no
+/// tokenizer, a failure, a marker the tokenizer round-trips to nothing). An empty result is safe: the splitter and
+/// the prompt probe both fall back to matching the decoded text.
+template <typename EncodeFn>
+std::vector<int32_t> ResolveMarkerTokenIds(const std::string& marker,
+                                           const PublishedMarker& published,
+                                           EncodeFn&& encode) {
+  if (marker.empty()) {
+    return {};
+  }
+
+  if (UsesPublishedToken(marker, published)) {
+    return {*published.id};
+  }
+
+  return std::forward<EncodeFn>(encode)(marker);
+}
+
 /// Whether a rendered prompt leaves a reasoning block open.
 ///
 /// Some package templates end the assistant prompt with the configured beginning-of-reasoning marker. That marker is
@@ -61,9 +101,14 @@ inline std::optional<size_t> LastTokenSequenceIndex(std::span<const int32_t> tok
 ///     sequence inside a user, system, or tool message is always followed by the rest of that message and by the
 ///     assistant turn header, so message content can never seed the state. Without this, a tool result quoting an
 ///     unbalanced marker would silently reclassify an entire answer as hidden reasoning.
-///  2. Identity — when the model publishes marker token IDs, the encoded prompt must agree that reasoning is open
-///     (its last opener ID comes after its last closer ID). Special tokens must be matched by ID because a tokenizer
-///     may decode them to nothing. Models that publish no marker IDs fall back to the positional rule alone.
+///  2. Identity — when marker token IDs are known, the encoded prompt must agree that reasoning is open (its last
+///     opener sequence comes after its last closer sequence). Special tokens must be matched by ID because a
+///     tokenizer may decode them to nothing. Markers with no known IDs fall back to the positional rule alone.
+///
+/// Identity can only refute the positional rule when the marker is the model's published dedicated token. An
+/// encode-derived sequence carries no such guarantee, even when it contains one ID: a tokenizer may merge the
+/// marker with adjacent prompt text. Its absence is therefore inconclusive, and the positional rule stands exactly
+/// as it does for a prompt with no encoded form at all (the media path).
 inline bool PromptOpensReasoning(std::span<const int32_t> prompt_token_ids,
                                  const ReasoningMarkers& markers,
                                  std::string_view prompt_text) {
@@ -91,7 +136,7 @@ inline bool PromptOpensReasoning(std::span<const int32_t> prompt_token_ids,
 
   const auto last_start_token = reasoning_detail::LastTokenSequenceIndex(prompt_token_ids, markers.start_token_ids);
   if (!last_start_token.has_value()) {
-    return false;
+    return !markers.start_token_is_published;
   }
 
   const auto last_end_token = reasoning_detail::LastTokenSequenceIndex(prompt_token_ids, markers.end_token_ids);

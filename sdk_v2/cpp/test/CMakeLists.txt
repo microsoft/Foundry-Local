@@ -28,6 +28,7 @@ add_executable(foundry_local_tests
     internal_api/chat/chat_session_test.cc
     internal_api/chat/chat_template_test.cc
     internal_api/chat/chat_transcript_test.cc
+    internal_api/chat/media_input_test.cc
     internal_api/chat/onnx_chat_generator_vision_test.cc
     internal_api/chat_completions_test.cc
     internal_api/chat_completions_converter_test.cc
@@ -57,6 +58,7 @@ add_executable(foundry_local_tests
     internal_api/model_load_manager_test.cc
     internal_api/model_sorting_test.cc
     internal_api/platform_path_test.cc
+    internal_api/replay_equivalence_test.cc
     internal_api/response_converter_test.cc
     internal_api/response_store_test.cc
     internal_api/responses_json_test.cc

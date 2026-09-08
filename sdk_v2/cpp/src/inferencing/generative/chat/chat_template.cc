@@ -51,11 +51,9 @@ nlohmann::ordered_json BuildMessageJson(const TranscriptMessage& message) {
     return entry;
   }
 
-  auto reasoning = message.ReasoningText();
-  if (!reasoning.empty()) {
-    entry["reasoning_content"] = std::move(reasoning);
-  }
-
+  // Reasoning is never projected back into a prompt, not even alongside the calls it produced. It is the model's
+  // private scratchpad: it is typed, stored, and surfaced to the caller, but a conversation replayed from storage
+  // cannot reproduce it, so replaying it here would make a warm session and a rebuilt one send different prompts.
   entry["tool_calls"] = BuildToolCallsJson(message);
   return entry;
 }

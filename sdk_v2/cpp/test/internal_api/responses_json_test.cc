@@ -753,7 +753,7 @@ TEST(ResponsesJsonTest, FunctionCallInputItemParsesInsideAResponseCreateParams) 
   EXPECT_EQ(call->arguments, R"({"city":"Seattle"})");
 }
 
-TEST(ResponsesJsonTest, ReasoningOutputIsIgnoredWhenReplayingResponseInput) {
+TEST(ResponsesJsonTest, ReasoningTextIsNeverReplayedButItsTurnBoundaryIs) {
   auto j = nlohmann::json::parse(R"({
     "model": "test-model",
     "input": [
@@ -766,9 +766,36 @@ TEST(ResponsesJsonTest, ReasoningOutputIsIgnoredWhenReplayingResponseInput) {
   auto* items = std::get_if<std::vector<InputItem>>(&params.input);
 
   ASSERT_NE(items, nullptr);
-  ASSERT_EQ(items->size(), 1u);
-  auto* message = std::get_if<InputMessage>(&items->front());
+  ASSERT_EQ(items->size(), 2u);
+
+  // The reasoning item becomes a content-free assistant message: the text stays private, the turn boundary does not.
+  auto* boundary = std::get_if<InputMessage>(&items->front());
+  ASSERT_NE(boundary, nullptr);
+  EXPECT_EQ(boundary->role, "assistant");
+  EXPECT_TRUE(boundary->content.empty());
+
+  auto* message = std::get_if<InputMessage>(&(*items)[1]);
   ASSERT_NE(message, nullptr);
   ASSERT_EQ(message->content.size(), 1u);
   EXPECT_EQ(std::get<InputTextContent>(message->content.front()).text, "Visible answer");
+}
+
+TEST(ResponsesJsonTest, ReasoningSummaryTextNeverBecomesReplayableContent) {
+  // Whatever the reasoning item carries, none of it reaches the parsed input.
+  auto j = nlohmann::json::parse(R"({
+    "model": "test-model",
+    "input": [
+      {"type":"reasoning","id":"reasoning_1","summary":[{"type":"summary_text","text":"private scratchpad"}]}
+    ]
+  })");
+
+  auto params = j.get<ResponseCreateParams>();
+  auto* items = std::get_if<std::vector<InputItem>>(&params.input);
+
+  ASSERT_NE(items, nullptr);
+  ASSERT_EQ(items->size(), 1u);
+  auto* boundary = std::get_if<InputMessage>(&items->front());
+  ASSERT_NE(boundary, nullptr);
+  EXPECT_EQ(boundary->role, "assistant");
+  EXPECT_TRUE(boundary->content.empty());
 }

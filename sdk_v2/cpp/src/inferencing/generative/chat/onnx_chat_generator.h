@@ -29,6 +29,10 @@ namespace fl {
 
 /// Resolve the reasoning boundary markers for a request: request/catalog overrides first, then the markers the loaded
 /// GenAI model publishes. Single source of truth for both the prompt-state probe and the generation-time splitter.
+///
+/// The token IDs always describe the marker strings that are actually in effect. A model's published marker ID is
+/// reused only when it decodes to exactly that string; an overridden marker is encoded with the model's tokenizer
+/// instead, so token-aware matching can never flip the reasoning state on a token that is not the boundary.
 ReasoningMarkers ResolveReasoningMarkers(const ToolCallContext& tool_ctx, GenAIModelInstance& model);
 
 /// ORT GenAI implementation of the ChatGenerator interface.

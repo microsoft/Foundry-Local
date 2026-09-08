@@ -87,41 +87,7 @@ std::vector<std::list<ResponseStore::Entry>::iterator> ResponseStore::WalkChainL
   return chain;
 }
 
-namespace {
-
-/// True when `item` is the system message ToInputItems synthesized from a request's `instructions`.
-/// Instructions are request-scoped in the Responses API, so replaying them from every hop of a chain would stack up
-/// copies of the system prompt in the middle of the conversation.
-///
-/// Every field is type-checked before it is read: stored items are arbitrary caller input, and a system message whose
-/// `content` is an array of content parts must be replayed, not throw.
-bool IsInstructionsItem(const nlohmann::json& item, const nlohmann::json& response) {
-  const auto instructions = response.find("instructions");
-  if (instructions == response.end() || !instructions->is_string()) {
-    return false;
-  }
-
-  if (!item.is_object()) {
-    return false;
-  }
-
-  const auto role = item.find("role");
-  if (role == item.end() || !role->is_string() || role->get<std::string>() != "system") {
-    return false;
-  }
-
-  // ToInputItems always writes the instructions as a plain string; any other shape is caller-supplied content.
-  const auto content = item.find("content");
-  if (content == item.end() || !content->is_string()) {
-    return false;
-  }
-
-  return content->get<std::string>() == instructions->get<std::string>();
-}
-
-}  // namespace
-
-std::optional<nlohmann::json> ResponseStore::BuildChainContext(const std::string& response_id) {
+std::optional<ResponseChainContext> ResponseStore::BuildChainContext(const std::string& response_id) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   auto chain = WalkChainLocked(response_id);
@@ -130,22 +96,23 @@ std::optional<nlohmann::json> ResponseStore::BuildChainContext(const std::string
   }
 
   // The walk collected hops newest-first; replay oldest-first so each hop's tool calls precede the results for them.
-  auto context = nlohmann::json::array();
+  ResponseChainContext context;
+  context.reserve(chain.size());
+
   for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
     const auto& entry = **hop;
 
+    ResponseChainHop replay;
     if (entry.input_items.is_array()) {
-      for (const auto& item : entry.input_items) {
-        if (!IsInstructionsItem(item, entry.response)) {
-          context.push_back(item);
-        }
-      }
+      replay.input_items = entry.input_items;
     }
 
     const auto output = entry.response.find("output");
     if (output != entry.response.end() && output->is_array()) {
-      context.insert(context.end(), output->begin(), output->end());
+      replay.output_items = *output;
     }
+
+    context.push_back(std::move(replay));
   }
 
   // Requesting the chain is a use of every entry in it. list::splice keeps the collected iterators valid.
@@ -180,7 +147,7 @@ bool ResponseStore::Delete(const std::string& response_id) {
   return true;
 }
 
-std::vector<nlohmann::json> ResponseStore::List(int limit, const std::string& after, const std::string& order) {
+ResponseStore::Page ResponseStore::List(int limit, const std::string& after, const std::string& order) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   // Collect all entries in insertion order (front = newest)
@@ -207,13 +174,17 @@ std::vector<nlohmann::json> ResponseStore::List(int limit, const std::string& af
   }
 
   // Collect results up to limit
-  std::vector<nlohmann::json> results;
-  int count = 0;
-  for (auto it = start; it != ordered.end() && count < limit; ++it, ++count) {
-    results.push_back((*it)->response);
+  Page page;
+  auto it = start;
+  for (int count = 0; it != ordered.end() && count < limit; ++it, ++count) {
+    page.data.push_back((*it)->response);
   }
 
-  return results;
+  // The iterator says exactly whether anything follows the page. Reporting `data.size() == limit` instead claimed a
+  // next page whenever the last page happened to be exactly full, and the caller's follow-up request came back empty.
+  page.has_more = it != ordered.end();
+
+  return page;
 }
 
 size_t ResponseStore::Size() const {

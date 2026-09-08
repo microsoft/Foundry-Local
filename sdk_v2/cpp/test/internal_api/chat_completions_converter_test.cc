@@ -6,6 +6,7 @@
 //
 #include "contracts/chat_completions_converter.h"
 
+#include "exception.h"
 #include "inferencing/generative/chat/chat_template.h"
 #include "inferencing/generative/chat/chat_transcript.h"
 #include "items/message_item.h"
@@ -1009,4 +1010,94 @@ TEST(ChatCompletionsConverterTest, FormatReasoningStreamingChunk_DoesNotContainC
   EXPECT_TRUE(delta.contains("reasoning_content"));
   EXPECT_FALSE(delta.contains("content"));
   EXPECT_FALSE(delta.contains("role"));
+}
+
+// ========================================================================
+// Assistant-turn ordering invariant on a Chat Completions payload.
+//
+// A chat completion carries the assistant reply as `content` plus a `tool_calls` array — the same schema the
+// transcript projection uses, with the same limitation. These pin that the limitation is handled explicitly on this
+// endpoint too, rather than by quietly moving text in front of the call it followed.
+// ========================================================================
+
+TEST(ChatCompletionsConverterTest, AssistantContentBeforeItsToolCallsIsAccepted) {
+  ChatCompletionRequest req;
+  req.messages.push_back({"user", std::string("Weather in Seattle?"), {}, {}, {}});
+
+  ChatCompletionMessage assistant;
+  assistant.role = "assistant";
+  assistant.content = std::string("Let me check.");
+  assistant.tool_calls.push_back({"call_1", "function", {"get_weather", R"({"city":"Seattle"})"}, std::nullopt});
+  req.messages.push_back(assistant);
+
+  req.messages.push_back({"tool", std::string("sunny"), {}, std::string("call_1"), {}});
+
+  Request session_request;
+  BuildRequestItems(req, session_request);
+
+  auto messages = BuildTranscriptMessages(session_request.items);
+  ASSERT_EQ(messages.size(), 3u);
+  EXPECT_FALSE(messages[1].HasVisibleTextAfterToolCall());
+
+  const ChatTranscript payload_transcript;
+  EXPECT_NO_THROW(payload_transcript.ValidateInputs(messages));
+}
+
+TEST(ChatCompletionsConverterTest, AnAssistantMessageContinuingAnUnansweredCallIsRejected) {
+  // Two assistant messages in a row, the first carrying an unanswered call. They are one assistant turn to any chat
+  // template, and that turn would have to report the second message's text before the call — so it is refused.
+  ChatCompletionRequest req;
+  req.messages.push_back({"user", std::string("Weather in Seattle?"), {}, {}, {}});
+
+  ChatCompletionMessage assistant;
+  assistant.role = "assistant";
+  assistant.content = std::string("Let me check.");
+  assistant.tool_calls.push_back({"call_1", "function", {"get_weather", R"({"city":"Seattle"})"}, std::nullopt});
+  req.messages.push_back(assistant);
+
+  req.messages.push_back({"assistant", std::string("One moment."), {}, {}, {}});
+
+  Request session_request;
+  BuildRequestItems(req, session_request);
+
+  auto messages = BuildTranscriptMessages(session_request.items);
+  ASSERT_EQ(messages.size(), 2u);
+  EXPECT_TRUE(messages[1].HasVisibleTextAfterToolCall());
+
+  const ChatTranscript payload_transcript;
+  try {
+    payload_transcript.ValidateInputs(messages);
+    FAIL() << "expected the ordering invariant to reject the payload";
+  } catch (const fl::Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("visible text after a tool call"), std::string::npos) << ex.what();
+  }
+}
+
+TEST(ChatCompletionsConverterTest, AnAssistantReplyAfterAToolResultStaysItsOwnTurn) {
+  // The ordinary multi-turn tool exchange: the tool result separates the two assistant turns, so nothing merges and
+  // nothing is rejected.
+  ChatCompletionRequest req;
+  req.messages.push_back({"user", std::string("Weather in Seattle?"), {}, {}, {}});
+
+  ChatCompletionMessage assistant;
+  assistant.role = "assistant";
+  assistant.content = std::string("Let me check.");
+  assistant.tool_calls.push_back({"call_1", "function", {"get_weather", "{}"}, std::nullopt});
+  req.messages.push_back(assistant);
+
+  req.messages.push_back({"tool", std::string("sunny"), {}, std::string("call_1"), {}});
+  req.messages.push_back({"assistant", std::string("It is sunny."), {}, {}, {}});
+  req.messages.push_back({"user", std::string("And tomorrow?"), {}, {}, {}});
+
+  Request session_request;
+  BuildRequestItems(req, session_request);
+
+  auto messages = BuildTranscriptMessages(session_request.items);
+  ASSERT_EQ(messages.size(), 5u);
+  EXPECT_EQ(messages[3].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(messages[3].VisibleText(), "It is sunny.");
+
+  const ChatTranscript payload_transcript;
+  EXPECT_NO_THROW(payload_transcript.ValidateInputs(messages));
 }
