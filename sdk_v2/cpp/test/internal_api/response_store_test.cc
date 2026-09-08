@@ -607,11 +607,25 @@ TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) 
   StoreHop(store, "resp_other", "", json::array(), json::array());
 
   ASSERT_TRUE(store.TouchChain("resp_tip"));
+  EXPECT_EQ(PageIds(store.List(3, "", "desc")),
+            (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
+
   StoreHop(store, "resp_new", "", json::array(), json::array());
 
   EXPECT_TRUE(store.Get("resp_tip").has_value());
   EXPECT_TRUE(store.Get("resp_root").has_value());
   EXPECT_FALSE(store.Get("resp_other").has_value());
+}
+
+TEST(ResponseStoreChainTest, RebuildingAChainKeepsTheRequestedEndpointMostRecent) {
+  ResponseStore store(3);
+  StoreHop(store, "resp_root", "", json::array(), json::array());
+  StoreHop(store, "resp_tip", "resp_root", json::array(), json::array());
+  StoreHop(store, "resp_other", "", json::array(), json::array());
+
+  ASSERT_TRUE(store.BuildChainContext("resp_tip").has_value());
+  EXPECT_EQ(PageIds(store.List(3, "", "desc")),
+            (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
 }
 
 TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {

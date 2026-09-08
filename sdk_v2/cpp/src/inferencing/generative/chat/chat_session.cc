@@ -467,13 +467,13 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     // Check if guidance requirements changed since the generator was created. Guidance (LARK grammar) is baked into
     // the OGA generator at creation time and cannot be changed. If tool_choice went from "required" to "auto" (or
     // vice versa), we must recreate the generator from the full transcript.
-    auto turn_tool_ctx = cached_tool_ctx_;
-    UpdateToolContextForTurn(request, turn_tool_ctx);
+    auto guidance_ctx = cached_tool_ctx_;
+    UpdateToolContextForTurn(request, guidance_ctx);
 
     bool prev_has_user_guidance = !cached_tool_ctx_.guidance_type.empty() && !cached_tool_ctx_.guidance_data.empty();
-    bool curr_has_user_guidance = !turn_tool_ctx.guidance_type.empty() && !turn_tool_ctx.guidance_data.empty();
+    bool curr_has_user_guidance = !guidance_ctx.guidance_type.empty() && !guidance_ctx.guidance_data.empty();
     bool prev_needs_guidance = prev_has_user_guidance || (cached_tool_ctx_.tool_output && !cached_tool_ctx_.text_output);
-    bool curr_needs_guidance = curr_has_user_guidance || (turn_tool_ctx.tool_output && !turn_tool_ctx.text_output);
+    bool curr_needs_guidance = curr_has_user_guidance || (guidance_ctx.tool_output && !guidance_ctx.text_output);
 
     // Rebuild when: guidance requirements changed OR the previous turn had user-specified guidance
     // (the finite grammar may have completed, causing IsDone() to return true on the next turn,

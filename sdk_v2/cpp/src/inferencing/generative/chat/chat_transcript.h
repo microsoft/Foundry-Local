@@ -256,7 +256,7 @@ void ValidateRenderableTurn(const TranscriptMessage& message);
 enum class TextDisposition {
   kEmit,     ///< Ordinary visible text: stream it and record it.
   kEndTurn,  ///< The first text that would break the ordering invariant. Drop it and stop generating; report once.
-  kDropped,  ///< The turn has already ended. Drop it silently — it was reported when the turn ended.
+  kDropped,  ///< Whitespace after a call, or any text after the turn ended. Drop it without another report.
 };
 
 /// Keeps a turn being generated on the renderable side of the ordering invariant, so a violation is prevented rather
