@@ -529,7 +529,7 @@ TEST_F(ChatSessionTest, RunMultiTurn) {
 TEST_F(ChatSessionTest, ChatTemplateKwargsControlCachedGeneratorReuse) {
   struct TurnResult {
     std::string text;
-    int prompt_tokens;
+    int64_t prompt_tokens;
   };
 
   auto run_turn = [&](ChatSession& session,
