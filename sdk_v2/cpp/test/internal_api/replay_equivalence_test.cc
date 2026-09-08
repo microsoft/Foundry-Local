@@ -176,6 +176,42 @@ TEST(ReplayEquivalenceTest, TextOnlyTurn) {
   ExpectWarmAndColdAgree({TextOnlyTurn()}, "And again?");
 }
 
+TEST(ReplayEquivalenceTest, MoreThanTwentyStoredHopsRemainColdReplayEquivalent) {
+  std::vector<ReplayTurn> turns(ResponseStore::kDefaultCapacity + 5, TextOnlyTurn());
+  for (size_t i = 0; i < turns.size(); ++i) {
+    const std::string suffix = std::to_string(i + 1);
+    turns[i].input_items = UserInputItem("Input " + suffix);
+    turns[i].output_items = json::array({OutputMessage("Output " + suffix)});
+    turns[i].live_inputs = {UserMessage("Input " + suffix)};
+    turns[i].live_output = TranscriptMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, "");
+    turns[i].live_output.AppendText("Output " + suffix);
+  }
+
+  ExpectWarmAndColdAgree(turns, "Continue after a cache miss.");
+}
+
+TEST(ReplayEquivalenceTest, ToolCallAndResultAcrossTheCompactionBoundaryRemainColdReplayEquivalent) {
+  std::vector<ReplayTurn> turns(ResponseStore::kDefaultCapacity + 2, TextOnlyTurn());
+  for (size_t i = 0; i < turns.size(); ++i) {
+    const std::string suffix = std::to_string(i + 1);
+    turns[i].input_items = UserInputItem("Input " + suffix);
+    turns[i].output_items = json::array({OutputMessage("Output " + suffix)});
+    turns[i].live_inputs = {UserMessage("Input " + suffix)};
+    turns[i].live_output = TranscriptMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, "Output " + suffix);
+  }
+
+  turns[1].output_items =
+      json::array({OutputFunctionCall("call_1", "get_weather", R"({"city":"Seattle"})")});
+  turns[1].live_output = TranscriptMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, "");
+  turns[1].live_output.AppendToolCall(SuppliedCall("call_1", "get_weather", R"({"city":"Seattle"})"));
+
+  turns[2].input_items =
+      json::array({{{"type", "function_call_output"}, {"call_id", "call_1"}, {"output", "sunny"}}});
+  turns[2].live_inputs = {TranscriptMessage::ToolResult("call_1", "sunny")};
+
+  ExpectWarmAndColdAgree(turns, "Continue after the compacted tool exchange.");
+}
+
 TEST(ReplayEquivalenceTest, TextThenCall) {
   ReplayTurn turn;
   turn.input_items = UserInputItem("Weather in Seattle?");
