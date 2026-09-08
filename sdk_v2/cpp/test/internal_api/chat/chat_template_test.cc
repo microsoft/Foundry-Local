@@ -19,6 +19,10 @@
 
 using namespace fl;
 
+namespace {
+constexpr const char* kTestChatTemplateKwargsModelAlias = "qwen3.5-0.8b-generic-cpu-2";
+}
+
 // ---------------------------------------------------------------------------
 // Test fixture: loads the shared test model once per suite
 // ---------------------------------------------------------------------------
@@ -44,6 +48,40 @@ class ChatTemplateTest : public ::testing::Test {
   static void TearDownTestSuite() {
     if (load_manager_) {
       load_manager_->UnloadModel(fl::test::kTestChatModelAlias);
+    }
+
+    load_manager_.reset();
+    ep_detector_.reset();
+    model_ = nullptr;
+  }
+
+  GenAIModelInstance& GetModel() { return *model_; }
+
+  static inline std::unique_ptr<StderrLogger> logger_;
+  static inline std::unique_ptr<test::CpuOnlyEpDetector> ep_detector_;
+  static inline std::unique_ptr<ModelLoadManager> load_manager_;
+  static inline GenAIModelInstance* model_ = nullptr;
+};
+
+class ChatTemplateKwargsTest : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    auto model_path = fl::test::GetTestModelPath(kTestChatTemplateKwargsModelAlias);
+    logger_ = std::make_unique<StderrLogger>();
+    ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
+    load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
+
+    auto result = load_manager_->LoadModel(model_path.string(), kTestChatTemplateKwargsModelAlias);
+
+    ASSERT_EQ(result.status, ModelLoadManager::LoadStatus::kSuccess)
+        << "Failed to load test model from: " << model_path;
+
+    model_ = result.model;
+  }
+
+  static void TearDownTestSuite() {
+    if (load_manager_) {
+      load_manager_->UnloadModel(kTestChatTemplateKwargsModelAlias);
     }
 
     load_manager_.reset();
@@ -120,6 +158,22 @@ TEST_F(ChatTemplateTest, PromptEndsWithAssistantPrefix) {
   // Qwen2.5 uses <|im_start|>assistant format
   EXPECT_NE(prompt.find("assistant"), std::string::npos)
       << "Prompt should end with assistant prefix for generation. Got: " << prompt;
+}
+
+TEST_F(ChatTemplateKwargsTest, TypedKwargsChangePromptAndOmissionClearsPriorState) {
+  std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "Hello!"}};
+
+  std::string default_prompt = BuildChatPrompt(messages, GetModel());
+  std::string thinking_prompt =
+      BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":true})");
+  std::string no_thinking_prompt =
+      BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":false})");
+  std::string default_prompt_after_kwargs = BuildChatPrompt(messages, GetModel());
+
+  EXPECT_NE(thinking_prompt, no_thinking_prompt)
+      << "Typed boolean kwargs should affect a kwargs-sensitive chat template";
+  EXPECT_EQ(default_prompt_after_kwargs, default_prompt)
+      << "Omitting kwargs must clear tokenizer state from the previous render";
 }
 
 // ---------------------------------------------------------------------------

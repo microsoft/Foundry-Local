@@ -526,6 +526,47 @@ TEST_F(ChatSessionTest, RunMultiTurn) {
   EXPECT_EQ(session.MessageCount(), 4u);
 }
 
+TEST_F(ChatSessionTest, ChatTemplateKwargsControlCachedGeneratorReuse) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  auto run_turn = [&](const char* prompt, const char* template_kwargs) {
+    Request request;
+    request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, prompt));
+    request.options.Add("max_output_tokens", "4");
+    request.options.Add("temperature", "0");
+    if (template_kwargs) {
+      request.options.Add("chat_template_kwargs", template_kwargs);
+    }
+
+    Response response;
+    session.ProcessRequest(request, response);
+    EXPECT_NE(response.finish_reason, FOUNDRY_LOCAL_FINISH_ERROR);
+    return response.usage.prompt_tokens;
+  };
+
+  run_turn("Reply briefly: one.", R"({"enable_thinking":false})");
+
+  int same_kwargs_prompt_tokens =
+      run_turn("Reply briefly: two.", R"({"enable_thinking":false})");
+  int changed_kwargs_prompt_tokens =
+      run_turn("Reply briefly: three.", R"({"enable_thinking":true})");
+  EXPECT_GT(changed_kwargs_prompt_tokens, same_kwargs_prompt_tokens)
+      << "Changing template kwargs must rebuild the generator from full history";
+
+  int reused_changed_kwargs_prompt_tokens =
+      run_turn("Reply briefly: four.", R"({"enable_thinking":true})");
+  EXPECT_GT(changed_kwargs_prompt_tokens, reused_changed_kwargs_prompt_tokens)
+      << "Identical template kwargs should retain the continuous-decoding path";
+
+  int removed_kwargs_prompt_tokens = run_turn("Reply briefly: five.", nullptr);
+  EXPECT_GT(removed_kwargs_prompt_tokens, reused_changed_kwargs_prompt_tokens)
+      << "Removing template kwargs must rebuild and clear the previous tokenizer state";
+
+  int reused_empty_kwargs_prompt_tokens = run_turn("Reply briefly: six.", nullptr);
+  EXPECT_GT(removed_kwargs_prompt_tokens, reused_empty_kwargs_prompt_tokens)
+      << "Repeated omission should retain the continuous-decoding path";
+}
+
 TEST_F(ChatSessionTest, RunStreamingCancellation) {
   ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
 
