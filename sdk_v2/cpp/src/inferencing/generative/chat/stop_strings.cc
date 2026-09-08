@@ -14,6 +14,7 @@ namespace {
 constexpr size_t kOpenAiMaxStopStrings = 4;
 constexpr size_t kEngineMaxStopStrings = 16;
 constexpr size_t kEngineMaxStopStringBytes = 16 * 1024;
+constexpr size_t kMaxSerializedStopStringsBytes = 128 * 1024;
 
 bool IsValidUtf8(std::string_view text) {
   size_t i = 0;
@@ -154,9 +155,16 @@ std::vector<std::string> LoadStopStringsOption(const KeyValuePairs& options) {
     return {};
   }
 
+  const std::string_view serialized_view(serialized);
+  if (serialized_view.size() > kMaxSerializedStopStringsBytes) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             std::string(kInternalStopStringsOptionKey) + " must be at most " +
+                 std::to_string(kMaxSerializedStopStringsBytes) + " serialized bytes");
+  }
+
   nlohmann::json stop_json;
   try {
-    stop_json = nlohmann::json::parse(serialized);
+    stop_json = nlohmann::json::parse(serialized_view);
   } catch (const nlohmann::json::parse_error& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
              std::string("internal stop strings option is not valid JSON: ") + e.what());

@@ -151,3 +151,10 @@ TEST(StopStringFilterTest, NormalizeOpenAiStopStringsRejectsOversizedPayload) {
       },
       "16384 UTF-8 bytes");
 }
+
+TEST(StopStringFilterTest, LoadStopStringsOptionRejectsOversizedSerializedPayloadBeforeParsing) {
+  KeyValuePairs options;
+  options[kInternalStopStringsOptionKey] = std::string(128 * 1024 + 1, ' ');
+
+  ExpectInvalidArgument([&]() { LoadStopStringsOption(options); }, "131072 serialized bytes");
+}
