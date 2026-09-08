@@ -170,10 +170,9 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
   plan.max_generated_tokens = ResolveMaxOutputTokens(options, default_max_output_tokens);
   plan.sampling = ResolveSamplingPlan(options);
 
-  // A per-turn seed is the only seed channel once Requests carry no generator params, and upstream refuses one
-  // outside dynamic batching. Reject instead of dropping it: a caller asking for reproducible output must not be
-  // told the request succeeded when the seed was never applied.
-  if (options.seed.has_value()) {
+  // Negative seeds preserve classic ORT GenAI's nondeterministic behavior and require no per-turn seed support.
+  // Nonnegative seeds must be forwarded because zero is a valid deterministic seed.
+  if (options.seed.has_value() && *options.seed >= 0) {
     if (!SupportsPerTurnSeed(backend_kind)) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
                "seed is not supported by this model's static-batching Engine backend; "

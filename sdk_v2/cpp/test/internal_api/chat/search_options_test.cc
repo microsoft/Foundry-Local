@@ -242,6 +242,31 @@ TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBacken
   EXPECT_EQ(plan.guidance->data, R"({"type":"object"})");
 }
 
+TEST(EngineTurnOptionsPlanTest, NegativeSeedIsOmittedOnEveryEngineBackend) {
+  for (int seed : {-1, -2, std::numeric_limits<int>::min()}) {
+    for (ChatBackendKind backend : {ChatBackendKind::kDynamicEngine, ChatBackendKind::kStaticEngine}) {
+      SearchOptions options;
+      options.seed = seed;
+
+      const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, backend);
+      EXPECT_FALSE(plan.seed.has_value());
+    }
+  }
+}
+
+TEST(EngineTurnOptionsPlanTest, ZeroSeedIsForwardedOnDynamicBackendAndRejectedOnStaticBackend) {
+  SearchOptions options;
+  options.seed = 0;
+
+  const auto plan =
+      BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
+  ASSERT_TRUE(plan.seed.has_value());
+  EXPECT_EQ(*plan.seed, 0);
+
+  EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kStaticEngine),
+               fl::Exception);
+}
+
 TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
   ToolCallContext tool_ctx;
   tool_ctx.guidance_type = "json_schema";
