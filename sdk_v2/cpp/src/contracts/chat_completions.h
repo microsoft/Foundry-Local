@@ -65,8 +65,8 @@ struct ChatCompletionRequest {
   std::optional<nlohmann::json> stop;                          // "stop" — string or array
   std::optional<int> max_tokens;                               // "max_tokens" (deprecated)
   std::optional<int> max_completion_tokens;                    // "max_completion_tokens"
-  std::optional<float> presence_penalty;                       // "presence_penalty"
-  std::optional<float> frequency_penalty;                      // "frequency_penalty"
+  std::optional<float> presence_penalty;                       // "presence_penalty"; only 0 is supported
+  std::optional<float> frequency_penalty;                      // "frequency_penalty"; only 0 is supported
   std::optional<std::vector<ChatCompletionTool>> tools;        // "tools"
   std::optional<nlohmann::json> tool_choice;                   // "tool_choice" — string or object
   std::optional<nlohmann::json> response_format;               // "response_format"

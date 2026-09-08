@@ -66,7 +66,6 @@ TEST_F(ReasoningFixture, SingleTurnStripsThinkBlock) {
   RequestOptions opts;
   opts.search.temperature = 0.0f;
   opts.search.max_output_tokens = 1024;
-  opts.search.frequency_penalty = 1.2f;
   request.SetOptions(opts);
 
   Response response = session.ProcessRequest(request);
@@ -188,7 +187,6 @@ TEST_F(ReasoningFixture, MultiTurnContinuousDecoding) {
   RequestOptions session_opts;
   session_opts.search.temperature = 0.0f;
   session_opts.search.max_output_tokens = 1024;
-  session_opts.search.frequency_penalty = 1.2f;
   session.SetOptions(session_opts);
 
   // Turn 1

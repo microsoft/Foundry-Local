@@ -418,14 +418,14 @@ Request ToSessionRequest(const ResponseCreateParams& params,
         std::to_string(*params.max_output_tokens);
   }
 
-  if (params.presence_penalty.has_value()) {
-    request.options["presence_penalty"] =
-        std::to_string(*params.presence_penalty);
+  if (params.presence_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero presence_penalty is not supported; ORT diversity_penalty has different semantics");
   }
 
-  if (params.frequency_penalty.has_value()) {
-    request.options["frequency_penalty"] =
-        std::to_string(*params.frequency_penalty);
+  if (params.frequency_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero frequency_penalty is not supported; ORT repetition_penalty has different semantics");
   }
 
   if (params.seed.has_value()) {

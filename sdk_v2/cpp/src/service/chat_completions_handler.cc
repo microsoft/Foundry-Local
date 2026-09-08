@@ -56,6 +56,12 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Pa
     return ErrorResponse(Status::CODE_400, "Missing required field: messages");
   }
 
+  if (req.frequency_penalty.value_or(0.0f) != 0.0f ||
+      req.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
+  }
+
   return nullptr;
 }
 

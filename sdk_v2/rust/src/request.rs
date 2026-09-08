@@ -50,9 +50,9 @@ pub struct SearchOptions {
     pub top_k: Option<i32>,
     /// Maximum number of tokens to generate.
     pub max_output_tokens: Option<i32>,
-    /// Frequency penalty in `[-2.0, 2.0]`.
+    /// Frequency penalty. Currently only the neutral value `0` is supported.
     pub frequency_penalty: Option<f32>,
-    /// Presence penalty in `[-2.0, 2.0]`.
+    /// Presence penalty. Currently only the neutral value `0` is supported.
     pub presence_penalty: Option<f32>,
     /// Random seed for reproducible sampling.
     pub seed: Option<i64>,

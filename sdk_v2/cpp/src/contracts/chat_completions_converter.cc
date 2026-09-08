@@ -48,8 +48,6 @@ void ApplyCatalogDefaults(ChatCompletionRequest& req, const KeyValuePairs& model
 
   apply_default_float("temperature", req.temperature);
   apply_default_float("top_p", req.top_p);
-  apply_default_float("presence_penalty", req.presence_penalty);
-  apply_default_float("frequency_penalty", req.frequency_penalty);
   apply_default_int("max_tokens", req.max_tokens);
 
   // top_k and random_seed go through metadata (matches C# behavior)
@@ -153,8 +151,14 @@ void MapRequestParameters(const ChatCompletionRequest& req, Request& session_req
 
   set_float_param(req.temperature, "temperature");
   set_float_param(req.top_p, "top_p");
-  set_float_param(req.frequency_penalty, "frequency_penalty");
-  set_float_param(req.presence_penalty, "presence_penalty");
+  if (req.frequency_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero frequency_penalty is not supported; ORT repetition_penalty has different semantics");
+  }
+  if (req.presence_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero presence_penalty is not supported; ORT diversity_penalty has different semantics");
+  }
 
   if (req.seed.has_value()) {
     session_request.options["seed"] = std::to_string(*req.seed);

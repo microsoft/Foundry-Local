@@ -943,8 +943,8 @@ struct SearchOptions {
   std::optional<float> top_p;              ///< Nucleus sampling [0.0, 1.0].
   std::optional<int> top_k;                ///< Top-k sampling.
   std::optional<int> max_output_tokens;    ///< Maximum tokens to generate.
-  std::optional<float> frequency_penalty;  ///< Frequency penalty [-2.0, 2.0].
-  std::optional<float> presence_penalty;   ///< Presence penalty [-2.0, 2.0].
+  std::optional<float> frequency_penalty;  ///< Currently only the neutral value 0 is supported.
+  std::optional<float> presence_penalty;   ///< Currently only the neutral value 0 is supported.
   std::optional<int> seed;                 ///< Random seed for reproducibility.
   std::optional<bool> early_stopping;      ///< Stop on stop-sequence match.
   std::optional<bool> do_sample;           ///< Whether to sample (false = greedy).
