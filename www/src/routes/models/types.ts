@@ -16,6 +16,7 @@ export interface FoundryModel {
 	framework?: string;
 	license?: string;
 	taskType?: string;
+	capabilities: string[];
 	modelSize?: string;
 	inputFormat?: string;
 	outputFormat?: string;
@@ -60,6 +61,7 @@ export interface GroupedFoundryModel {
 	framework?: string; // Primary framework
 	license?: string;
 	taskType?: string;
+	capabilities: string[]; // Combined capabilities from all variants
 	modelSize?: string;
 	fileSizeBytes?: number; // File size in bytes for sorting/display
 	variants: FoundryModel[]; // All device variants

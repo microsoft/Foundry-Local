@@ -73,6 +73,15 @@ test('ModelCard uses sibling controls instead of nested interactive descendants'
 	assert.equal(foregroundActions.length, 4);
 });
 
+test('model task and capability filters have associated labels', () => {
+	const modelFilters = readSource('../src/routes/models/components/ModelFilters.svelte');
+
+	assert.match(modelFilters, /<Label for="task">Task<\/Label>/);
+	assert.match(modelFilters, /<Button[\s\S]*?id="task"[\s\S]*?>/);
+	assert.match(modelFilters, /<Label for="capability">Capability<\/Label>/);
+	assert.match(modelFilters, /<Button[\s\S]*?id="capability"[\s\S]*?>/);
+});
+
 test('shared skip link is hidden until keyboard focus and targets both main landmarks', () => {
 	const skipLink = readSource('../src/lib/components/skip-link.svelte');
 	const nav = readSource('../src/lib/components/home/nav.svelte');
