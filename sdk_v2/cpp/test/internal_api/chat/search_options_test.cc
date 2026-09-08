@@ -568,22 +568,16 @@ TEST_F(SearchOptionsTest, NonzeroPenaltiesAreRejected) {
   }
 }
 
-TEST_F(SearchOptionsTest, ZeroMaxOutputTokensThrows) {
-  SearchOptions opts;
-  opts.max_output_tokens = 0;
-  auto params = MakeParams();
+TEST_F(SearchOptionsTest, NonpositiveMaxOutputTokensThrow) {
+  for (int max_output_tokens : {0, -5}) {
+    SearchOptions opts;
+    opts.max_output_tokens = max_output_tokens;
+    auto params = MakeParams();
 
-  EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault),
-               fl::Exception);
-}
-
-TEST_F(SearchOptionsTest, NegativeMaxOutputTokensThrows) {
-  SearchOptions opts;
-  opts.max_output_tokens = -5;
-  auto params = MakeParams();
-
-  EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault),
-               fl::Exception);
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault),
+                 fl::Exception)
+        << "max_output_tokens=" << max_output_tokens;
+  }
 }
 
 TEST_F(SearchOptionsTest, ExplicitDoSampleAndZeroTemperatureAreBothForwarded) {

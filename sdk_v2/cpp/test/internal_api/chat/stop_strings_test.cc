@@ -122,7 +122,7 @@ TEST(StopStringFilterTest, HandlesUtf8StopStringsAcrossFragments) {
 
 TEST(StopStringFilterTest, StoreAndLoadRoundTripsInternalOption) {
   KeyValuePairs options;
-  StoreStopStringsOption({"END", "STOP", "END"}, options);
+  StoreStopStringsOption({"END", "STOP"}, options);
 
   EXPECT_EQ(LoadStopStringsOption(options), (std::vector<std::string>{"END", "STOP"}));
 

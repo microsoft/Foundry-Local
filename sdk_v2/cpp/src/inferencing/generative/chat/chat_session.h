@@ -4,6 +4,7 @@
 
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
 #include "inferencing/generative/chat/search_options.h"
+#include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/generative/toolcalling/tool_call_utils.h"
 #include "inferencing/session/session.h"
@@ -13,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -22,6 +24,61 @@ class GenAIModelInstance;
 class ChatGenerator;
 
 namespace chat_session_internal {
+
+template <typename SegmentProcessor>
+bool PushDecodedFragment(const std::string& fragment,
+                         std::optional<int32_t> token_id,
+                         StopStringFilter* stop_filter,
+                         ReasoningStreamSplitter& splitter,
+                         SegmentProcessor&& process_segments) {
+  if (stop_filter == nullptr) {
+    if (token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, fragment));
+    } else if (!fragment.empty()) {
+      process_segments(splitter.Push(fragment));
+    }
+
+    return false;
+  }
+
+  if (stop_filter->matched()) {
+    return true;
+  }
+
+  if (fragment.empty()) {
+    if (token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, fragment));
+    }
+
+    return false;
+  }
+
+  auto filtered = stop_filter->PushWithTokenAlignment(fragment);
+  if (!filtered.text.empty()) {
+    if (filtered.token_aligned && token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, std::move(filtered.text)));
+    } else {
+      // Filtering combined or shortened decoded token fragments, so the current token ID is no longer aligned.
+      process_segments(splitter.Push(filtered.text));
+    }
+  }
+
+  return stop_filter->matched();
+}
+
+template <typename SegmentProcessor>
+void FlushDecodedStream(StopStringFilter* stop_filter,
+                        ReasoningStreamSplitter& splitter,
+                        SegmentProcessor&& process_segments) {
+  if (stop_filter != nullptr && !stop_filter->matched()) {
+    auto tail = stop_filter->Flush();
+    if (!tail.empty()) {
+      process_segments(splitter.Push(tail));
+    }
+  }
+
+  process_segments(splitter.Flush());
+}
 
 /// Resolve the final finish reason for one generated turn.
 /// Complete tool calls win over a later host-side stop-string match because the

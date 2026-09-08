@@ -112,61 +112,6 @@ void AppendGeneratedSegment(std::vector<GeneratedOutputEvent>& destination,
   destination.push_back(TextSegment{std::move(text), type});
 }
 
-template <typename SegmentProcessor>
-bool PushDecodedFragment(const std::string& fragment,
-                         std::optional<int32_t> token_id,
-                         StopStringFilter* stop_filter,
-                         ReasoningStreamSplitter& splitter,
-                         SegmentProcessor&& process_segments) {
-  if (stop_filter == nullptr) {
-    if (token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, fragment));
-    } else if (!fragment.empty()) {
-      process_segments(splitter.Push(fragment));
-    }
-
-    return false;
-  }
-
-  if (stop_filter->matched()) {
-    return true;
-  }
-
-  if (fragment.empty()) {
-    if (token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, fragment));
-    }
-
-    return false;
-  }
-
-  auto filtered = stop_filter->PushWithTokenAlignment(fragment);
-  if (!filtered.text.empty()) {
-    if (filtered.token_aligned && token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, std::move(filtered.text)));
-    } else {
-      // Filtering combined or shortened decoded token fragments, so the current token ID is no longer aligned.
-      process_segments(splitter.Push(filtered.text));
-    }
-  }
-
-  return stop_filter->matched();
-}
-
-template <typename SegmentProcessor>
-void FlushDecodedStream(StopStringFilter* stop_filter,
-                        ReasoningStreamSplitter& splitter,
-                        SegmentProcessor&& process_segments) {
-  if (stop_filter != nullptr && !stop_filter->matched()) {
-    auto tail = stop_filter->Flush();
-    if (!tail.empty()) {
-      process_segments(splitter.Push(tail));
-    }
-  }
-
-  process_segments(splitter.Flush());
-}
-
 }  // namespace
 
 namespace chat_session_internal {
@@ -743,7 +688,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     std::string token = cached_generator_->Decode();
     ++output_tokens;
 
-    if (PushDecodedFragment(token, token_id, active_stop_filter, splitter, emit_segments)) {
+    if (chat_session_internal::PushDecodedFragment(
+            token, token_id, active_stop_filter, splitter, emit_segments)) {
       stop_sequence_matched = true;
       break;
     }
@@ -761,7 +707,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   // End-of-stream: drain the reasoning splitter first so any final DEFAULT bytes feed into the tool accumulator,
   // then drain the tool accumulator.
-  FlushDecodedStream(active_stop_filter, splitter, emit_segments);
+  chat_session_internal::FlushDecodedStream(active_stop_filter, splitter, emit_segments);
   flush_accumulator();
 
   if (request.canceled) {
@@ -987,7 +933,8 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
     const auto token_id = generator->CurrentTokenId();
     std::string token = generator->Decode();
 
-    if (PushDecodedFragment(token, token_id, active_stop_filter, splitter, process_segments)) {
+    if (chat_session_internal::PushDecodedFragment(
+            token, token_id, active_stop_filter, splitter, process_segments)) {
       stop_sequence_matched = true;
       break;
     }
@@ -995,7 +942,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
 
   // Drain any buffered partial-marker bytes at end-of-stream. Reasoning splitter first so any final DEFAULT bytes
   // feed into the tool accumulator; then drain the tool accumulator.
-  FlushDecodedStream(active_stop_filter, splitter, process_segments);
+  chat_session_internal::FlushDecodedStream(active_stop_filter, splitter, process_segments);
   process_tool_output(tool_accumulator.Flush());
 
   if (original_request.canceled) {

@@ -34,6 +34,18 @@ using namespace fl;
 
 namespace {
 
+using Segment = ReasoningStreamSplitter::Segment;
+
+void AppendSegments(std::vector<Segment>& destination, const std::vector<Segment>& source) {
+  for (const auto& segment : source) {
+    if (!destination.empty() && destination.back().type == segment.type) {
+      destination.back().text += segment.text;
+    } else {
+      destination.push_back(segment);
+    }
+  }
+}
+
 class EngineModelStaging {
  public:
   explicit EngineModelStaging(const std::filesystem::path& source)
@@ -77,14 +89,6 @@ class EngineModelStaging {
 
 }  // namespace
 
-TEST(ChatSessionDecisionTest, FinishReasonPrefersParsedToolCallsOverHostStop) {
-  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
-                /*canceled=*/false, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
-                /*host_output_limit_reached=*/false, FOUNDRY_LOCAL_FINISH_STOP,
-                /*completion_tokens=*/8, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
-}
-
 TEST(ChatSessionDecisionTest, HostOutputLimitTruncatesOnlyAnUnfinishedBackendAtTheBoundary) {
   using chat_session_internal::DidHostOutputLimitTruncate;
 
@@ -107,40 +111,93 @@ TEST(ChatSessionDecisionTest, HostOutputLimitAppliesToClassicAndMediaGeneratorsB
   EXPECT_FALSE(ShouldEnforceHostOutputLimit(ChatBackendKind::kStaticEngine, /*media_turn=*/false));
 }
 
-TEST(ChatSessionDecisionTest, HostOutputLimitProducesLengthDespiteCanceledBackendReason) {
-  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
-                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/false,
-                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
-                /*completion_tokens=*/32, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_LENGTH);
-}
-
-TEST(ChatSessionDecisionTest, NaturalBackendCompletionAtOutputLimitPreservesBackendReason) {
-  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
-                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/false,
-                /*host_output_limit_reached=*/false, FOUNDRY_LOCAL_FINISH_STOP,
-                /*completion_tokens=*/32, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_STOP);
-}
-
-TEST(ChatSessionDecisionTest, FinishReasonKeepsCancellationToolCallsAndStopAheadOfHostLimit) {
+TEST(ChatSessionDecisionTest, FinishReasonPrecedenceCoversEveryTerminalSource) {
   using chat_session_internal::ResolveGeneratedFinishReason;
 
-  EXPECT_EQ(ResolveGeneratedFinishReason(
-                /*canceled=*/true, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
-                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
-                /*completion_tokens=*/32, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_NONE);
-  EXPECT_EQ(ResolveGeneratedFinishReason(
-                /*canceled=*/false, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
-                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
-                /*completion_tokens=*/32, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
-  EXPECT_EQ(ResolveGeneratedFinishReason(
-                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/true,
-                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
-                /*completion_tokens=*/32, /*max_output_tokens=*/32),
-            FOUNDRY_LOCAL_FINISH_STOP);
+  struct TestCase {
+    const char* name;
+    bool canceled;
+    bool has_tool_calls;
+    bool stop_sequence_matched;
+    bool host_output_limit_reached;
+    std::optional<flFinishReason> backend_finish_reason;
+    flFinishReason expected;
+  };
+
+  const std::vector<TestCase> cases = {
+      {"cancellation wins", true, true, true, true, FOUNDRY_LOCAL_FINISH_NONE, FOUNDRY_LOCAL_FINISH_NONE},
+      {"tool calls win over stop", false, true, true, false, FOUNDRY_LOCAL_FINISH_STOP,
+       FOUNDRY_LOCAL_FINISH_TOOL_CALLS},
+      {"tool calls win over host limit", false, true, true, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_TOOL_CALLS},
+      {"stop wins over host limit", false, false, true, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_STOP},
+      {"host limit produces length", false, false, false, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_LENGTH},
+      {"backend reason survives natural completion", false, false, false, false, FOUNDRY_LOCAL_FINISH_STOP,
+       FOUNDRY_LOCAL_FINISH_STOP},
+  };
+
+  for (const auto& test : cases) {
+    SCOPED_TRACE(test.name);
+    EXPECT_EQ(ResolveGeneratedFinishReason(test.canceled, test.has_tool_calls, test.stop_sequence_matched,
+                                           test.host_output_limit_reached, test.backend_finish_reason,
+                                           /*completion_tokens=*/32, /*max_output_tokens=*/32),
+              test.expected);
+  }
+}
+
+TEST(ChatSessionDecodedStreamTest, CombinedFilterOutputUsesTextMarkerFallback) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>", {101}, {102});
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "S", 1, &stop_filter, splitter, process));
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>hidden</think>visible", 2, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 3u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+  EXPECT_EQ(segments[0].text, "S");
+  EXPECT_EQ(segments[1].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[1].text, "hidden");
+  EXPECT_EQ(segments[2].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+  EXPECT_EQ(segments[2].text, "visible");
+}
+
+TEST(ChatSessionDecodedStreamTest, FlushReleasesUnmatchedStopPrefixThroughReasoningSplitter) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>");
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>unfinished ST", 1, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 1u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[0].text, "unfinished ST");
+}
+
+TEST(ChatSessionDecodedStreamTest, MatchedStopSuppressesStopBytesButFlushesPendingReasoningText) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>");
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>hidden</thiST", 1, &stop_filter, splitter, process));
+  EXPECT_TRUE(chat_session_internal::PushDecodedFragment(
+      "OPignored", 2, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 1u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[0].text, "hidden</thi");
 }
 
 TEST(ChatSessionDecisionTest, PreAppendRebuildIsUnconditionalForStaticEngine) {
