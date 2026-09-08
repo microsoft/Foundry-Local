@@ -82,8 +82,67 @@ class EngineModelStaging {
 TEST(ChatSessionDecisionTest, FinishReasonPrefersParsedToolCallsOverHostStop) {
   EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
                 /*canceled=*/false, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
-                FOUNDRY_LOCAL_FINISH_STOP, /*completion_tokens=*/8, /*max_output_tokens=*/32),
+                /*host_output_limit_reached=*/false, FOUNDRY_LOCAL_FINISH_STOP,
+                /*completion_tokens=*/8, /*max_output_tokens=*/32),
             FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+}
+
+TEST(ChatSessionDecisionTest, HostOutputLimitTruncatesOnlyAnUnfinishedBackendAtTheBoundary) {
+  using chat_session_internal::DidHostOutputLimitTruncate;
+
+  EXPECT_FALSE(DidHostOutputLimitTruncate(/*output_tokens=*/31, /*max_output_tokens=*/32,
+                                          /*backend_finished=*/false));
+  EXPECT_TRUE(DidHostOutputLimitTruncate(/*output_tokens=*/32, /*max_output_tokens=*/32,
+                                         /*backend_finished=*/false));
+  EXPECT_FALSE(DidHostOutputLimitTruncate(/*output_tokens=*/32, /*max_output_tokens=*/32,
+                                          /*backend_finished=*/true));
+}
+
+TEST(ChatSessionDecisionTest, HostOutputLimitAppliesToClassicAndMediaGeneratorsButNotEngineText) {
+  using chat_session_internal::ShouldEnforceHostOutputLimit;
+
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kGenerator, /*media_turn=*/false));
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kGenerator, /*media_turn=*/true));
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kDynamicEngine, /*media_turn=*/true));
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kStaticEngine, /*media_turn=*/true));
+  EXPECT_FALSE(ShouldEnforceHostOutputLimit(ChatBackendKind::kDynamicEngine, /*media_turn=*/false));
+  EXPECT_FALSE(ShouldEnforceHostOutputLimit(ChatBackendKind::kStaticEngine, /*media_turn=*/false));
+}
+
+TEST(ChatSessionDecisionTest, HostOutputLimitProducesLengthDespiteCanceledBackendReason) {
+  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
+                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/false,
+                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
+                /*completion_tokens=*/32, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_LENGTH);
+}
+
+TEST(ChatSessionDecisionTest, NaturalBackendCompletionAtOutputLimitPreservesBackendReason) {
+  EXPECT_EQ(chat_session_internal::ResolveGeneratedFinishReason(
+                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/false,
+                /*host_output_limit_reached=*/false, FOUNDRY_LOCAL_FINISH_STOP,
+                /*completion_tokens=*/32, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_STOP);
+}
+
+TEST(ChatSessionDecisionTest, FinishReasonKeepsCancellationToolCallsAndStopAheadOfHostLimit) {
+  using chat_session_internal::ResolveGeneratedFinishReason;
+
+  EXPECT_EQ(ResolveGeneratedFinishReason(
+                /*canceled=*/true, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
+                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
+                /*completion_tokens=*/32, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_NONE);
+  EXPECT_EQ(ResolveGeneratedFinishReason(
+                /*canceled=*/false, /*has_tool_calls=*/true, /*stop_sequence_matched=*/true,
+                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
+                /*completion_tokens=*/32, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+  EXPECT_EQ(ResolveGeneratedFinishReason(
+                /*canceled=*/false, /*has_tool_calls=*/false, /*stop_sequence_matched=*/true,
+                /*host_output_limit_reached=*/true, FOUNDRY_LOCAL_FINISH_NONE,
+                /*completion_tokens=*/32, /*max_output_tokens=*/32),
+            FOUNDRY_LOCAL_FINISH_STOP);
 }
 
 TEST(ChatSessionDecisionTest, PreAppendRebuildIsUnconditionalForStaticEngine) {
@@ -127,25 +186,35 @@ TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSema
 
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kDynamicEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
 
-  // A static Engine cannot be continued, and grammar/reasoning/host-side stop matches leave retained state ahead of
-  // the committed history on every backend.
+  // A static Engine cannot be continued, and grammar/reasoning/host-side truncation leaves retained state ahead of
+  // the committed history on applicable generator paths.
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kStaticEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false));
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kDynamicEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true));
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
+      /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
       ChatBackendKind::kDynamicEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false));
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/true));
 }
 
 TEST(EngineTurnDecoderTest, DecoderIsRefreshedOnlyAfterTheTurnIsAdmitted) {

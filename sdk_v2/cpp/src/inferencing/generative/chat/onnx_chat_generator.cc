@@ -355,9 +355,8 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
 
   // 4. Apply search options (temperature, top_p, max_length, etc.) and validate token budget.
   //    Media inputs use a larger default because preprocessing expands them into tokens.
-  int default_max_output = media_branch ? 3072 : 2048;
   ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, model.EP(),
-                     use_full_context, default_max_output);
+                     use_full_context, GetDefaultMaxOutputTokens(media_branch));
 
   // 5. Apply constrained decoding for tool-only output when supported.
   ApplyGuidanceOptions(tool_ctx, *gen_params);

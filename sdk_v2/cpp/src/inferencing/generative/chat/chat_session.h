@@ -29,9 +29,16 @@ namespace chat_session_internal {
 flFinishReason ResolveGeneratedFinishReason(bool canceled,
                                             bool has_tool_calls,
                                             bool stop_sequence_matched,
+                                            bool host_output_limit_reached,
                                             std::optional<flFinishReason> backend_finish_reason,
                                             int completion_tokens,
                                             std::optional<int> max_output_tokens);
+
+/// Whether the host output limit stopped generation before the backend completed naturally.
+bool DidHostOutputLimitTruncate(int output_tokens, int max_output_tokens, bool backend_finished);
+
+/// Whether the selected generator path requires host-side output-limit enforcement.
+bool ShouldEnforceHostOutputLimit(ChatBackendKind backend_kind, bool media_turn);
 
 /// Whether the retained generator must be rebuilt from full history before appending this turn.
 ///
@@ -46,12 +53,13 @@ bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
                                                 bool retained_generation_settings_changed);
 
 /// Whether retained backend state must be discarded after a successful turn commits.
-/// Host-side stop filtering can leave retained state ahead of committed history, so
-/// stop matches invalidate even when the current turn still succeeds.
+/// Host-side stop filtering or output-limit truncation can leave retained state ahead of committed history, so
+/// either condition invalidates even when the current turn still succeeds.
 bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
                                                                 bool grammar_was_active,
                                                                 bool reasoning_was_active,
-                                                                bool stop_sequence_matched);
+                                                                bool stop_sequence_matched,
+                                                                bool host_output_limit_reached);
 
 }  // namespace chat_session_internal
 
@@ -130,6 +138,7 @@ class ChatSession : public Session {
                               const SearchOptions& effective_options,
                               bool canceled,
                               bool stop_sequence_matched,
+                              bool host_output_limit_reached,
                               Response& response,
                               int prompt_tokens,
                               int total_tokens,

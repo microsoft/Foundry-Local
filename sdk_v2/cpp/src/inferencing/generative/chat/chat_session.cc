@@ -174,6 +174,7 @@ namespace chat_session_internal {
 flFinishReason ResolveGeneratedFinishReason(bool canceled,
                                             bool has_tool_calls,
                                             bool stop_sequence_matched,
+                                            bool host_output_limit_reached,
                                             std::optional<flFinishReason> backend_finish_reason,
                                             int completion_tokens,
                                             std::optional<int> max_output_tokens) {
@@ -189,6 +190,10 @@ flFinishReason ResolveGeneratedFinishReason(bool canceled,
     return FOUNDRY_LOCAL_FINISH_STOP;
   }
 
+  if (host_output_limit_reached) {
+    return FOUNDRY_LOCAL_FINISH_LENGTH;
+  }
+
   if (backend_finish_reason.has_value()) {
     return *backend_finish_reason;
   }
@@ -199,6 +204,14 @@ flFinishReason ResolveGeneratedFinishReason(bool canceled,
   }
 
   return FOUNDRY_LOCAL_FINISH_STOP;
+}
+
+bool DidHostOutputLimitTruncate(int output_tokens, int max_output_tokens, bool backend_finished) {
+  return output_tokens >= max_output_tokens && !backend_finished;
+}
+
+bool ShouldEnforceHostOutputLimit(ChatBackendKind backend_kind, bool media_turn) {
+  return media_turn || backend_kind == ChatBackendKind::kGenerator;
 }
 
 bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
@@ -212,8 +225,9 @@ bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
 bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
                                                                 bool grammar_was_active,
                                                                 bool reasoning_was_active,
-                                                                bool stop_sequence_matched) {
-  return stop_sequence_matched || reasoning_was_active || grammar_was_active ||
+                                                                bool stop_sequence_matched,
+                                                                bool host_output_limit_reached) {
+  return stop_sequence_matched || host_output_limit_reached || reasoning_was_active || grammar_was_active ||
          backend_kind == ChatBackendKind::kStaticEngine;
 }
 
@@ -417,6 +431,7 @@ void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> event
                                          const SearchOptions& effective_options,
                                          bool canceled,
                                          bool stop_sequence_matched,
+                                         bool host_output_limit_reached,
                                          Response& response,
                                          int prompt_tokens,
                                          int total_tokens,
@@ -465,8 +480,8 @@ void ChatSession::ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> event
   flush_segments();
 
   response.finish_reason = chat_session_internal::ResolveGeneratedFinishReason(
-      canceled, has_tool_calls, stop_sequence_matched, backend_finish_reason, completion_tokens,
-      effective_options.max_output_tokens);
+      canceled, has_tool_calls, stop_sequence_matched, host_output_limit_reached, backend_finish_reason,
+      completion_tokens, effective_options.max_output_tokens);
 
   response.usage.prompt_tokens = prompt_tokens;
   response.usage.completion_tokens = completion_tokens;
@@ -631,7 +646,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     cached_search_options_ = effective_options;
   }
 
-  const int max_output = effective_options.max_output_tokens.value_or(0);
+  const int max_output =
+      ResolveMaxOutputTokens(effective_options, GetDefaultMaxOutputTokens(media_turn));
+  const bool enforce_host_output_limit =
+      chat_session_internal::ShouldEnforceHostOutputLimit(backend_kind, media_turn);
   const auto committed_tool_ctx = cached_tool_ctx_;
 
   // Generate token-by-token with optional streaming.
@@ -642,6 +660,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   StopStringFilter stop_filter(effective_options.stop_sequences);
   auto* active_stop_filter = effective_options.stop_sequences.empty() ? nullptr : &stop_filter;
   bool stop_sequence_matched = false;
+  bool host_output_limit_reached = false;
   std::vector<GeneratedOutputEvent> generated_events;
 
   // Marker IDs are derived from the configured strings with the model tokenizer. This detects special markers even
@@ -727,9 +746,13 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       break;
     }
 
-    // Enforce max_output_tokens — with use_full_context the OGA max_length
-    // is the entire context window, so we must cap output ourselves.
-    if (max_output > 0 && output_tokens >= max_output) {
+    // Classic text generators use the full context window, and media turns always use OnnxChatGenerator directly,
+    // so retain the host boundary guard for both. Engine text turns receive this limit in their per-turn options and
+    // report completion asynchronously; checking IsDone() here could race their definitive finish notification.
+    if (enforce_host_output_limit &&
+        chat_session_internal::DidHostOutputLimitTruncate(
+            output_tokens, max_output, cached_generator_->IsDone())) {
+      host_output_limit_reached = true;
       break;
     }
   }
@@ -741,7 +764,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   if (request.canceled) {
     cached_generator_->Cancel();
-  } else if (stop_sequence_matched && !cached_generator_->IsDone()) {
+  } else if ((stop_sequence_matched || host_output_limit_reached) && !cached_generator_->IsDone()) {
     cached_generator_->Cancel();
   }
 
@@ -763,7 +786,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   }
 
   ProcessGeneratedOutput(std::move(generated_events), effective_options, request.canceled,
-                         stop_sequence_matched, response, prompt_tokens, total_tokens,
+                         stop_sequence_matched, host_output_limit_reached, response, prompt_tokens, total_tokens,
                          splitter.ReasoningTokenCount(),
                          backend_finish_reason);
 
@@ -778,7 +801,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     const bool reasoning_was_active = cached_tool_ctx_.supports_reasoning;
     const bool discard_after_success =
         chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-            backend_kind, grammar_was_active, reasoning_was_active, stop_sequence_matched);
+            backend_kind, grammar_was_active, reasoning_was_active, stop_sequence_matched,
+            host_output_limit_reached);
 
     // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
     // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
@@ -786,9 +810,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     //
     // Reasoning models (qwen3, etc.) also need invalidation: continuous decoding leaves prior <think> tokens in the KV
     // cache and the model fails to close subsequent reasoning blocks. The chat template strips prior </think> content
-    // when re-applied to history, so a rebuild restores correct behavior. Host-side stop filtering also forces a
-    // rebuild: the retained backend state still contains the matched stop token (or a latched cancellation for the
-    // classic generator), while committed history stores the filtered assistant text.
+    // when re-applied to history, so a rebuild restores correct behavior. Host-side stop filtering and output-limit
+    // truncation also force a rebuild: the retained backend state is ahead of committed history or has a latched
+    // cancellation.
     CommitTurn(std::move(new_messages), std::move(assistant_history_text), pre_turn_token_count, total_tokens,
                can_rewind_to_pre_turn);
 
@@ -988,9 +1012,8 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
 
   // Parsed tool-call events are reused for the final response so streamed IDs remain stable.
   ProcessGeneratedOutput(std::move(generated_events), options, original_request.canceled,
-                         stop_sequence_matched, response, prompt_tokens, total_tokens,
-                         splitter.ReasoningTokenCount(),
-                         backend_finish_reason);
+                         stop_sequence_matched, /*host_output_limit_reached=*/false, response, prompt_tokens,
+                         total_tokens, splitter.ReasoningTokenCount(), backend_finish_reason);
 
   // Emit final streaming chunk with finish_reason
   if (is_streaming) {

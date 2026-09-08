@@ -35,13 +35,19 @@ TEST(SearchOptionsParsingTest, TemperatureOutsideSupportedRangeThrows) {
   }
 }
 
-TEST(SearchOptionsParsingTest, ResolvesDefaultAndExplicitOutputLimits) {
+TEST(SearchOptionsParsingTest, OmittedOutputLimitUsesTextAndMediaDefaults) {
   SearchOptions defaults;
-  EXPECT_EQ(ResolveMaxOutputTokens(defaults), 2048);
+  EXPECT_EQ(GetDefaultMaxOutputTokens(/*has_media=*/false), 2048);
+  EXPECT_EQ(GetDefaultMaxOutputTokens(/*has_media=*/true), 3072);
+  EXPECT_EQ(ResolveMaxOutputTokens(defaults, GetDefaultMaxOutputTokens(/*has_media=*/false)), 2048);
+  EXPECT_EQ(ResolveMaxOutputTokens(defaults, GetDefaultMaxOutputTokens(/*has_media=*/true)), 3072);
+}
 
+TEST(SearchOptionsParsingTest, ExplicitOutputLimitOverridesTurnDefault) {
   SearchOptions explicit_limit;
   explicit_limit.max_output_tokens = 64;
-  EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit), 64);
+  EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit, GetDefaultMaxOutputTokens(/*has_media=*/false)), 64);
+  EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit, GetDefaultMaxOutputTokens(/*has_media=*/true)), 64);
 }
 
 TEST(SearchOptionsParsingTest, RetainedGenerationSettingsAreBackendAware) {

@@ -90,8 +90,17 @@ struct SearchOptions {
   bool HasSameRetainedGenerationSettings(const SearchOptions& other, ChatBackendKind backend_kind) const;
 };
 
-/// Return the explicit or default output-token limit for a text generation turn.
-int ResolveMaxOutputTokens(const SearchOptions& options, int default_max_output_tokens = 2048);
+inline constexpr int kDefaultChatTextMaxOutputTokens = 2048;
+inline constexpr int kDefaultChatMediaMaxOutputTokens = 3072;
+
+/// Return the default output-token limit for a text or media generation turn.
+constexpr int GetDefaultMaxOutputTokens(bool has_media) noexcept {
+  return has_media ? kDefaultChatMediaMaxOutputTokens : kDefaultChatTextMaxOutputTokens;
+}
+
+/// Return the explicit or caller-selected default output-token limit.
+int ResolveMaxOutputTokens(const SearchOptions& options,
+                           int default_max_output_tokens = kDefaultChatTextMaxOutputTokens);
 
 /// Return the model's total context window from genai_config.json.
 int GetModelMaxContextLength(const GenAIConfig& config);
@@ -119,7 +128,7 @@ bool SupportsPerTurnSeed(ChatBackendKind backend_kind);
 EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  const ToolCallContext& tool_ctx,
                                                  ChatBackendKind backend_kind,
-                                                 int default_max_output_tokens = 2048);
+                                                 int default_max_output_tokens = kDefaultChatTextMaxOutputTokens);
 
 /// Apply search options to OgaGeneratorParams.
 /// Validates token budget (input + output vs model max_length from config).
@@ -145,7 +154,7 @@ int ApplySearchOptions(const SearchOptions& options,
                        OgaGeneratorParams& gen_params,
                        ExecutionProvider ep,
                        bool use_full_context = false,
-                       int default_max_output_tokens = 2048);
+                       int default_max_output_tokens = kDefaultChatTextMaxOutputTokens);
 
 /// Applies request-level grammar guidance to generator parameters when the tool context requires tool-only output.
 void ApplyGuidanceOptions(const ToolCallContext& tool_ctx, OgaGeneratorParams& gen_params);
