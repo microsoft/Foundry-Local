@@ -527,11 +527,18 @@ TEST_F(ChatSessionTest, RunMultiTurn) {
 }
 
 TEST_F(ChatSessionTest, ChatTemplateKwargsControlCachedGeneratorReuse) {
-  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  struct TurnResult {
+    std::string text;
+    int prompt_tokens;
+  };
 
-  auto run_turn = [&](const char* prompt, const char* template_kwargs) {
+  auto run_turn = [&](ChatSession& session,
+                      const std::vector<std::pair<flMessageRole, std::string>>& messages,
+                      const char* template_kwargs) {
     Request request;
-    request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, prompt));
+    for (const auto& [role, content] : messages) {
+      request.AddOwnedItem(MakeMessage(role, content));
+    }
     request.options.Add("max_output_tokens", "4");
     request.options.Add("temperature", "0");
     if (template_kwargs) {
@@ -541,30 +548,62 @@ TEST_F(ChatSessionTest, ChatTemplateKwargsControlCachedGeneratorReuse) {
     Response response;
     session.ProcessRequest(request, response);
     EXPECT_NE(response.finish_reason, FOUNDRY_LOCAL_FINISH_ERROR);
-    return response.usage.prompt_tokens;
+    return TurnResult{GetAssistantText(response), response.usage.prompt_tokens};
   };
 
-  run_turn("Reply briefly: one.", R"({"enable_thinking":false})");
+  constexpr const char* kFirstPrompt = "Reply briefly: one.";
+  constexpr const char* kSecondPrompt = "Reply briefly: two.";
+  constexpr const char* kThirdPrompt = "Reply briefly: three.";
+  constexpr const char* kFourthPrompt = "Reply briefly: four.";
+  constexpr const char* kNoThinking = R"({"enable_thinking":false})";
+  constexpr const char* kThinking = R"({"enable_thinking":true})";
 
-  int same_kwargs_prompt_tokens =
-      run_turn("Reply briefly: two.", R"({"enable_thinking":false})");
-  int changed_kwargs_prompt_tokens =
-      run_turn("Reply briefly: three.", R"({"enable_thinking":true})");
-  EXPECT_GT(changed_kwargs_prompt_tokens, same_kwargs_prompt_tokens)
-      << "Changing template kwargs must rebuild the generator from full history";
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  auto first = run_turn(session, {{FOUNDRY_LOCAL_ROLE_USER, kFirstPrompt}}, kNoThinking);
+  auto same_kwargs = run_turn(session, {{FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt}}, kNoThinking);
 
-  int reused_changed_kwargs_prompt_tokens =
-      run_turn("Reply briefly: four.", R"({"enable_thinking":true})");
-  EXPECT_GT(changed_kwargs_prompt_tokens, reused_changed_kwargs_prompt_tokens)
+  ChatSession same_kwargs_baseline(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  auto same_kwargs_full_history = run_turn(
+      same_kwargs_baseline,
+      {{FOUNDRY_LOCAL_ROLE_USER, kFirstPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt}},
+      kNoThinking);
+  EXPECT_EQ(same_kwargs.text, same_kwargs_full_history.text);
+  EXPECT_LT(same_kwargs.prompt_tokens, same_kwargs_full_history.prompt_tokens)
       << "Identical template kwargs should retain the continuous-decoding path";
 
-  int removed_kwargs_prompt_tokens = run_turn("Reply briefly: five.", nullptr);
-  EXPECT_GT(removed_kwargs_prompt_tokens, reused_changed_kwargs_prompt_tokens)
-      << "Removing template kwargs must rebuild and clear the previous tokenizer state";
+  auto changed_kwargs = run_turn(session, {{FOUNDRY_LOCAL_ROLE_USER, kThirdPrompt}}, kThinking);
 
-  int reused_empty_kwargs_prompt_tokens = run_turn("Reply briefly: six.", nullptr);
-  EXPECT_GT(removed_kwargs_prompt_tokens, reused_empty_kwargs_prompt_tokens)
-      << "Repeated omission should retain the continuous-decoding path";
+  ChatSession changed_kwargs_baseline(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  auto changed_kwargs_full_history = run_turn(
+      changed_kwargs_baseline,
+      {{FOUNDRY_LOCAL_ROLE_USER, kFirstPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, same_kwargs.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kThirdPrompt}},
+      kThinking);
+  EXPECT_EQ(changed_kwargs.text, changed_kwargs_full_history.text);
+  EXPECT_EQ(changed_kwargs.prompt_tokens, changed_kwargs_full_history.prompt_tokens)
+      << "Changing template kwargs must rebuild the generator from full history";
+
+  auto removed_kwargs = run_turn(session, {{FOUNDRY_LOCAL_ROLE_USER, kFourthPrompt}}, nullptr);
+
+  ChatSession removed_kwargs_baseline(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  auto removed_kwargs_full_history = run_turn(
+      removed_kwargs_baseline,
+      {{FOUNDRY_LOCAL_ROLE_USER, kFirstPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, same_kwargs.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kThirdPrompt},
+       {FOUNDRY_LOCAL_ROLE_ASSISTANT, changed_kwargs.text},
+       {FOUNDRY_LOCAL_ROLE_USER, kFourthPrompt}},
+      nullptr);
+  EXPECT_EQ(removed_kwargs.text, removed_kwargs_full_history.text);
+  EXPECT_EQ(removed_kwargs.prompt_tokens, removed_kwargs_full_history.prompt_tokens)
+      << "Removing template kwargs must rebuild from full history and clear tokenizer state";
 }
 
 TEST_F(ChatSessionTest, RunStreamingCancellation) {
