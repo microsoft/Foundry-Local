@@ -12,8 +12,10 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 using namespace fl::responses;
 using namespace fl;
@@ -76,15 +78,25 @@ TEST(ResponseConverterTest, ToSessionRequestWithInstructions) {
   auto params = req.get<ResponseCreateParams>();
   auto session_req = ResponseConverter::ToSessionRequest(params);
 
-  ASSERT_GE(session_req.items.size(), 2u);
-  // First item should be the system message
-  const MessageItem& system_msg = static_cast<const MessageItem&>(*session_req.items[0]);
-  EXPECT_EQ(system_msg.role, FOUNDRY_LOCAL_ROLE_SYSTEM);
-  EXPECT_EQ(system_msg.GetSimpleText(), "You are a helpful robot.");
-  // Second should be the user message
-  const MessageItem& user_msg = static_cast<const MessageItem&>(*session_req.items[1]);
+  // Instructions travel as the request-scoped system prefix, not as a message: a message would be committed to the
+  // transcript and replayed on every later turn.
+  const char* prefix = session_req.options.Find(kSystemPromptOption);
+  ASSERT_NE(prefix, nullptr);
+  EXPECT_STREQ(prefix, "You are a helpful robot.");
+
+  ASSERT_EQ(session_req.items.size(), 1u);
+  const MessageItem& user_msg = static_cast<const MessageItem&>(*session_req.items[0]);
   EXPECT_EQ(user_msg.role, FOUNDRY_LOCAL_ROLE_USER);
   EXPECT_EQ(user_msg.GetSimpleText(), "Hello");
+}
+
+TEST(ResponseConverterTest, ToSessionRequestWithoutInstructionsSetsNoSystemPrefix) {
+  json req = {{"model", "test-model"}, {"input", "Hello"}};
+
+  auto params = req.get<ResponseCreateParams>();
+  auto session_req = ResponseConverter::ToSessionRequest(params);
+
+  EXPECT_EQ(session_req.options.Find(kSystemPromptOption), nullptr);
 }
 
 TEST(ResponseConverterTest, ToSessionRequestWithTemperature) {
@@ -154,8 +166,7 @@ TEST(ResponseConverterTest, ToSessionRequestWithPreviousContext) {
   });
 
   auto params = req.get<ResponseCreateParams>();
-  nlohmann::json previous_context = prev_input;
-  previous_context.insert(previous_context.end(), prev_output.begin(), prev_output.end());
+  ResponseChainContext previous_context{ResponseChainHop{prev_input, prev_output}};
   auto session_req = ResponseConverter::ToSessionRequest(params, &previous_context);
 
   // Should have: previous user msg + previous assistant msg + new user msg
@@ -361,68 +372,144 @@ TEST(ResponseStoreTest, DeleteReturnsFalseForMissing) {
   EXPECT_FALSE(store.Delete("nonexistent"));
 }
 
+namespace {
+
+/// Store `count` responses named resp_1 .. resp_count, oldest first. ResponseStore owns a mutex and so is neither
+/// copyable nor movable; the caller supplies the store.
+void FillStore(ResponseStore& store, int count) {
+  for (int i = 1; i <= count; ++i) {
+    const std::string id = "resp_" + std::to_string(i);
+    store.Store(id, {{"id", id}}, json::array());
+  }
+}
+
+/// The IDs of a page, in the order the store returned them.
+std::vector<std::string> PageIds(const ResponseStore::Page& page) {
+  std::vector<std::string> ids;
+  for (const auto& item : page.data) {
+    ids.push_back(item.value("id", ""));
+  }
+
+  return ids;
+}
+
+}  // namespace
+
 TEST(ResponseStoreTest, ListReturnsAllEntries) {
   ResponseStore store;
-
-  store.Store("resp_1", {{"id", "resp_1"}}, json::array());
-  store.Store("resp_2", {{"id", "resp_2"}}, json::array());
-  store.Store("resp_3", {{"id", "resp_3"}}, json::array());
+  FillStore(store, 3);
 
   auto all = store.List(10, "", "desc");
-  EXPECT_EQ(all.size(), 3u);
+  EXPECT_EQ(all.data.size(), 3u);
 }
 
 TEST(ResponseStoreTest, ListRespectsLimit) {
   ResponseStore store;
-
-  store.Store("resp_1", {{"id", "resp_1"}}, json::array());
-  store.Store("resp_2", {{"id", "resp_2"}}, json::array());
-  store.Store("resp_3", {{"id", "resp_3"}}, json::array());
+  FillStore(store, 3);
 
   auto limited = store.List(2, "", "desc");
-  EXPECT_EQ(limited.size(), 2u);
+  EXPECT_EQ(limited.data.size(), 2u);
 }
 
 TEST(ResponseStoreTest, ListDescOrderReturnsMostRecentFirst) {
   ResponseStore store;
-
-  store.Store("resp_1", {{"id", "resp_1"}}, json::array());
-  store.Store("resp_2", {{"id", "resp_2"}}, json::array());
-  store.Store("resp_3", {{"id", "resp_3"}}, json::array());
+  FillStore(store, 3);
 
   auto results = store.List(10, "", "desc");
-  ASSERT_EQ(results.size(), 3u);
-  EXPECT_EQ(results[0]["id"], "resp_3");
-  EXPECT_EQ(results[1]["id"], "resp_2");
-  EXPECT_EQ(results[2]["id"], "resp_1");
+  EXPECT_EQ(PageIds(results), (std::vector<std::string>{"resp_3", "resp_2", "resp_1"}));
 }
 
 TEST(ResponseStoreTest, ListAscOrderReturnsOldestFirst) {
   ResponseStore store;
-
-  store.Store("resp_1", {{"id", "resp_1"}}, json::array());
-  store.Store("resp_2", {{"id", "resp_2"}}, json::array());
-  store.Store("resp_3", {{"id", "resp_3"}}, json::array());
+  FillStore(store, 3);
 
   auto results = store.List(10, "", "asc");
-  ASSERT_EQ(results.size(), 3u);
-  EXPECT_EQ(results[0]["id"], "resp_1");
-  EXPECT_EQ(results[1]["id"], "resp_2");
-  EXPECT_EQ(results[2]["id"], "resp_3");
+  EXPECT_EQ(PageIds(results), (std::vector<std::string>{"resp_1", "resp_2", "resp_3"}));
 }
 
 TEST(ResponseStoreTest, ListWithCursorPagination) {
   ResponseStore store;
+  FillStore(store, 3);
 
-  store.Store("resp_1", {{"id", "resp_1"}}, json::array());
-  store.Store("resp_2", {{"id", "resp_2"}}, json::array());
-  store.Store("resp_3", {{"id", "resp_3"}}, json::array());
-
-  // Get items after resp_2 in desc order
+  // In desc order (newest first: 3,2,1), after resp_2 should give resp_1.
   auto results = store.List(10, "resp_2", "desc");
-  // In desc order (newest first: 3,2,1), after resp_2 should give resp_1
-  ASSERT_EQ(results.size(), 1u);
-  EXPECT_EQ(results[0]["id"], "resp_1");
+  EXPECT_EQ(PageIds(results), (std::vector<std::string>{"resp_1"}));
+}
+
+// --- has_more: the page must report whether anything actually follows it -----------------------------------------
+
+TEST(ResponseStoreTest, FewerEntriesThanLimitReportsNoMore) {
+  ResponseStore store;
+  FillStore(store, 2);
+
+  auto page = store.List(5, "", "desc");
+  EXPECT_EQ(page.data.size(), 2u);
+  EXPECT_FALSE(page.has_more);
+}
+
+TEST(ResponseStoreTest, ExactlyLimitEntriesReportsNoMoreInDescOrder) {
+  // The false positive this guards: a full final page used to claim a next page that did not exist.
+  ResponseStore store;
+  FillStore(store, 3);
+
+  auto page = store.List(3, "", "desc");
+  EXPECT_EQ(PageIds(page), (std::vector<std::string>{"resp_3", "resp_2", "resp_1"}));
+  EXPECT_FALSE(page.has_more);
+}
+
+TEST(ResponseStoreTest, ExactlyLimitEntriesReportsNoMoreInAscOrder) {
+  ResponseStore store;
+  FillStore(store, 3);
+
+  auto page = store.List(3, "", "asc");
+  EXPECT_EQ(PageIds(page), (std::vector<std::string>{"resp_1", "resp_2", "resp_3"}));
+  EXPECT_FALSE(page.has_more);
+}
+
+TEST(ResponseStoreTest, MoreEntriesThanLimitReportsMore) {
+  ResponseStore store;
+  FillStore(store, 4);
+
+  auto page = store.List(3, "", "desc");
+  EXPECT_EQ(PageIds(page), (std::vector<std::string>{"resp_4", "resp_3", "resp_2"}));
+  EXPECT_TRUE(page.has_more);
+}
+
+TEST(ResponseStoreTest, ExactlyLimitEntriesAfterACursorReportsNoMore) {
+  ResponseStore store;
+  FillStore(store, 4);
+
+  // desc order is 4,3,2,1; after resp_3 exactly two remain and the page holds both.
+  auto page = store.List(2, "resp_3", "desc");
+  EXPECT_EQ(PageIds(page), (std::vector<std::string>{"resp_2", "resp_1"}));
+  EXPECT_FALSE(page.has_more);
+}
+
+TEST(ResponseStoreTest, MoreEntriesAfterACursorReportsMore) {
+  ResponseStore store;
+  FillStore(store, 4);
+
+  // asc order is 1,2,3,4; after resp_1 three remain and the page holds two of them.
+  auto page = store.List(2, "resp_1", "asc");
+  EXPECT_EQ(PageIds(page), (std::vector<std::string>{"resp_2", "resp_3"}));
+  EXPECT_TRUE(page.has_more);
+}
+
+TEST(ResponseStoreTest, CursorAtTheEndReturnsAnEmptyFinalPage) {
+  ResponseStore store;
+  FillStore(store, 3);
+
+  auto page = store.List(2, "resp_1", "desc");
+  EXPECT_TRUE(page.data.empty());
+  EXPECT_FALSE(page.has_more);
+}
+
+TEST(ResponseStoreTest, EmptyStoreReportsNoMore) {
+  ResponseStore store;
+
+  auto page = store.List(10, "", "desc");
+  EXPECT_TRUE(page.data.empty());
+  EXPECT_FALSE(page.has_more);
 }
 
 TEST(ResponseStoreTest, EvictsOldestWhenCapacityExceeded) {
@@ -496,15 +583,21 @@ TEST(ResponseStoreChainTest, ReconstructsToolCallAndResultAcrossMultipleHops) {
   auto context = store.BuildChainContext("resp_2");
 
   ASSERT_TRUE(context.has_value());
-  ASSERT_EQ(context->size(), 4u);
+  ASSERT_EQ(context->size(), 2u);
 
-  // Oldest first, each hop's input followed by its output — so the tool call precedes the result that answers it.
-  EXPECT_EQ((*context)[0]["role"], "user");
-  EXPECT_EQ((*context)[1]["type"], "function_call");
-  EXPECT_EQ((*context)[1]["call_id"], "call_1");
-  EXPECT_EQ((*context)[2]["type"], "function_call_output");
-  EXPECT_EQ((*context)[2]["call_id"], "call_1");
-  EXPECT_EQ((*context)[3]["role"], "assistant");
+  // Oldest hop first, and each hop keeps its own input and output apart so replay can rebuild one assistant turn
+  // per hop — the tool call therefore still precedes the result that answers it.
+  ASSERT_EQ((*context)[0].input_items.size(), 1u);
+  EXPECT_EQ((*context)[0].input_items[0]["role"], "user");
+  ASSERT_EQ((*context)[0].output_items.size(), 1u);
+  EXPECT_EQ((*context)[0].output_items[0]["type"], "function_call");
+  EXPECT_EQ((*context)[0].output_items[0]["call_id"], "call_1");
+
+  ASSERT_EQ((*context)[1].input_items.size(), 1u);
+  EXPECT_EQ((*context)[1].input_items[0]["type"], "function_call_output");
+  EXPECT_EQ((*context)[1].input_items[0]["call_id"], "call_1");
+  ASSERT_EQ((*context)[1].output_items.size(), 1u);
+  EXPECT_EQ((*context)[1].output_items[0]["role"], "assistant");
 }
 
 TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {
@@ -516,9 +609,27 @@ TEST(ResponseStoreChainTest, SingleHopChainReturnsItsOwnInputAndOutput) {
   auto context = store.BuildChainContext("resp_1");
 
   ASSERT_TRUE(context.has_value());
-  ASSERT_EQ(context->size(), 2u);
-  EXPECT_EQ((*context)[0]["role"], "user");
-  EXPECT_EQ((*context)[1]["role"], "assistant");
+  ASSERT_EQ(context->size(), 1u);
+  ASSERT_EQ((*context)[0].input_items.size(), 1u);
+  EXPECT_EQ((*context)[0].input_items[0]["role"], "user");
+  ASSERT_EQ((*context)[0].output_items.size(), 1u);
+  EXPECT_EQ((*context)[0].output_items[0]["role"], "assistant");
+}
+
+TEST(ResponseStoreChainTest, EmptyOutputStillReportsTheHopThatProducedIt) {
+  // A hop whose output was reasoning-only or truncated before any visible text still happened. Reporting the hop
+  // with an empty output array is what lets replay rebuild the assistant boundary the live session committed.
+  ResponseStore store;
+  StoreHop(store, "resp_1", "",
+           json::array({{{"type", "message"}, {"role", "user"}, {"content", "hello"}}}), json::array());
+
+  auto context = store.BuildChainContext("resp_1");
+
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 1u);
+  EXPECT_EQ((*context)[0].input_items.size(), 1u);
+  EXPECT_TRUE((*context)[0].output_items.is_array());
+  EXPECT_TRUE((*context)[0].output_items.empty());
 }
 
 TEST(ResponseStoreChainTest, MissingLinkCannotBeReconstructed) {
@@ -563,59 +674,74 @@ TEST(ResponseStoreChainTest, ReconstructionDoesNotChangeInputItemsEndpointSemant
   EXPECT_EQ((*items)[0]["type"], "function_call_output");
 }
 
-TEST(ResponseStoreChainTest, InstructionsAreNotReplayedOncePerHop) {
+TEST(ResponseStoreChainTest, EveryStoredSystemMessageIsReplayedVerbatim) {
+  // Instructions are no longer stored as items, so the store never has to guess which system message was ours.
+  // Every system message the caller sent survives reconstruction, including duplicates and content-part forms.
   ResponseStore store;
 
-  // ToInputItems injects a request's instructions as the leading system item of that request's stored input.
-  auto hop_input = [](const std::string& instructions, const std::string& user_text) {
-    return json::array({{{"type", "message"}, {"role", "system"}, {"content", instructions}},
-                        {{"type", "message"}, {"role", "user"}, {"content", user_text}}});
-  };
+  json response;
+  response["id"] = "resp_1";
+  response["previous_response_id"] = nullptr;
+  response["instructions"] = "Be terse.";
+  response["output"] = json::array();
 
-  json first;
-  first["id"] = "resp_1";
-  first["previous_response_id"] = nullptr;
-  first["instructions"] = "Be terse.";
-  first["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "ok"}}});
-  store.Store("resp_1", first, hop_input("Be terse.", "hello"));
+  store.Store("resp_1", response,
+              json::array({{{"type", "message"}, {"role", "system"}, {"content", "Be terse."}},
+                           {{"type", "message"}, {"role", "user"}, {"content", "hello"}},
+                           {{"type", "message"}, {"role", "system"}, {"content", "Be terse."}},
+                           {{"type", "message"},
+                            {"role", "system"},
+                            {"content", json::array({{{"type", "input_text"}, {"text", "Be terse."}}})}}}));
 
-  json second;
-  second["id"] = "resp_2";
-  second["previous_response_id"] = "resp_1";
-  second["instructions"] = "Be terse.";
-  second["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "sure"}}});
-  store.Store("resp_2", second, hop_input("Be terse.", "again"));
+  auto context = store.BuildChainContext("resp_1");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 1u);
+
+  const auto& replayed = (*context)[0].input_items;
+  ASSERT_EQ(replayed.size(), 4u);
+  EXPECT_EQ(replayed[0]["content"], "Be terse.");
+  EXPECT_EQ(replayed[1]["content"], "hello");
+  EXPECT_EQ(replayed[2]["content"], "Be terse.");
+  EXPECT_TRUE(replayed[3]["content"].is_array());
+  EXPECT_EQ(replayed[3]["content"][0]["text"], "Be terse.");
+}
+
+TEST(ResponseStoreChainTest, StoredInputItemsAreReturnedUnchangedAcrossHops) {
+  ResponseStore store;
+
+  StoreHop(store, "resp_1", "", json::array({{{"type", "message"}, {"role", "user"}, {"content", "hello"}}}),
+           json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "ok"}}}));
+  StoreHop(store, "resp_2", "resp_1", json::array({{{"type", "message"}, {"role", "user"}, {"content", "again"}}}),
+           json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "sure"}}}));
 
   auto context = store.BuildChainContext("resp_2");
   ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
 
-  // Instructions are request-scoped: the current request supplies its own, so no hop replays one.
-  int system_items = 0;
-  for (const auto& item : *context) {
-    if (item.value("role", "") == "system") {
-      ++system_items;
-    }
-  }
+  EXPECT_EQ((*context)[0].input_items, *store.GetInputItems("resp_1"));
+  EXPECT_EQ((*context)[1].input_items, *store.GetInputItems("resp_2"));
+  EXPECT_EQ((*context)[0].output_items[0]["content"], "ok");
+  EXPECT_EQ((*context)[1].output_items[0]["content"], "sure");
+}
 
-  EXPECT_EQ(system_items, 0);
-  ASSERT_EQ(context->size(), 4u);
-  EXPECT_EQ((*context)[0]["content"], "hello");
-  EXPECT_EQ((*context)[1]["content"], "ok");
-  EXPECT_EQ((*context)[2]["content"], "again");
-  EXPECT_EQ((*context)[3]["content"], "sure");
+TEST(ResponseStoreChainTest, NonArrayStoredInputItemsBecomeAnEmptyHopInput) {
+  // Stored entries are arbitrary JSON. A malformed input-items field must not throw or leak a non-array into replay.
+  ResponseStore store;
 
-  // A system message the caller actually put in `input` is not an instructions item and is still replayed.
-  json third;
-  third["id"] = "resp_3";
-  third["previous_response_id"] = nullptr;
-  third["output"] = json::array();
-  store.Store("resp_3", third,
-              json::array({{{"type", "message"}, {"role", "system"}, {"content", "caller system"}}}));
+  json response;
+  response["id"] = "resp_1";
+  response["previous_response_id"] = nullptr;
+  response["output"] = json("not-an-array");
+  store.Store("resp_1", response, json("not-an-array"));
 
-  auto kept = store.BuildChainContext("resp_3");
-  ASSERT_TRUE(kept.has_value());
-  ASSERT_EQ(kept->size(), 1u);
-  EXPECT_EQ((*kept)[0]["content"], "caller system");
+  std::optional<ResponseChainContext> context;
+  ASSERT_NO_THROW(context = store.BuildChainContext("resp_1"));
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 1u);
+  EXPECT_TRUE((*context)[0].input_items.is_array());
+  EXPECT_TRUE((*context)[0].input_items.empty());
+  EXPECT_TRUE((*context)[0].output_items.is_array());
+  EXPECT_TRUE((*context)[0].output_items.empty());
 }
 
 TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
@@ -633,7 +759,7 @@ TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
   auto context = store.BuildChainContext("resp_2");
   ASSERT_TRUE(context.has_value());
   ASSERT_EQ(context->size(), 2u);
-  EXPECT_EQ((*context)[0]["content"], "one");
+  EXPECT_EQ((*context)[0].input_items[0]["content"], "one");
 }
 
 TEST(ResponseStoreChainTest, TouchChainReportsABrokenChain) {
@@ -642,40 +768,6 @@ TEST(ResponseStoreChainTest, TouchChainReportsABrokenChain) {
 
   EXPECT_FALSE(store.TouchChain("resp_2"));
   EXPECT_FALSE(store.TouchChain("resp_missing"));
-}
-
-TEST(ResponseStoreChainTest, CallerSystemMessageWithArrayContentReplaysAlongsideInstructions) {
-  // Regression: the instructions probe used to read `content` as a string unconditionally, so a caller-supplied
-  // system message whose content is an array of parts threw while reconstructing a chain that also had instructions.
-  ResponseStore store;
-
-  json response;
-  response["id"] = "resp_1";
-  response["previous_response_id"] = nullptr;
-  response["instructions"] = "Be terse.";
-  response["output"] = json::array({{{"type", "message"}, {"role", "assistant"}, {"content", "ok"}}});
-
-  auto input_items = json::array({
-      // The instructions-derived item, which must be dropped.
-      {{"type", "message"}, {"role", "system"}, {"content", "Be terse."}},
-      // A caller-supplied system message in content-part form, which must survive.
-      {{"type", "message"},
-       {"role", "system"},
-       {"content", json::array({{{"type", "input_text"}, {"text", "Answer in French."}}})}},
-      {{"type", "message"}, {"role", "user"}, {"content", "hello"}},
-  });
-  store.Store("resp_1", response, input_items);
-
-  std::optional<json> context;
-  ASSERT_NO_THROW(context = store.BuildChainContext("resp_1"));
-  ASSERT_TRUE(context.has_value());
-
-  ASSERT_EQ(context->size(), 3u);
-  EXPECT_EQ((*context)[0]["role"], "system");
-  EXPECT_TRUE((*context)[0]["content"].is_array());
-  EXPECT_EQ((*context)[0]["content"][0]["text"], "Answer in French.");
-  EXPECT_EQ((*context)[1]["content"], "hello");
-  EXPECT_EQ((*context)[2]["content"], "ok");
 }
 
 TEST(ResponseStoreChainTest, NonStringRolesAndContentDoNotBreakReconstruction) {
@@ -687,17 +779,18 @@ TEST(ResponseStoreChainTest, NonStringRolesAndContentDoNotBreakReconstruction) {
   response["instructions"] = "Be terse.";
   response["output"] = json::array();
 
-  // Arbitrary stored shapes must be tolerated by the instructions probe.
+  // Stored items are arbitrary caller input. Reconstruction copies them through untouched — it never inspects a
+  // role or a content shape, so no stored shape can make it throw or drop an item.
   store.Store("resp_1", response,
               json::array({json::array({1, 2}),
                            {{"role", 7}, {"content", "Be terse."}},
                            {{"role", "system"}, {"content", 42}},
                            {{"role", "system"}, {"content", "Be terse."}}}));
 
-  std::optional<json> context;
+  std::optional<ResponseChainContext> context;
   ASSERT_NO_THROW(context = store.BuildChainContext("resp_1"));
   ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 1u);
 
-  // Only the genuine instructions item is dropped.
-  EXPECT_EQ(context->size(), 3u);
+  EXPECT_EQ((*context)[0].input_items.size(), 4u);
 }

@@ -279,8 +279,13 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
           // Assistant tool calls are replayed as input when the caller chains turns without server-side storage.
           items.push_back(entry.get<FunctionCallInputItem>());
         } else if (type == "reasoning") {
-          // Reasoning output is not fed back to the model. This matches stored-chain reconstruction.
-          continue;
+          // Reasoning text is private and is never fed back to the model. The assistant turn that produced it still
+          // happened, so it replays as an empty assistant message: dropping the item outright would leave two user
+          // turns next to each other and a different prompt than the live session builds. When the same turn also
+          // carried visible text or a call, this boundary merges into that assistant message and changes nothing.
+          InputMessage boundary;
+          boundary.role = "assistant";
+          items.push_back(std::move(boundary));
         } else {
           // Default: message item
           items.push_back(entry.get<InputMessage>());

@@ -8,6 +8,8 @@
 #include "exception.h"
 #include "inferencing/generative/chat/chat_template.h"
 #include "inferencing/session/request.h"
+#include "items/audio_item.h"
+#include "items/image_item.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
 #include "items/tool_call_item.h"
@@ -15,6 +17,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -91,15 +95,19 @@ TEST(ChatTemplateProjectionTest, MultipleToolCallsKeepEmissionOrder) {
             R"({"id":"call_2","type":"function","function":{"name":"second","arguments":{"b":2}}}]}])");
 }
 
-TEST(ChatTemplateProjectionTest, ReasoningIsProjectedAlongsideToolCalls) {
+TEST(ChatTemplateProjectionTest, ReasoningIsNotProjectedEvenAlongsideToolCalls) {
+  // Reasoning is the model's private scratchpad. A conversation rebuilt from storage cannot reproduce it, so
+  // projecting it here would make a live session and a rebuilt one send different prompts. It stays on the
+  // transcript and is still surfaced to the caller as a typed output item.
   TranscriptMessage assistant;
   assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
   assistant.AppendReasoning("The user wants weather.");
   assistant.AppendText("Checking.");
   assistant.AppendToolCall(MakeCall("call_1", "get_weather", R"({"city":"Seattle"})"));
 
+  EXPECT_EQ(assistant.ReasoningText(), "The user wants weather.") << "the record keeps it";
   EXPECT_EQ(BuildChatMessagesJson({assistant}),
-            R"([{"role":"assistant","content":"Checking.","reasoning_content":"The user wants weather.",)"
+            R"([{"role":"assistant","content":"Checking.",)"
             R"("tool_calls":[{"id":"call_1","type":"function",)"
             R"("function":{"name":"get_weather","arguments":{"city":"Seattle"}}}]}])");
 }
@@ -214,6 +222,678 @@ TEST(TranscriptIngestTest, TypedTextPartsKeepVisibleAndReasoningApart) {
   ASSERT_EQ(messages.size(), 1u);
   EXPECT_EQ(messages[0].ReasoningText(), "thinking");
   EXPECT_EQ(messages[0].VisibleText(), "answer");
+}
+
+TEST(TranscriptIngestTest, AssistantMessageAfterAToolCallContinuesTheSameTurn) {
+  // A replayed `text -> call -> text` turn arrives as three items. The live session recorded it as one assistant
+  // message, so ingestion has to rebuild one message with the events still in order.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Weather?"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "Let me check."));
+  request.AddOwnedItem(std::make_unique<ToolCallItem>("call_1", "get_weather", R"({"city":"Seattle"})"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " One moment."));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 2u);
+  const auto& assistant = messages[1];
+  ASSERT_EQ(assistant.entries.size(), 3u);
+  EXPECT_EQ(assistant.entries[0].kind, TranscriptEntry::Kind::kText);
+  EXPECT_EQ(assistant.entries[0].text, "Let me check.");
+  EXPECT_EQ(assistant.entries[1].kind, TranscriptEntry::Kind::kToolCall);
+  EXPECT_EQ(assistant.entries[1].tool_call.call_id, "call_1");
+  EXPECT_EQ(assistant.entries[2].kind, TranscriptEntry::Kind::kText);
+  EXPECT_EQ(assistant.entries[2].text, " One moment.");
+  EXPECT_EQ(assistant.VisibleText(), "Let me check. One moment.");
+
+  // Ingestion rebuilds it faithfully; validation is what refuses it, because no chat template can say that the
+  // trailing text came after the call.
+  EXPECT_TRUE(assistant.HasVisibleTextAfterToolCall());
+  ChatTranscript transcript;
+  EXPECT_THROW(transcript.ValidateInputs(messages), fl::Exception);
+}
+
+TEST(TranscriptIngestTest, WhitespaceAfterAToolCallIsNotTextAfterACall) {
+  // A newline between two call blocks makes no claim about order and must not reject the turn.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Weather and time?"));
+  request.AddOwnedItem(std::make_unique<ToolCallItem>("call_1", "get_weather", R"({"city":"Seattle"})"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "\n"));
+  request.AddOwnedItem(std::make_unique<ToolCallItem>("call_2", "get_time", "{}"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 2u);
+  EXPECT_FALSE(messages[1].HasVisibleTextAfterToolCall());
+  ChatTranscript transcript;
+  EXPECT_NO_THROW(transcript.ValidateInputs(messages));
+}
+
+TEST(ChatTranscriptTest, TextAfterAToolCallIsRejectedWithInvalidArgument) {
+  TranscriptMessage assistant;
+  assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  assistant.AppendText("Let me check.");
+  assistant.AppendToolCall(MakeSuppliedToolCall("call_1", "get_weather", "{}"));
+  assistant.AppendText(" One moment.");
+
+  try {
+    ValidateRenderableTurn(assistant);
+    FAIL() << "expected the ordering invariant to reject the turn";
+  } catch (const fl::Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("visible text after a tool call"), std::string::npos) << ex.what();
+  }
+
+  // Nothing about the turn is committed, and the call never becomes answerable.
+  ChatTranscript transcript;
+  EXPECT_THROW(transcript.CommitTurn({}, assistant, {}), fl::Exception);
+  EXPECT_TRUE(transcript.Empty());
+  EXPECT_FALSE(transcript.HasOutstandingCalls());
+}
+
+TEST(ChatTranscriptTest, AReplyThatWouldContinueAPrefilledCallIsRejected) {
+  // Prefill and reply are each renderable on their own; merged they are not, so the check has to run on the merge.
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("Let me check.");
+  prefill.AppendToolCall(MakeSuppliedToolCall("call_1", "get_weather", "{}"));
+
+  TranscriptMessage reply;
+  reply.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  reply.AppendText(" One moment.");
+
+  ChatTranscript transcript;
+  EXPECT_THROW(transcript.CommitTurn({prefill}, reply, {}), fl::Exception);
+  EXPECT_TRUE(transcript.Empty());
+}
+
+// ===========================================================================
+// AssistantTurnGuard — the generation-side half of the ordering invariant.
+//
+// ChatSession applies this while a turn is produced, so post-call text is never streamed to the caller and never
+// reaches the transcript. These tests are the only model-free way to pin that behaviour.
+// ===========================================================================
+
+TEST(AssistantTurnGuardTest, TextBeforeAnyCallIsEmitted) {
+  AssistantTurnGuard guard;
+
+  EXPECT_EQ(guard.OfferVisibleText("Let me check."), TextDisposition::kEmit);
+  EXPECT_FALSE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, TextAfterACallEndsTheTurnOnce) {
+  AssistantTurnGuard guard;
+
+  EXPECT_EQ(guard.OfferVisibleText("Let me check."), TextDisposition::kEmit);
+  guard.RecordToolCall();
+
+  // The first post-call text is the one the caller is told about; everything after it is already accounted for.
+  EXPECT_EQ(guard.OfferVisibleText(" One moment."), TextDisposition::kEndTurn);
+  EXPECT_TRUE(guard.TurnEnded());
+  EXPECT_EQ(guard.OfferVisibleText(" and more"), TextDisposition::kDropped);
+  EXPECT_EQ(guard.OfferVisibleText("\n"), TextDisposition::kDropped);
+  EXPECT_TRUE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, WhitespaceBetweenCallsIsStillEmitted) {
+  // Models separate consecutive call blocks with a newline. Ending the turn on that would break parallel calls.
+  AssistantTurnGuard guard;
+
+  guard.RecordToolCall();
+  EXPECT_EQ(guard.OfferVisibleText("\n"), TextDisposition::kEmit);
+  EXPECT_EQ(guard.OfferVisibleText("  \t "), TextDisposition::kEmit);
+  guard.RecordToolCall();
+  EXPECT_FALSE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, AnEmptyTextEventNeverEndsTheTurn) {
+  AssistantTurnGuard guard;
+
+  guard.RecordToolCall();
+  EXPECT_EQ(guard.OfferVisibleText(""), TextDisposition::kEmit);
+  EXPECT_FALSE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, APrefilledCallClosesVisibleTextBeforeTheFirstToken) {
+  // The reply merges into the prefill, so the two are one assistant turn and the prefill's call already closed it.
+  AssistantTurnGuard guard(/*calls_already_issued=*/true);
+
+  EXPECT_EQ(guard.OfferVisibleText("continuing"), TextDisposition::kEndTurn);
+  EXPECT_TRUE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, ParallelCallsWithNoTextAreUnaffected) {
+  AssistantTurnGuard guard;
+
+  guard.RecordToolCall();
+  guard.RecordToolCall();
+  EXPECT_FALSE(guard.TurnEnded());
+}
+
+TEST(AssistantTurnGuardTest, WhatTheGuardAllowsIsExactlyWhatTheTranscriptAccepts) {
+  // The two halves of the invariant must agree: anything the guard lets through has to commit.
+  AssistantTurnGuard guard;
+
+  TranscriptMessage assistant;
+  assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+
+  const std::vector<std::string> stream{"Let me check.", "", "\n"};
+  for (const auto& text : stream) {
+    if (guard.OfferVisibleText(text) == TextDisposition::kEmit) {
+      assistant.AppendText(text);
+    }
+  }
+
+  guard.RecordToolCall();
+  assistant.AppendToolCall(MakeSuppliedToolCall("call_1", "get_weather", "{}"));
+
+  // The model keeps talking; the guard drops it, so the message stays renderable.
+  if (guard.OfferVisibleText(" One moment.") == TextDisposition::kEmit) {
+    assistant.AppendText(" One moment.");
+  }
+
+  EXPECT_TRUE(guard.TurnEnded());
+  EXPECT_FALSE(assistant.HasVisibleTextAfterToolCall());
+  EXPECT_NO_THROW(ValidateRenderableTurn(assistant));
+  EXPECT_EQ(assistant.VisibleText(), "Let me check.\n");
+}
+
+TEST(ChatTranscriptTest, AnEmptyReplyAfterAPrefilledCallCommitsAsTheOneTurn) {
+  // What the guard produces when a caller prefills an unanswered call and asks for more: the text is dropped, so the
+  // reply is empty and merges away. The call stays outstanding, waiting for the result it actually needs.
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendToolCall(MakeSuppliedToolCall("call_1", "get_weather", "{}"));
+
+  TranscriptMessage empty_reply;
+  empty_reply.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+
+  ChatTranscript transcript;
+  ASSERT_NO_THROW(transcript.CommitTurn({UserMessage("Weather?"), prefill}, empty_reply, {}));
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_EQ(transcript.Messages()[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(transcript.Messages()[1].ToolCalls().size(), 1u);
+  EXPECT_TRUE(transcript.IsOutstanding("call_1"));
+}
+
+TEST(ChatTranscriptTest, AssistantPrefillForReplyReportsTheMessageTheReplyWouldContinue) {
+  TranscriptMessage user(FOUNDRY_LOCAL_ROLE_USER, "Weather?");
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("Let me check.");
+
+  const std::vector<TranscriptMessage> inputs{user, prefill};
+
+  EXPECT_EQ(AssistantPrefillForReply(inputs, 0), &inputs.back());
+  // The floor is the boundary of the current replay segment: an earlier hop's assistant message is off limits.
+  EXPECT_EQ(AssistantPrefillForReply(inputs, inputs.size()), nullptr);
+  // A trailing user message is not a prefill.
+  EXPECT_EQ(AssistantPrefillForReply({prefill, user}, 0), nullptr);
+}
+
+TEST(TranscriptIngestTest, ConsecutiveAssistantMessagesBecomeOneTurn) {
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " two"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "one two");
+}
+
+TEST(TranscriptIngestTest, ADifferentParticipantNameStartsANewAssistantMessage) {
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one", "alice"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "two", "bob"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 2u);
+  EXPECT_EQ(messages[0].name, "alice");
+  EXPECT_EQ(messages[1].name, "bob");
+}
+
+// ===========================================================================
+// TurnCanGenerate — one decision for "does this turn have anything to say".
+//
+// ChatSession asks this once, so an empty `input` behaves the same whether the conversation is held in a warm
+// session or was replayed into the request from storage, and a turn with nothing at all is a client error rather
+// than a service failure.
+// ===========================================================================
+
+TEST(TurnCanGenerateTest, MessageContentIsEnough) {
+  EXPECT_TRUE(TurnCanGenerate({UserMessage("Hi")}, {}));
+}
+
+TEST(TurnCanGenerateTest, MediaWithNoTextIsContent) {
+  // The direct SDK regression: an image-only message has no text part, so it ingests as a message with no entries.
+  // The bytes are the question and reach the generator directly, so the turn most certainly can generate.
+  TranscriptMessage image_only;
+  image_only.role = FOUNDRY_LOCAL_ROLE_USER;
+  ASSERT_TRUE(image_only.entries.empty());
+
+  EXPECT_FALSE(TurnCanGenerate({image_only}, {}));
+  EXPECT_TRUE(TurnCanGenerate({image_only}, {.media = true}));
+}
+
+TEST(TurnCanGenerateTest, AudioOnlyIsContentForTheSameReason) {
+  TranscriptMessage audio_only;
+  audio_only.role = FOUNDRY_LOCAL_ROLE_USER;
+
+  EXPECT_TRUE(TurnCanGenerate({audio_only}, {.media = true}));
+}
+
+TEST(TurnCanGenerateTest, InstructionsAloneMayGenerate) {
+  // A new conversation whose whole request is `instructions`. The system prompt is content: the model can act on it.
+  EXPECT_TRUE(TurnCanGenerate({}, {.system_prefix = true}));
+}
+
+TEST(TurnCanGenerateTest, AnEmptyInputContinuesAConversation) {
+  // previous_response_id with an empty `input`, both ways round: warm sees history in the transcript, cold sees the
+  // replayed chain in its inputs. Both must be answerable, or the same request would depend on cache luck.
+  EXPECT_TRUE(TurnCanGenerate({}, {.history = true}));
+  EXPECT_TRUE(TurnCanGenerate({UserMessage("a"), MakeAssistant("A", {})}, {}));
+}
+
+TEST(TurnCanGenerateTest, NothingAtAllCannotGenerate) {
+  EXPECT_FALSE(TurnCanGenerate({}, {}));
+
+  // An assistant boundary is not content: it records that a turn happened and says nothing to answer.
+  TranscriptMessage boundary;
+  boundary.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  EXPECT_FALSE(TurnCanGenerate({boundary}, {}));
+}
+
+// ===========================================================================
+// Consecutive assistant messages — intentional continuation semantics.
+// ===========================================================================
+
+TEST(TranscriptIngestTest, TwoAssistantMessagesJoinLiterallyWithNoSeparatorInserted) {
+  // Deliberate: the fragments are two halves of one utterance, exactly as a live session records the text a model
+  // emits in two chunks. Inserting a space here would put text in the conversation that nobody produced, and would
+  // make a replayed turn differ from the turn it replays. The caller owns the spacing.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "Let me"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " check."));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "Let me check.");
+  // One text entry, because the two fragments coalesced into the run they belong to.
+  ASSERT_EQ(messages[0].entries.size(), 1u);
+  EXPECT_EQ(messages[0].entries[0].kind, TranscriptEntry::Kind::kText);
+}
+
+TEST(TranscriptIngestTest, JoiningInsertsNothingEvenWhenTheFragmentsHaveNoSpacing) {
+  // The exact concatenation, pinned: "one" + "two" is "onetwo", never "one two".
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "two"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "onetwo");
+}
+
+TEST(ChatTranscriptTest, AGeneratedReplyJoinsAnAssistantPrefillByTheSameLiteralRule) {
+  // The commit side of the same decision: a caller prefills "The answer is" and the model continues " 42.". One
+  // assistant turn, one message, no separator — which is also what replay rebuilds for that turn.
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("The answer is");
+
+  TranscriptMessage reply;
+  reply.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  reply.AppendText(" 42.");
+
+  ChatTranscript transcript;
+  transcript.CommitTurn({UserMessage("What is it?"), prefill}, reply, {});
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_EQ(transcript.Messages()[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(transcript.Messages()[1].VisibleText(), "The answer is 42.");
+  ASSERT_EQ(transcript.Messages()[1].entries.size(), 1u);
+}
+
+TEST(TranscriptIngestTest, AnUnnamedContinuationAdoptsTheOpenTurnsName) {
+  // Participant-name merge semantics, stated explicitly: an unnamed assistant message continues the open turn and
+  // the turn keeps the name it already had.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one", "alice"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " two"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].name, "alice");
+  EXPECT_EQ(messages[0].VisibleText(), "one two");
+}
+
+TEST(TranscriptIngestTest, AssistantTurnsSeparatedByAnotherRoleStayApart) {
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "and?"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "two"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 3u);
+  EXPECT_EQ(messages[0].VisibleText(), "one");
+  EXPECT_EQ(messages[2].VisibleText(), "two");
+}
+
+TEST(TranscriptIngestTest, AnAssistantMessageWithEmptyTextIsAnEmptyTurnBoundary) {
+  // How replay records a turn whose output was reasoning-only or truncated before any visible text.
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>(std::string{}));
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Say nothing."));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts)));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Still there?"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 3u);
+  EXPECT_EQ(messages[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_TRUE(messages[1].entries.empty());
+}
+
+TEST(TranscriptIngestTest, AnEmptyBoundaryMergesIntoTheAssistantOutputThatFollowsIt) {
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>(std::string{}));
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts)));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "Visible answer"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "Visible answer");
+}
+
+// ===========================================================================
+// Replay segments — the merge rule stops at a recorded-turn boundary
+// ===========================================================================
+
+TEST(TranscriptIngestTest, AssistantItemsInDifferentSegmentsStayApart) {
+  Request request;
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "turn one"));
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "turn two"));
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 2u);
+  EXPECT_EQ(ingest.messages[0].VisibleText(), "turn one");
+  EXPECT_EQ(ingest.messages[1].VisibleText(), "turn two");
+  EXPECT_EQ(ingest.last_segment_start, 1u);
+}
+
+TEST(TranscriptIngestTest, AssistantItemsInsideOneSegmentStillMerge) {
+  Request request;
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<ToolCallItem>("call_1", "get_weather", R"({})"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " two"));
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 1u);
+  ASSERT_EQ(ingest.messages[0].entries.size(), 3u);
+  EXPECT_EQ(ingest.messages[0].VisibleText(), "one two");
+  EXPECT_EQ(ingest.messages[0].entries[1].kind, TranscriptEntry::Kind::kToolCall);
+}
+
+TEST(TranscriptIngestTest, AToolCallOpeningASegmentDoesNotFoldIntoTheSegmentBefore) {
+  Request request;
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "earlier turn"));
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<ToolCallItem>("call_1", "get_weather", R"({})"));
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 2u);
+  EXPECT_EQ(ingest.messages[0].VisibleText(), "earlier turn");
+  EXPECT_FALSE(ingest.messages[0].HasToolCalls());
+  ASSERT_EQ(ingest.messages[1].ToolCalls().size(), 1u);
+  EXPECT_EQ(ingest.messages[1].ToolCalls()[0]->call_id, "call_1");
+}
+
+TEST(TranscriptIngestTest, ASegmentThatContributesNothingStillMovesTheBoundary) {
+  Request request;
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "earlier turn"));
+  request.BeginItemSegment();  // empty segment
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "later turn"));
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 2u);
+  EXPECT_EQ(ingest.last_segment_start, 1u);
+}
+
+TEST(TranscriptIngestTest, ATrailingEmptySegmentReportsItselfAsTheLastSegment) {
+  // The current request contributed no items at all: nothing generated now may merge into the replayed history.
+  Request request;
+  request.BeginItemSegment();
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "earlier turn"));
+  request.BeginItemSegment();
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 1u);
+  EXPECT_EQ(ingest.last_segment_start, 1u);
+}
+
+TEST(TranscriptIngestTest, NoSegmentsMeansAdjacencyGrouping) {
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " two"));
+
+  auto ingest = IngestRequestItems(request.items, request.item_segment_starts);
+
+  ASSERT_EQ(ingest.messages.size(), 1u);
+  EXPECT_EQ(ingest.messages[0].VisibleText(), "one two");
+  EXPECT_EQ(ingest.last_segment_start, 0u);
+}
+
+// ===========================================================================
+// CommitTurn — the reply continues a trailing assistant input
+// ===========================================================================
+
+TEST(ChatTranscriptTest, ReplyMergesIntoATrailingAssistantInputMessage) {
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("Sure, ");
+
+  ChatTranscript transcript;
+  transcript.CommitTurn({UserMessage("Finish this."), prefill}, MakeAssistant("here it is.", {}), {});
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_EQ(transcript.Messages()[1].VisibleText(), "Sure, here it is.");
+  EXPECT_EQ(transcript.TurnCount(), 1u);
+}
+
+TEST(ChatTranscriptTest, ReplyMergedIntoAPrefillKeepsItsToolCalls) {
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("Checking. ");
+
+  ChatTranscript transcript;
+  transcript.CommitTurn({UserMessage("Weather?"), prefill},
+                        MakeAssistant("", {MakeCall("call_1", "get_weather", "{}")}), {});
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_TRUE(transcript.IsOutstanding("call_1"));
+  ASSERT_EQ(transcript.Messages()[1].ToolCalls().size(), 1u);
+  EXPECT_EQ(transcript.Messages()[1].VisibleText(), "Checking. ");
+}
+
+TEST(ChatTranscriptTest, ReplyDoesNotMergeAcrossTheReplyMergeFloor) {
+  TranscriptMessage replayed;
+  replayed.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  replayed.AppendText("earlier turn");
+
+  ChatTranscript transcript;
+  // The first input message is replayed history, so the reply must not continue it.
+  transcript.CommitTurn({replayed}, MakeAssistant("new answer", {}), {}, /*reply_merge_floor=*/1);
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_EQ(transcript.Messages()[0].VisibleText(), "earlier turn");
+  EXPECT_EQ(transcript.Messages()[1].VisibleText(), "new answer");
+}
+
+TEST(ChatTranscriptTest, UndoRemovesATurnWhoseReplyWasMergedIntoItsInput) {
+  TranscriptMessage prefill;
+  prefill.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  prefill.AppendText("Sure, ");
+
+  ChatTranscript transcript;
+  transcript.CommitTurn({UserMessage("First.")}, MakeAssistant("One.", {}), {});
+  transcript.CommitTurn({UserMessage("Finish this."), prefill}, MakeAssistant("here it is.", {}), {});
+
+  ASSERT_EQ(transcript.MessageCount(), 4u);
+  transcript.UndoTurns(1);
+
+  ASSERT_EQ(transcript.MessageCount(), 2u);
+  EXPECT_EQ(transcript.Messages()[1].VisibleText(), "One.");
+}
+
+// ===========================================================================
+// CarriesToolActivity / CarriesPriorTurnHistory
+// ===========================================================================
+
+TEST(TranscriptIngestTest, CarriesToolActivityDetectsCallsAndResults) {
+  EXPECT_FALSE(CarriesToolActivity({}));
+  EXPECT_FALSE(CarriesToolActivity({UserMessage("Hi")}));
+  EXPECT_FALSE(CarriesToolActivity({MakeAssistant("plain answer", {})}));
+  EXPECT_TRUE(CarriesToolActivity({MakeAssistant("", {MakeCall("call_1", "get_weather", "{}")})}));
+  EXPECT_TRUE(CarriesToolActivity({TranscriptMessage::ToolResult("call_1", "")}));
+}
+
+TEST(TranscriptIngestTest, CarriesPriorTurnHistoryDetectsAnyAssistantOrToolMessage) {
+  EXPECT_FALSE(CarriesPriorTurnHistory({}));
+  EXPECT_FALSE(CarriesPriorTurnHistory({UserMessage("Hi")}));
+  EXPECT_FALSE(CarriesPriorTurnHistory({TranscriptMessage(FOUNDRY_LOCAL_ROLE_SYSTEM, "Be terse.")}));
+  EXPECT_TRUE(CarriesPriorTurnHistory({MakeAssistant("plain answer", {})}));
+  EXPECT_TRUE(CarriesPriorTurnHistory({TranscriptMessage::ToolResult("call_1", "")}));
+
+  // An assistant boundary with no entries is still a prior turn.
+  TranscriptMessage boundary;
+  boundary.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  EXPECT_TRUE(CarriesPriorTurnHistory({boundary}));
+}
+
+// ===========================================================================
+// WithSystemPrompt
+// ===========================================================================
+
+TEST(TranscriptIngestTest, WithSystemPromptPrependsExactlyOneSystemMessage) {
+  auto messages = WithSystemPrompt("Be terse.", {UserMessage("Hi")});
+
+  ASSERT_EQ(messages.size(), 2u);
+  EXPECT_EQ(messages[0].role, FOUNDRY_LOCAL_ROLE_SYSTEM);
+  EXPECT_EQ(messages[0].VisibleText(), "Be terse.");
+  EXPECT_EQ(messages[1].VisibleText(), "Hi");
+}
+
+TEST(TranscriptIngestTest, WithSystemPromptIsANoOpWhenThereIsNoPrefix) {
+  auto messages = WithSystemPrompt("", {UserMessage("Hi")});
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "Hi");
+}
+
+TEST(TranscriptIngestTest, ATopLevelImageItemIsRejectedRatherThanDropped) {
+  // Media only reaches the model as a content part of a message. A bare top-level item would contribute nothing and
+  // the model would be asked about an image it never saw.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "What is this?"));
+  request.AddOwnedItem(std::make_unique<ImageItem>(std::vector<std::uint8_t>{1, 2, 3}, "image/png"));
+
+  try {
+    BuildTranscriptMessages(request.items);
+    FAIL() << "expected a top-level image item to be rejected";
+  } catch (const fl::Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("content parts of a message item"), std::string::npos) << ex.what();
+  }
+}
+
+TEST(TranscriptIngestTest, ATopLevelAudioItemIsRejectedRatherThanDropped) {
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Transcribe this."));
+  request.AddOwnedItem(std::make_unique<AudioItem>(std::vector<std::uint8_t>{1, 2, 3}, "wav"));
+
+  EXPECT_THROW(BuildTranscriptMessages(request.items), fl::Exception);
+}
+
+TEST(TranscriptIngestTest, ATopLevelTextItemIsRejectedRatherThanDropped) {
+  // The same silent-drop hole as a top-level media item: text only reaches the model inside a message.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, "Hello"));
+  request.AddOwnedItem(std::make_unique<TextItem>("and this bit too"));
+
+  try {
+    BuildTranscriptMessages(request.items);
+    FAIL() << "expected a top-level text item to be rejected";
+  } catch (const fl::Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("message, tool call, and tool result"), std::string::npos) << ex.what();
+  }
+}
+
+TEST(TranscriptIngestTest, MediaPartsInsideAMessageAreStillSkipped) {
+  // The message itself is ingested for its text; the media bytes travel to the generator separately.
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>("What is this?"));
+  parts.push_back(std::make_unique<ImageItem>(std::vector<std::uint8_t>{1, 2, 3}, "image/png"));
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, std::move(parts)));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].VisibleText(), "What is this?");
+}
+
+TEST(TranscriptIngestTest, CarriesRespondableContentDistinguishesABoundaryFromRealInput) {
+  TranscriptMessage boundary;
+  boundary.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+
+  // A reasoning item rebuilds as exactly this: a turn happened, but there is nothing to respond to.
+  EXPECT_FALSE(CarriesRespondableContent({boundary}));
+  EXPECT_TRUE(CarriesRespondableContent({boundary, UserMessage("Hi")}));
+  EXPECT_TRUE(CarriesRespondableContent({TranscriptMessage::ToolResult("call_1", "sunny")}));
+
+  TranscriptMessage with_call;
+  with_call.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+  with_call.AppendToolCall(MakeSuppliedToolCall("call_1", "get_weather", "{}"));
+  EXPECT_TRUE(CarriesRespondableContent({with_call}));
+}
+
+TEST(TranscriptIngestTest, AnUnnamedOpenTurnTakesTheNameOfItsContinuation) {
+  // The mirror case: the open turn had no name, so the named continuation supplies one rather than starting a
+  // second assistant message no template could render.
+  Request request;
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, "one"));
+  request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, " two", "alice"));
+
+  auto messages = BuildTranscriptMessages(request.items);
+
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].name, "alice");
+  EXPECT_EQ(messages[0].VisibleText(), "one two");
 }
 
 // ===========================================================================

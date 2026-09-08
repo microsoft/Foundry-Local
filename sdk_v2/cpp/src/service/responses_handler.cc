@@ -64,7 +64,11 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 
       std::string type = entry.value("type", "");
       std::string role = entry.value("role", "");
-      if (type != "function_call_output" && type != "function_call" && role.empty()) {
+
+      // `reasoning` items carry no role: they are output items a client echoes back when it replays a conversation
+      // statelessly. Their text is never replayed, but the item must parse so the assistant turn that produced it
+      // keeps its boundary.
+      if (type != "function_call_output" && type != "function_call" && type != "reasoning" && role.empty()) {
         return ErrorResponse(Status::CODE_400, "Invalid input item", "Message items must have a 'role' field");
       }
     }
@@ -107,8 +111,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveM
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::LoadPreviousContext(
     const ResponseCreateParams& params,
-    nlohmann::json& context_storage,
-    const nlohmann::json*& previous_context) {
+    ResponseChainContext& context_storage,
+    const ResponseChainContext*& previous_context) {
   previous_context = nullptr;
 
   if (!params.previous_response_id.has_value()) {
@@ -194,8 +198,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
   try {
     // 4. Rebuild previous context only on a session-cache miss — a live session already holds the conversation in its
     //    transcript and KV cache, so a chain that can no longer be reconstructed from the store is irrelevant there.
-    nlohmann::json previous_context_storage;
-    const nlohmann::json* previous_context = nullptr;
+    ResponseChainContext previous_context_storage;
+    const ResponseChainContext* previous_context = nullptr;
 
     if (!session) {
       if (auto err = LoadPreviousContext(params, previous_context_storage, previous_context)) {
@@ -723,17 +727,17 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ListResponsesHandler::hand
 
   ctx_.logger.Log(LogLevel::Debug, fmt::format("ListResponses: limit={}", limit));
 
-  auto data = ctx_.response_store.List(limit, after->c_str(), order->c_str());
+  auto page = ctx_.response_store.List(limit, after->c_str(), order->c_str());
 
   nlohmann::json result = {
       {"object", "list"},
       {"data", nlohmann::json::array()},
       {"first_id", nullptr},
       {"last_id", nullptr},
-      {"has_more", static_cast<int>(data.size()) == limit},
+      {"has_more", page.has_more},
   };
 
-  for (auto& item : data) {
+  for (auto& item : page.data) {
     result["data"].push_back(std::move(item));
   }
 

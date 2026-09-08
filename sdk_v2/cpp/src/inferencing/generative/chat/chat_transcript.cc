@@ -8,7 +8,10 @@
 #include "items/tool_call_item.h"
 #include "items/tool_result_item.h"
 
+#include <algorithm>
+#include <cctype>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 namespace fl {
@@ -28,6 +31,10 @@ std::string JoinEntries(const std::vector<TranscriptEntry>& entries, TranscriptE
 }
 
 }  // namespace
+
+bool IsWhitespaceOnly(std::string_view text) {
+  return std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isspace(c) != 0; });
+}
 
 // ---------------------------------------------------------------------------
 // Tool call arguments
@@ -123,6 +130,22 @@ bool TranscriptMessage::HasToolCalls() const {
   return false;
 }
 
+bool TranscriptMessage::HasVisibleTextAfterToolCall() const {
+  bool seen_call = false;
+  for (const auto& entry : entries) {
+    if (entry.kind == TranscriptEntry::Kind::kToolCall) {
+      seen_call = true;
+      continue;
+    }
+
+    if (seen_call && entry.kind == TranscriptEntry::Kind::kText && !IsWhitespaceOnly(entry.text)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 std::string TranscriptMessage::VisibleText() const {
   return JoinEntries(entries, TranscriptEntry::Kind::kText);
 }
@@ -146,10 +169,77 @@ std::vector<const TranscriptToolCall*> TranscriptMessage::ToolCalls() const {
 // Item ingestion
 // ---------------------------------------------------------------------------
 
-std::vector<TranscriptMessage> BuildTranscriptMessages(const std::vector<Item*>& items) {
-  std::vector<TranscriptMessage> messages;
+namespace {
 
-  for (const auto* item : items) {
+/// True when `candidate` continues the assistant turn `open` already started. A different participant name is a
+/// different speaker and therefore a different message; an unnamed message continues the open turn.
+bool ContinuesAssistantTurn(const TranscriptMessage& open, const TranscriptMessage& candidate) {
+  if (open.role != FOUNDRY_LOCAL_ROLE_ASSISTANT || candidate.role != FOUNDRY_LOCAL_ROLE_ASSISTANT) {
+    return false;
+  }
+
+  return open.name.empty() || candidate.name.empty() || open.name == candidate.name;
+}
+
+/// Append every event of `next` to `open`, keeping the order the events were produced in. Text and reasoning runs
+/// coalesce with a trailing run of the same kind, exactly as they do while a turn is being generated. An open turn
+/// with no name adopts the continuation's name, so a named speaker is never lost.
+///
+/// Coalescing is literal: no separator is inserted. Two assistant fragments are two halves of one utterance — the
+/// live session records "Let me" and " check." as the single message "Let me check." because that is what the model
+/// emitted — so any spacing belongs to the fragments themselves. Inserting one here would put text in the
+/// conversation that nobody produced, and would make a replayed turn differ from the turn it replays.
+void MergeAssistantTurn(TranscriptMessage& open, TranscriptMessage&& next) {
+  if (open.name.empty()) {
+    open.name = std::move(next.name);
+  }
+
+  for (auto& entry : next.entries) {
+    switch (entry.kind) {
+      case TranscriptEntry::Kind::kText:
+        open.AppendText(std::move(entry.text));
+        break;
+      case TranscriptEntry::Kind::kReasoning:
+        open.AppendReasoning(std::move(entry.text));
+        break;
+      case TranscriptEntry::Kind::kToolCall:
+        open.AppendToolCall(std::move(entry.tool_call));
+        break;
+    }
+  }
+}
+
+/// The one merge rule, shared by item ingestion and turn commit.
+///
+/// Appends `message`, merging it into the trailing message when the two are one assistant turn. `merge_floor` is
+/// the first index of the current segment: nothing before it may be merged into, so two recorded turns can never
+/// collapse into a single message.
+void AppendWithinSegment(std::vector<TranscriptMessage>& messages, TranscriptMessage&& message, size_t merge_floor) {
+  if (messages.size() > merge_floor && ContinuesAssistantTurn(messages.back(), message)) {
+    MergeAssistantTurn(messages.back(), std::move(message));
+    return;
+  }
+
+  messages.push_back(std::move(message));
+}
+
+}  // namespace
+
+TranscriptIngest IngestRequestItems(const std::vector<Item*>& items, const std::vector<size_t>& segment_starts) {
+  TranscriptIngest ingest;
+  auto& messages = ingest.messages;
+
+  auto next_boundary = segment_starts.begin();
+
+  for (size_t index = 0; index < items.size(); ++index) {
+    // Close the open assistant turn whenever a new recorded segment begins. Several boundaries can land on the same
+    // index when a segment contributes no items at all.
+    while (next_boundary != segment_starts.end() && *next_boundary <= index) {
+      ingest.last_segment_start = messages.size();
+      ++next_boundary;
+    }
+
+    const auto* item = items[index];
     if (item == nullptr) {
       continue;
     }
@@ -180,33 +270,119 @@ std::vector<TranscriptMessage> BuildTranscriptMessages(const std::vector<Item*>&
         }
       }
 
-      messages.push_back(std::move(message));
+      AppendWithinSegment(messages, std::move(message), ingest.last_segment_start);
       continue;
     }
 
     if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
       const auto& call_item = static_cast<const ToolCallItem&>(*item);
-      auto call = MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments);
 
-      // Fold into a directly adjacent assistant message so replayed content and its calls stay in one message.
-      if (!messages.empty() && messages.back().role == FOUNDRY_LOCAL_ROLE_ASSISTANT) {
-        messages.back().AppendToolCall(std::move(call));
-      } else {
-        TranscriptMessage message;
-        message.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
-        message.AppendToolCall(std::move(call));
-        messages.push_back(std::move(message));
-      }
+      TranscriptMessage message;
+      message.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+      message.AppendToolCall(MakeSuppliedToolCall(call_item.call_id, call_item.name, call_item.arguments));
+
+      // The same rule folds the call into the open assistant turn, so replayed content and its calls stay in one
+      // message — and a call that opens a segment starts its own.
+      AppendWithinSegment(messages, std::move(message), ingest.last_segment_start);
       continue;
     }
 
     if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
       const auto& result_item = static_cast<const ToolResultItem&>(*item);
       messages.push_back(TranscriptMessage::ToolResult(result_item.call_id, result_item.result));
+      continue;
     }
+
+    // Nothing else belongs in a conversation, and skipping it would silently drop what the caller sent — the turn
+    // would answer a question the prompt never carried. Media is the likely mistake: image and audio reach the model
+    // as content parts of a message item, which is the only shape CollectMediaInput gathers and the only one the
+    // media prompt path renders.
+    if (item->type == FOUNDRY_LOCAL_ITEM_IMAGE || item->type == FOUNDRY_LOCAL_ITEM_AUDIO) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               "image and audio input must be content parts of a message item; a top-level media item cannot be "
+               "placed in the conversation and would never reach the model");
+    }
+
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "a conversation accepts only message, tool call, and tool result items; anything else would be "
+             "dropped without reaching the model");
   }
 
-  return messages;
+  // Boundaries past the last item still open a (empty) final segment: a hop that contributed nothing must not let
+  // the next reply merge into the hop before it.
+  if (next_boundary != segment_starts.end()) {
+    ingest.last_segment_start = messages.size();
+  }
+
+  return ingest;
+}
+
+std::vector<TranscriptMessage> BuildTranscriptMessages(const std::vector<Item*>& items) {
+  return IngestRequestItems(items, {}).messages;
+}
+
+bool CarriesToolActivity(const std::vector<TranscriptMessage>& messages) {
+  return std::any_of(messages.begin(), messages.end(), [](const TranscriptMessage& message) {
+    return message.role == FOUNDRY_LOCAL_ROLE_TOOL || message.HasToolCalls();
+  });
+}
+
+bool CarriesPriorTurnHistory(const std::vector<TranscriptMessage>& messages) {
+  return std::any_of(messages.begin(), messages.end(), [](const TranscriptMessage& message) {
+    return message.role == FOUNDRY_LOCAL_ROLE_ASSISTANT || message.role == FOUNDRY_LOCAL_ROLE_TOOL;
+  });
+}
+
+bool CarriesRespondableContent(const std::vector<TranscriptMessage>& messages) {
+  return std::any_of(messages.begin(), messages.end(), [](const TranscriptMessage& message) {
+    return !message.entries.empty();
+  });
+}
+
+bool TurnCanGenerate(const std::vector<TranscriptMessage>& inputs, const TurnContent& context) {
+  return context.media || context.history || context.system_prefix || CarriesRespondableContent(inputs);
+}
+
+const TranscriptMessage* AssistantPrefillForReply(const std::vector<TranscriptMessage>& inputs, size_t merge_floor) {
+  if (inputs.size() <= merge_floor || inputs.back().role != FOUNDRY_LOCAL_ROLE_ASSISTANT) {
+    return nullptr;
+  }
+
+  // A generated reply has no participant name, so it continues whatever name the prefill carries.
+  return &inputs.back();
+}
+
+AssistantTurnGuard AssistantTurnGuard::ForReplyTo(const std::vector<TranscriptMessage>& inputs, size_t merge_floor) {
+  const auto* prefill = AssistantPrefillForReply(inputs, merge_floor);
+  return AssistantTurnGuard(prefill != nullptr && prefill->HasToolCalls());
+}
+
+void ValidateRenderableTurn(const TranscriptMessage& message) {
+  if (!message.HasVisibleTextAfterToolCall()) {
+    return;
+  }
+
+  FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+           "an assistant turn cannot carry visible text after a tool call: a chat template renders an assistant "
+           "turn as content followed by its tool calls, so replaying that text would present it to the model as "
+           "though it came before the call. Split the text and the call into separate turns, or send the text "
+           "before the call.");
+}
+
+std::vector<TranscriptMessage> WithSystemPrompt(const std::string& system_prompt,
+                                                std::vector<TranscriptMessage> messages) {
+  if (system_prompt.empty()) {
+    return messages;
+  }
+
+  std::vector<TranscriptMessage> prefixed;
+  prefixed.reserve(messages.size() + 1);
+  prefixed.emplace_back(FOUNDRY_LOCAL_ROLE_SYSTEM, system_prompt);
+  for (auto& message : messages) {
+    prefixed.push_back(std::move(message));
+  }
+
+  return prefixed;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,11 +391,14 @@ std::vector<TranscriptMessage> BuildTranscriptMessages(const std::vector<Item*>&
 
 namespace {
 
-/// Validate the tool calls of an assistant message against the call IDs issued so far, then record them as
-/// outstanding. `issued` and `outstanding` may be the transcript's own sets or scratch copies used for a dry run.
-void StageAssistantCalls(const TranscriptMessage& message,
-                         std::unordered_set<std::string>& issued,
-                         std::unordered_set<std::string>& outstanding) {
+/// Validate one assistant message and record the calls it issues. The ordering invariant is checked first: a message
+/// that cannot be rendered must be rejected before any of its calls become outstanding. `issued` and `outstanding`
+/// may be the transcript's own sets or scratch copies used for a dry run.
+void StageAssistantMessage(const TranscriptMessage& message,
+                           std::unordered_set<std::string>& issued,
+                           std::unordered_set<std::string>& outstanding) {
+  ValidateRenderableTurn(message);
+
   for (const auto* call : message.ToolCalls()) {
     if (call->call_id.empty()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "tool call requires a non-empty call id");
@@ -265,12 +444,12 @@ void StageTurn(const std::vector<TranscriptMessage>& inputs,
     if (message.role == FOUNDRY_LOCAL_ROLE_TOOL) {
       StageToolResult(message, issued, outstanding);
     } else if (message.role == FOUNDRY_LOCAL_ROLE_ASSISTANT) {
-      StageAssistantCalls(message, issued, outstanding);
+      StageAssistantMessage(message, issued, outstanding);
     }
   }
 
   if (output != nullptr) {
-    StageAssistantCalls(*output, issued, outstanding);
+    StageAssistantMessage(*output, issued, outstanding);
   }
 }
 
@@ -288,23 +467,39 @@ void ChatTranscript::ValidateGeneratedOutput(const TranscriptMessage& output) co
   StageTurn({}, &output, issued, outstanding);
 }
 
-void ChatTranscript::CommitTurn(std::vector<TranscriptMessage> inputs, TranscriptMessage output, TurnTokens tokens) {
+void ChatTranscript::CommitTurn(std::vector<TranscriptMessage> inputs, TranscriptMessage output, TurnTokens tokens,
+                                size_t reply_merge_floor) {
   // Stage the whole turn against scratch copies first. Everything below this point is unconditional, so a rejected
   // turn leaves the committed messages and call state exactly as they were.
   auto issued = issued_;
   auto outstanding = outstanding_;
   StageTurn(inputs, &output, issued, outstanding);
 
+  // A reply that merges into a trailing assistant prefill becomes one message with it, so the ordering invariant
+  // applies to the merged result rather than to the two halves. Checked before anything is appended, so a rejected
+  // turn still leaves the transcript untouched.
+  if (const auto* prefill = AssistantPrefillForReply(inputs, reply_merge_floor);
+      prefill != nullptr && ContinuesAssistantTurn(*prefill, output)) {
+    TranscriptMessage merged = *prefill;
+    auto reply = output;
+    MergeAssistantTurn(merged, std::move(reply));
+    ValidateRenderableTurn(merged);
+  }
+
   Turn turn;
   turn.message_start = messages_.size();
   turn.tokens = tokens;
+
+  // The floor is expressed against `inputs`; translate it to an index in the committed list. Inputs are appended
+  // as ingestion produced them — it already applied the merge rule within each segment it knew about.
+  const size_t floor = turn.message_start + std::min(reply_merge_floor, inputs.size());
 
   messages_.reserve(messages_.size() + inputs.size() + 1);
   for (auto& message : inputs) {
     messages_.push_back(std::move(message));
   }
 
-  messages_.push_back(std::move(output));
+  AppendWithinSegment(messages_, std::move(output), floor);
   turns_.push_back(turn);
   issued_ = std::move(issued);
   outstanding_ = std::move(outstanding);

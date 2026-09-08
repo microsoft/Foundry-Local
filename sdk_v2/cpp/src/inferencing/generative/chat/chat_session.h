@@ -57,10 +57,10 @@ class ChatSession : public Session {
   /// each turn's input messages and assistant reply from the transcript.
   /// If all turns are undone, the cached generator is destroyed.
   ///
-  /// Vision turns: image input is only allowed on the first turn of a
-  /// session. UndoTurns rolls back history but does not undo this
-  /// constraint — once a session has started, no later turn may include
-  /// images. Start a new ChatSession to send images.
+  /// Vision turns: image input is only allowed while the conversation has no
+  /// history. UndoTurns rolls back messages, so undoing every turn does make
+  /// the session accept media again — but the media bytes of an undone turn
+  /// are gone either way, because they never entered the transcript.
   ///
   /// Blocks until any in-flight request on this session completes.
   ///
@@ -119,6 +119,12 @@ class ChatSession : public Session {
   // Tool context used when creating the cached generator.
   // Reused for subsequent turns to maintain tool definition consistency.
   ToolCallContext cached_tool_ctx_;
+
+  // The system prefix baked into cached_generator_'s prompt (the kSystemPromptOption value of the turn that built
+  // it). Deliberately not part of the transcript: it is request state, so it can never accumulate a copy per turn
+  // and is never replayed from a stored conversation. A turn that asks for a different prefix rebuilds; a turn that
+  // asks for the same one keeps the KV cache.
+  std::string system_prompt_;
 };
 
 }  // namespace fl

@@ -9,9 +9,11 @@
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/generative/chat/search_options.h"
+#include "inferencing/session/request.h"
 #include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/text_item.h"
+#include "items/tool_result_item.h"
 #include "ep_detection/ep_detector.h"
 #include "logger.h"
 #include "model.h"
@@ -610,4 +612,174 @@ TEST_F(ChatSessionTest, SearchOptionsFromEmptyParameters) {
 
   EXPECT_FALSE(opts.temperature.has_value());
   EXPECT_FALSE(opts.max_output_tokens.has_value());
+}
+
+// ===========================================================================
+// Request-scoped system prefix (`instructions`) against a warm session.
+//
+// The prefix is baked into a generator's prompt, so a turn that changes it must rebuild while a turn that repeats it
+// keeps the KV cache. `prompt_tokens` discriminates the two: an appended turn reports only the tokens it added, a
+// rebuilt turn reports the whole prompt. Deleting the invalidation branch in ProcessRequestImpl makes the changed
+// -prefix turn look like an appended one, and these tests fail.
+// ===========================================================================
+
+namespace {
+
+/// Run one turn. `instructions` is the request-scoped system prefix; empty means none.
+Response RunTurnResponse(ChatSession& session, const std::string& user_text, const std::string& instructions) {
+  Request request;
+  if (!user_text.empty()) {
+    request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, user_text));
+  }
+
+  if (!instructions.empty()) {
+    request.options.Add(kSystemPromptOption, instructions);
+  }
+
+  request.options.Add("max_output_tokens", "8");
+  request.options.Add("temperature", "0");
+
+  Response response;
+  session.ProcessRequest(request, response);
+  return response;
+}
+
+fl::TokenUsage RunTurn(ChatSession& session, const std::string& user_text, const std::string& instructions) {
+  return RunTurnResponse(session, user_text, instructions).usage;
+}
+
+}  // namespace
+
+TEST_F(ChatSessionTest, UnchangedInstructionsKeepTheCachedGeneratorAndDoNotRepeatThePrefix) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  const std::string instructions = "You are a terse assistant that answers in one word.";
+  const std::string first_user = "Say ok.";
+  const std::string second_user = "Say ok again.";
+
+  auto first_response = RunTurnResponse(session, first_user, instructions);
+  const auto second = RunTurn(session, second_user, instructions);
+
+  // Compare against the same conversation rebuilt in a fresh session. The warm turn appends only its new message;
+  // the cold turn tokenizes the system prefix and the complete conversation. This remains discriminating even when
+  // the second user message happens to be longer than the first one.
+  ChatSession rebuilt_session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  Request rebuilt_request;
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, first_user));
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, GetAssistantText(first_response)));
+  rebuilt_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, second_user));
+  rebuilt_request.options.Add(kSystemPromptOption, instructions);
+  rebuilt_request.options.Add("max_output_tokens", "8");
+  rebuilt_request.options.Add("temperature", "0");
+
+  Response rebuilt_response;
+  rebuilt_session.ProcessRequest(rebuilt_request, rebuilt_response);
+
+  EXPECT_GT(first_response.usage.prompt_tokens, 0);
+  EXPECT_GT(second.prompt_tokens, 0);
+  EXPECT_LT(second.prompt_tokens, rebuilt_response.usage.prompt_tokens)
+      << "an unchanged prefix must keep the KV cache; appended=" << second.prompt_tokens
+      << " rebuilt=" << rebuilt_response.usage.prompt_tokens;
+
+  // The prefix is request state and never enters the conversation record: two turns, four messages, no system
+  // message among them.
+  ASSERT_EQ(session.MessageCount(), 4u);
+  for (const auto& message : session.Transcript().Messages()) {
+    EXPECT_NE(message.role, FOUNDRY_LOCAL_ROLE_SYSTEM) << "the system prefix must not be committed to history";
+  }
+}
+
+TEST_F(ChatSessionTest, ChangedInstructionsRebuildTheGeneratorWithTheNewPrefix) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  const std::string first_instructions = "You are a terse assistant that answers in one word.";
+  // Deliberately much longer: a rebuilt prompt has to carry it, so the token count cannot be mistaken for an append.
+  const std::string second_instructions =
+      "You are an extremely careful assistant. Answer in one word. Do not explain yourself. Do not apologise. "
+      "Do not add pleasantries. Do not restate the question. Keep every answer as short as it can possibly be.";
+
+  const auto first = RunTurn(session, "Say ok.", first_instructions);
+  const auto appended = RunTurn(session, "Say ok again.", first_instructions);
+  const auto rebuilt = RunTurn(session, "Say ok once more.", second_instructions);
+
+  // The discriminator: changing the prefix must rebuild, so this turn's prompt is the whole conversation plus the
+  // new prefix — far more than the handful of tokens an appended turn pays for. Without the invalidation branch the
+  // new instructions would never reach the model and this would be another small append.
+  EXPECT_GT(rebuilt.prompt_tokens, appended.prompt_tokens)
+      << "a changed prefix must rebuild; appended=" << appended.prompt_tokens
+      << " rebuilt=" << rebuilt.prompt_tokens;
+  EXPECT_GT(rebuilt.prompt_tokens, first.prompt_tokens)
+      << "the rebuilt prompt carries the whole conversation behind the longer prefix";
+
+  // Still nothing in the record: a changed prefix replaces the old one rather than stacking another system message.
+  ASSERT_EQ(session.MessageCount(), 6u);
+  for (const auto& message : session.Transcript().Messages()) {
+    EXPECT_NE(message.role, FOUNDRY_LOCAL_ROLE_SYSTEM) << "the system prefix must not be committed to history";
+  }
+}
+
+// ===========================================================================
+// Turns that carry no message of their own.
+// ===========================================================================
+
+TEST_F(ChatSessionTest, InstructionsAloneOnANewConversationGenerate) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  const auto usage = RunTurn(session, "", "Reply with the single word: ok");
+
+  EXPECT_GT(usage.prompt_tokens, 0) << "the system prefix is the prompt";
+  ASSERT_EQ(session.MessageCount(), 1u) << "only the assistant turn is recorded";
+  EXPECT_EQ(session.Transcript().Messages()[0].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+}
+
+TEST_F(ChatSessionTest, AnEmptyInputContinuesAWarmConversation) {
+  // The warm half of the previous_response_id-with-empty-input case. The cached generator cannot append an empty
+  // message list, so the turn rebuilds from committed history and produces the next assistant turn — which is what
+  // the cold path does with the same request.
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  RunTurn(session, "Name a colour. Answer with one word.", "");
+  ASSERT_EQ(session.MessageCount(), 2u);
+
+  const auto continued = RunTurn(session, "", "");
+
+  EXPECT_GT(continued.prompt_tokens, 0);
+  // No input message was added, so the turn contributes exactly one assistant message.
+  ASSERT_EQ(session.MessageCount(), 3u);
+  EXPECT_EQ(session.Transcript().Messages()[2].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(session.Transcript().TurnCount(), 2u);
+}
+
+TEST_F(ChatSessionTest, ARequestWithNothingAtAllIsAClientError) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  Response response;
+
+  try {
+    session.ProcessRequest(request, response);
+    FAIL() << "expected a request with no content, no media, no instructions and no history to be rejected";
+  } catch (const fl::Exception& ex) {
+    // A caller mistake, so it must map to HTTP 400 — never a 500.
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("nothing to generate from"), std::string::npos) << ex.what();
+  }
+}
+
+TEST_F(ChatSessionTest, AnEmptyToolResultForAnUnknownCallReportsTheCorrelationError) {
+  // Precedence: an empty tool result carries no content, but "unknown call id" is the real problem and must not be
+  // reported as an empty request.
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<ToolResultItem>("call_missing", ""));
+
+  Response response;
+  try {
+    session.ProcessRequest(request, response);
+    FAIL() << "expected the unknown tool call id to be rejected";
+  } catch (const fl::Exception& ex) {
+    EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(ex.what()).find("unknown tool call id"), std::string::npos) << ex.what();
+  }
 }

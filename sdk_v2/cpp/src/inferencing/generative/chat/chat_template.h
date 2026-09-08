@@ -42,10 +42,9 @@ std::string RenderMessageForPrompt(const MessageItem& msg);
 ///
 /// The projection is provider-neutral and canonicalizes each message into the shape chat templates expect, while the
 /// transcript keeps the authoritative event order:
-///   - `content` — concatenated visible text (never reasoning). Always present, possibly empty.
-///   - `reasoning_content` — the message's reasoning text, emitted only for assistant messages that also carry tool
-///     calls: that reasoning is part of the tool-calling exchange the template has to reproduce. Reasoning from plain
-///     text turns is scratchpad and is not replayed.
+///   - `content` — concatenated visible text. Reasoning is never projected, on any message: it is the model's
+///     private scratchpad, and a conversation rebuilt from storage cannot reproduce it, so replaying it would make
+///     a live session and a rebuilt one send different prompts. Always present, possibly empty.
 ///   - `tool_calls` — OpenAI-shaped array (`id` / `type` / `function.name` / `function.arguments`) for assistant
 ///     messages that issued calls. Arguments are the transcript's normalized object form, so a committed
 ///     conversation always projects; the raw bytes stay on the transcript and the response.
@@ -53,6 +52,12 @@ std::string RenderMessageForPrompt(const MessageItem& msg);
 ///   - `name` — emitted only when the message carries a participant name.
 ///
 /// The projection is total: every committed transcript renders.
+///
+/// It is also order-faithful, but only because the transcript refuses to hold the one shape this schema cannot
+/// express. `content` plus a `tool_calls` array can say "this text, then these calls"; it has no way to say "text,
+/// then a call, then more text". Rather than silently reorder such a turn, ChatTranscript rejects it and generation
+/// stops at the call — see ValidateRenderableTurn. Within that invariant, what the template receives is the order
+/// the events actually happened in.
 std::string BuildChatMessagesJson(const std::vector<TranscriptMessage>& messages);
 
 /// Build a chat prompt string from the transcript messages of a conversation.

@@ -6,6 +6,8 @@
 
 #include "service/handler_utils.h"
 
+#include "inferencing/generative/openresponses/response_chain.h"
+
 #include <memory>
 #include <string>
 
@@ -49,8 +51,8 @@ class ResponsesHandler : public HttpRequestHandler {
   /// Only called when no cached session is available — a live session already holds the conversation.
   /// Returns an error response when the chain cannot be reconstructed, nullptr on success.
   std::shared_ptr<OutgoingResponse> LoadPreviousContext(const responses::ResponseCreateParams& params,
-                                                        nlohmann::json& context_storage,
-                                                        const nlohmann::json*& previous_context);
+                                                        ResponseChainContext& context_storage,
+                                                        const ResponseChainContext*& previous_context);
 
   // --- Inference dispatch ---
 

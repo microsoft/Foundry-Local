@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/openresponses/response_chain.h"
+
 #include <nlohmann/json.hpp>
 
 #include <list>
@@ -41,20 +43,24 @@ class ResponseStore {
   /// Retrieve stored input items for a response. Returns nullopt if not found.
   std::optional<nlohmann::json> GetInputItems(const std::string& response_id);
 
-  /// Reconstruct the complete replay context for a chained response: for every hop from the root of the
-  /// `previous_response_id` chain to `response_id`, that hop's own input items followed by its output items, oldest
-  /// first.
+  /// Reconstruct the complete replay context for a chained response: every hop from the root of the
+  /// `previous_response_id` chain to `response_id`, oldest first, each keeping its own input items and its own
+  /// output items.
   ///
   /// Each entry stores only its own request's input items — that is exactly what the /input_items endpoint must
   /// return — so a caller that replayed a single hop would lose everything before it, including the assistant tool
   /// calls that later tool results have to correlate against.
   ///
-  /// Instructions are request-scoped in the Responses API and are not carried across a chain, so each hop's
-  /// instructions-derived system item is left out of the replay while remaining in that hop's stored input items.
+  /// The per-hop grouping is part of the contract: a hop's output is one assistant turn, and replay has to rebuild
+  /// it as one assistant message even when that turn produced only reasoning or nothing at all.
+  ///
+  /// A hop's input items are returned exactly as stored. Instructions are request-scoped and are not stored as
+  /// items at all, so the store never has to guess which system message was the caller's — every system message a
+  /// caller sent is replayed verbatim.
   ///
   /// Returns nullopt when the chain cannot be reconstructed: a link is missing (evicted or never stored) or the
   /// stored links form a cycle. Callers must fail explicitly rather than run inference on a truncated conversation.
-  std::optional<nlohmann::json> BuildChainContext(const std::string& response_id);
+  std::optional<ResponseChainContext> BuildChainContext(const std::string& response_id);
 
   /// Mark every hop of a chain as recently used without materializing its context. Callers that continue a
   /// conversation from a live session skip reconstruction entirely; without this the conversation's own early hops
@@ -65,14 +71,20 @@ class ResponseStore {
   /// Delete a stored response. Returns true if it existed.
   bool Delete(const std::string& response_id);
 
+  /// One page of stored responses plus the exact continuation state.
+  struct Page {
+    std::vector<nlohmann::json> data;
+    /// True when at least one more response exists after this page. Derived from the store's own iteration, so a
+    /// final page that happens to hold exactly `limit` items is reported correctly.
+    bool has_more = false;
+  };
+
   /// List stored responses with cursor-based pagination.
   /// @param limit  Maximum number to return.
-  /// @param after  Cursor — return responses after this ID. Empty = from start.
+  /// @param after  Cursor — return responses after this ID. Empty (or unknown) = from the start.
   /// @param order  "asc" or "desc" (default: "desc" = newest first).
-  /// @return  Vector of response JSON objects.
-  std::vector<nlohmann::json> List(int limit = 20,
-                                   const std::string& after = "",
-                                   const std::string& order = "desc");
+  /// @return  One page of response JSON objects and whether more follow it.
+  Page List(int limit = 20, const std::string& after = "", const std::string& order = "desc");
 
   /// Number of responses currently stored.
   size_t Size() const;

@@ -8,7 +8,9 @@
 
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace fl;
@@ -437,7 +439,7 @@ namespace {
 constexpr const char* kPromptOpenedByTemplate = "<|im_start|>assistant\n<think>\n";
 
 ReasoningMarkers MakeMarkers(std::vector<int32_t> start_ids = {101}, std::vector<int32_t> end_ids = {102}) {
-  return {"<think>", "</think>", std::move(start_ids), std::move(end_ids)};
+  return {"<think>", "</think>", std::move(start_ids), std::move(end_ids), true};
 }
 
 }  // namespace
@@ -671,4 +673,192 @@ TEST(ReasoningStreamSplitterTest, SeedingIsIgnoredWithoutConfiguredMarkers) {
   ASSERT_EQ(segments.size(), 1u);
   EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
   EXPECT_EQ(splitter.ReasoningTokenCount(), 0);
+}
+
+// ========================================================================
+// ResolveMarkerTokenIds — the IDs must describe the marker actually in effect.
+//
+// The marker *string* can be overridden per request while the ID a model publishes always describes the model's own
+// marker. Pairing the two would make the splitter flip its reasoning state on a token that is not the boundary.
+// ========================================================================
+
+namespace {
+
+/// A stand-in tokenizer: every marker it knows maps to a token ID sequence, everything else encodes to nothing.
+struct FakeEncoder {
+  std::vector<std::pair<std::string, std::vector<int32_t>>> vocabulary;
+
+  std::vector<int32_t> operator()(const std::string& text) const {
+    for (const auto& [marker, ids] : vocabulary) {
+      if (marker == text) {
+        return ids;
+      }
+    }
+
+    return {};
+  }
+};
+
+}  // namespace
+
+TEST(ResolveMarkerTokenIdsTest, PublishedIdIsUsedWhenItDecodesToTheEffectiveMarker) {
+  FakeEncoder encoder{{{"<think>", {999}}}};
+
+  const auto ids = ResolveMarkerTokenIds("<think>", {151667, "<think>"}, encoder);
+
+  // The published ID is proven to be this marker, so it is preferred over re-encoding.
+  EXPECT_EQ(ids, (std::vector<int32_t>{151667}));
+}
+
+TEST(ResolveMarkerTokenIdsTest, OverrideThatDiffersFromTheModelMarkerIsEncodedInstead) {
+  FakeEncoder encoder{{{"<reasoning>", {42}}}};
+
+  // The model publishes ID 151667 for "<think>"; the request asked for "<reasoning>". Using 151667 would flip the
+  // reasoning state on the wrong token and leak the scratchpad.
+  const auto ids = ResolveMarkerTokenIds("<reasoning>", {151667, "<think>"}, encoder);
+
+  EXPECT_EQ(ids, (std::vector<int32_t>{42}));
+}
+
+TEST(ResolveMarkerTokenIdsTest, MultiTokenOverrideKeepsItsWholeSequence) {
+  FakeEncoder encoder{{{"BEGIN REASONING", {10, 11, 12}}}};
+
+  const auto ids = ResolveMarkerTokenIds("BEGIN REASONING", {151667, "<think>"}, encoder);
+
+  EXPECT_EQ(ids, (std::vector<int32_t>{10, 11, 12}));
+}
+
+TEST(ResolveMarkerTokenIdsTest, PublishedIdThatDecodesToNothingIsNotAssumedToBeTheMarker) {
+  // A tokenizer that skips special tokens decodes a valid ID to an empty string. That is not proof of identity, so
+  // the marker in effect is encoded rather than paired with the unproven ID.
+  FakeEncoder encoder{{{"<think>", {7}}}};
+
+  const auto ids = ResolveMarkerTokenIds("<think>", {151667, ""}, encoder);
+
+  EXPECT_EQ(ids, (std::vector<int32_t>{7}));
+}
+
+TEST(ResolveMarkerTokenIdsTest, UnencodableMarkerFallsBackToTextMatching) {
+  FakeEncoder encoder{};
+
+  const auto ids = ResolveMarkerTokenIds("<reasoning>", {151667, "<think>"}, encoder);
+
+  // Empty IDs are safe: the splitter and the prompt probe both fall back to matching decoded text.
+  EXPECT_TRUE(ids.empty());
+}
+
+TEST(ResolveMarkerTokenIdsTest, AnEmptyMarkerResolvesToNoIds) {
+  FakeEncoder encoder{{{"", {5}}}};
+
+  EXPECT_TRUE(ResolveMarkerTokenIds("", {151667, "<think>"}, encoder).empty());
+}
+
+TEST(ResolveMarkerTokenIdsTest, ModelWithoutPublishedIdsEncodesTheMarker) {
+  FakeEncoder encoder{{{"<think>", {3, 4}}}};
+
+  const auto ids = ResolveMarkerTokenIds("<think>", {std::nullopt, ""}, encoder);
+
+  EXPECT_EQ(ids, (std::vector<int32_t>{3, 4}));
+}
+
+TEST(PromptOpensReasoningTest, OverriddenMarkerIdsDecideThePromptProbe) {
+  // End-to-end for the override: the encoded IDs of the *overridden* markers are what the prompt is checked against.
+  FakeEncoder encoder{{{"<reasoning>", {70, 71}}, {"</reasoning>", {80, 81}}}};
+
+  ReasoningMarkers markers;
+  markers.start = "<reasoning>";
+  markers.end = "</reasoning>";
+  markers.start_token_ids = ResolveMarkerTokenIds(markers.start, {151667, "<think>"}, encoder);
+  markers.end_token_ids = ResolveMarkerTokenIds(markers.end, {151668, "</think>"}, encoder);
+
+  const std::vector<int32_t> open_prompt{1, 2, 70, 71};
+  EXPECT_TRUE(PromptOpensReasoning(open_prompt, markers, "user turn<reasoning>"));
+
+  const std::vector<int32_t> closed_prompt{1, 2, 70, 71, 5, 80, 81};
+  // The model's own IDs appear nowhere in this prompt; only the overridden sequences decide.
+  EXPECT_FALSE(PromptOpensReasoning(closed_prompt, markers, "user turn<reasoning>hidden</reasoning>"));
+}
+
+TEST(ReasoningStreamSplitterTest, OverriddenMarkerIdsClassifyReasoningAndLeakNothing) {
+  FakeEncoder encoder{{{"<reasoning>", {70}}, {"</reasoning>", {80}}}};
+
+  const auto start_ids = ResolveMarkerTokenIds("<reasoning>", {151667, "<think>"}, encoder);
+  const auto end_ids = ResolveMarkerTokenIds("</reasoning>", {151668, "</think>"}, encoder);
+
+  ReasoningStreamSplitter splitter("<reasoning>", "</reasoning>", start_ids, end_ids);
+
+  std::vector<Segment> segments;
+  Append(segments, splitter.Push(1, "visible "));
+  // 151667 is the model's published opener ID. It is not the marker in effect and must be ordinary content.
+  Append(segments, splitter.Push(151667, "<think>"));
+  Append(segments, splitter.Push(70, "<reasoning>"));
+  Append(segments, splitter.Push(2, "hidden"));
+  Append(segments, splitter.Push(80, "</reasoning>"));
+  Append(segments, splitter.Push(3, "answer"));
+  Append(segments, splitter.Flush());
+
+  EXPECT_EQ(Collect(segments, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING), "hidden");
+  EXPECT_EQ(Collect(segments, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT), "visible <think>answer");
+  EXPECT_FALSE(splitter.InsideReasoning());
+}
+
+TEST(PromptOpensReasoningTest, AbsentDedicatedOpenerTokenRefutesTheTextMatch) {
+  // A single-ID marker is a dedicated token. If the encoding does not contain it, the trailing text only looked like
+  // the marker, and seeding reasoning would hide the whole answer.
+  ReasoningMarkers markers;
+  markers.start = "<think>";
+  markers.end = "</think>";
+  markers.start_token_ids = {151667};
+  markers.end_token_ids = {151668};
+  markers.start_token_is_published = true;
+
+  const std::vector<int32_t> prompt{1, 2, 3};
+  EXPECT_FALSE(PromptOpensReasoning(prompt, markers, "chat<think>"));
+}
+
+TEST(PromptOpensReasoningTest, AbsentMultiTokenOpenerLeavesThePositionalRuleStanding) {
+  // An overridden marker usually encodes to several ordinary tokens, and a tokenizer may merge its leading bytes
+  // with whatever precedes them — so the sequence can be missing from the prompt's encoding even though the marker
+  // really is its last text. Refusing to seed there would leak the scratchpad of every prompt-opened turn.
+  ReasoningMarkers markers;
+  markers.start = "BEGIN REASONING";
+  markers.end = "END REASONING";
+  markers.start_token_ids = {10, 11, 12};
+  markers.end_token_ids = {20, 21};
+
+  const std::vector<int32_t> prompt{1, 2, 3};
+  EXPECT_TRUE(PromptOpensReasoning(prompt, markers, "chat\nBEGIN REASONING"));
+
+  // The positional rule is still the gate: marker text in the middle of the prompt does not seed anything.
+  EXPECT_FALSE(PromptOpensReasoning(prompt, markers, "BEGIN REASONING quoted by a tool result\nassistant:"));
+}
+
+TEST(PromptOpensReasoningTest, AbsentEncodeDerivedSingleTokenLeavesThePositionalRuleStanding) {
+  ReasoningMarkers markers;
+  markers.start = "<custom-think>";
+  markers.end = "</custom-think>";
+  markers.start_token_ids = {42};
+  markers.end_token_ids = {43};
+  markers.start_token_is_published = false;
+
+  EXPECT_TRUE(PromptOpensReasoning(std::vector<int32_t>{1, 2}, markers, "assistant\n<custom-think>\n"));
+}
+
+TEST(PromptOpensReasoningTest, AMultiTokenOpenerFoundInTheEncodingStillObeysItsCloser) {
+  // When the sequence *is* locatable, the balance rule applies exactly as it does for dedicated tokens.
+  ReasoningMarkers markers;
+  markers.start = "BEGIN REASONING";
+  markers.end = "END REASONING";
+  markers.start_token_ids = {10, 11, 12};
+  markers.end_token_ids = {20, 21};
+
+  const std::vector<int32_t> open_prompt{1, 10, 11, 12};
+  EXPECT_TRUE(PromptOpensReasoning(open_prompt, markers, "chat\nBEGIN REASONING"));
+
+  const std::vector<int32_t> closed_prompt{10, 11, 12, 5, 20, 21, 10, 11, 12};
+  EXPECT_TRUE(PromptOpensReasoning(closed_prompt, markers, "chat\nBEGIN REASONING"));
+
+  // Closer after the last opener: the block the prompt left behind is finished.
+  const std::vector<int32_t> balanced_prompt{10, 11, 12, 5, 20, 21};
+  EXPECT_FALSE(PromptOpensReasoning(balanced_prompt, markers, "chat\nBEGIN REASONING"));
 }
