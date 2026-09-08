@@ -62,8 +62,8 @@ struct SearchOptions {
   std::optional<float> top_p;
   std::optional<int> top_k;
   std::optional<int> max_output_tokens;
-  std::optional<float> frequency_penalty;
-  std::optional<float> presence_penalty;
+  std::optional<float> frequency_penalty;  // Currently only the neutral value 0 is supported.
+  std::optional<float> presence_penalty;   // Currently only the neutral value 0 is supported.
   std::optional<int> seed;
   std::optional<bool> do_sample;
   std::optional<bool> early_stopping;

@@ -228,6 +228,19 @@ TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBacken
   EXPECT_EQ(plan.guidance->data, R"({"type":"object"})");
 }
 
+TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
+  ToolCallContext tool_ctx;
+  tool_ctx.guidance_type = "json_schema";
+  tool_ctx.guidance_data = R"({"type":"object","required":["answer"]})";
+
+  const auto plan =
+      BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kDynamicEngine);
+
+  ASSERT_TRUE(plan.guidance.has_value());
+  EXPECT_EQ(plan.guidance->type, "json_schema");
+  EXPECT_EQ(plan.guidance->data, R"({"type":"object","required":["answer"]})");
+}
+
 TEST(EngineTurnOptionsPlanTest, StaticBackendKeepsStopStringsHostSideAndRejectsSeed) {
   SearchOptions with_stop;
   with_stop.stop_sequences = {"END"};
@@ -241,29 +254,26 @@ TEST(EngineTurnOptionsPlanTest, StaticBackendKeepsStopStringsHostSideAndRejectsS
                fl::Exception);
 }
 
-TEST(EngineTurnOptionsPlanTest, MapsPositiveFrequencyPenaltyToExistingRepetitionPenaltyContract) {
-  SearchOptions options;
-  options.frequency_penalty = 1.2f;
-
-  const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
-  ASSERT_TRUE(plan.repetition_penalty.has_value());
-  EXPECT_FLOAT_EQ(*plan.repetition_penalty, 1.2f);
-}
-
-TEST(EngineTurnOptionsPlanTest, NeutralFrequencyPenaltyDoesNotOverrideModelDefault) {
+TEST(EngineTurnOptionsPlanTest, NeutralPenaltiesDoNotOverrideModelDefaults) {
   SearchOptions options;
   options.frequency_penalty = 0.0f;
+  options.presence_penalty = 0.0f;
 
   const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
   EXPECT_FALSE(plan.repetition_penalty.has_value());
 }
 
-TEST(EngineTurnOptionsPlanTest, RejectsFrequencyPenaltyThatOrtCannotRepresent) {
-  SearchOptions options;
-  options.frequency_penalty = -0.5f;
+TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f},
+        std::pair{0.0f, -0.3f}}) {
+    SearchOptions options;
+    options.frequency_penalty = frequency;
+    options.presence_penalty = presence;
 
-  EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine),
-               fl::Exception);
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine),
+                 fl::Exception);
+  }
 }
 
 TEST(SearchOptionsParsingTest, EngineStopStringsAndSeedRemainHostOnlyForStaticBackend) {
@@ -486,16 +496,16 @@ TEST_F(SearchOptionsTest, ZeroPenaltiesDoNotOverrideModelDefaults) {
   EXPECT_EQ(params->GetSearchNumber("diversity_penalty"), diversity_penalty);
 }
 
-TEST_F(SearchOptionsTest, PositivePenaltiesPreserveExistingMappings) {
-  SearchOptions opts;
-  opts.frequency_penalty = 1.2f;
-  opts.presence_penalty = 0.3f;
-  auto params = MakeParams();
+TEST_F(SearchOptionsTest, NonzeroPenaltiesAreRejected) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f}, std::pair{0.0f, -0.3f}}) {
+    SearchOptions opts;
+    opts.frequency_penalty = frequency;
+    opts.presence_penalty = presence;
+    auto params = MakeParams();
 
-  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
-
-  EXPECT_FLOAT_EQ(static_cast<float>(params->GetSearchNumber("repetition_penalty")), 1.2f);
-  EXPECT_FLOAT_EQ(static_cast<float>(params->GetSearchNumber("diversity_penalty")), 0.3f);
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault), fl::Exception);
+  }
 }
 
 TEST_F(SearchOptionsTest, ZeroMaxOutputTokensThrows) {

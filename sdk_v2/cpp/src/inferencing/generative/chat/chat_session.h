@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/chat/reasoning_stream_splitter.h"
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/generative/toolcalling/tool_call_utils.h"
@@ -10,7 +11,9 @@
 #include "logger.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace fl {
@@ -51,6 +54,8 @@ bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind 
                                                                 bool stop_sequence_matched);
 
 }  // namespace chat_session_internal
+
+using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, ParsedToolCall>;
 
 /// A chat session that maintains conversation history across turns.
 /// Designed for multi-turn conversations where message history accumulates
@@ -120,16 +125,16 @@ class ChatSession : public Session {
   /// while keeping session-level tool definitions and marker tokens stable.
   void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
 
-  /// Process generated output: parse tool calls (or reuse pre-parsed ones), set finish reason, usage, and response
-  /// items. When `pre_parsed_calls` is non-empty, it is used as-is and no re-parse of `text` is performed — this is
-  /// how the streaming path keeps `call_id`s stable: the calls parsed during streaming are also the calls returned
-  /// in the final response.
-  void ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
-                              const SearchOptions& effective_options, bool canceled,
+  /// Build final response items from the typed segments and tool calls produced during generation.
+  void ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,
+                              const SearchOptions& effective_options,
+                              bool canceled,
                               bool stop_sequence_matched,
-                              Response& response, int prompt_tokens, int total_tokens,
-                              std::vector<ParsedToolCall> pre_parsed_calls = {},
-                              std::optional<flFinishReason> backend_finish_reason = std::nullopt);
+                              Response& response,
+                              int prompt_tokens,
+                              int total_tokens,
+                              int reasoning_tokens,
+                              std::optional<flFinishReason> backend_finish_reason);
 
   /// Process a request whose first item is a TextItem tagged OPENAI_JSON containing an OpenAI chat completions
   /// request. Parses the JSON, converts to internal items, runs generation, and produces an OPENAI_JSON-tagged
@@ -139,8 +144,11 @@ class ChatSession : public Session {
                                   Response& response);
 
   /// Commit input messages and assistant reply to history after a successful turn.
-  void CommitTurn(std::vector<MessageItem>&& new_messages, const Response& response,
-                  int pre_turn_token_count, int post_turn_token_count, bool can_rewind_to_pre_turn);
+  void CommitTurn(std::vector<MessageItem>&& new_messages,
+                  std::string assistant_history,
+                  int pre_turn_token_count,
+                  int post_turn_token_count,
+                  bool can_rewind_to_pre_turn);
 
   GenAIModelInstance& Model() { return model_; }
   const GenAIModelInstance& Model() const { return model_; }

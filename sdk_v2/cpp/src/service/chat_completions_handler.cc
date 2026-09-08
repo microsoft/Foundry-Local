@@ -56,6 +56,12 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Pa
     return ErrorResponse(Status::CODE_400, "Missing required field: messages");
   }
 
+  if (req.frequency_penalty.value_or(0.0f) != 0.0f ||
+      req.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
+  }
+
   return nullptr;
 }
 
@@ -246,6 +252,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Ha
         usage.prompt_tokens = static_cast<int>(bg_response.usage.prompt_tokens);
         usage.completion_tokens = static_cast<int>(bg_response.usage.completion_tokens);
         usage.total_tokens = static_cast<int>(bg_response.usage.total_tokens);
+        usage.completion_tokens_details.reasoning_tokens =
+            static_cast<int>(bg_response.usage.reasoning_tokens);
         usage_chunk.usage = std::move(usage);
 
         body_ptr->Push("data: " + nlohmann::json(usage_chunk).dump() + "\n\n");

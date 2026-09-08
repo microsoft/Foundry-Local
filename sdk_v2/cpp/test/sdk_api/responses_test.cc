@@ -242,6 +242,21 @@ TEST_F(WebServiceIntegrationTest, ResponsesMissingInput) {
   EXPECT_EQ(result->status, 400);
 }
 
+TEST_F(WebServiceIntegrationTest, ResponsesRejectsNonzeroPenaltyBeforeInference) {
+  auto client = MakeClient();
+  json request_body = {
+      {"model", model_id()},
+      {"input", "Hello"},
+      {"presence_penalty", -0.3},
+  };
+
+  auto result = client.Post("/v1/responses", request_body.dump(), "application/json");
+
+  ASSERT_TRUE(result) << "HTTP request failed";
+  EXPECT_EQ(result->status, 400);
+  EXPECT_EQ(json::parse(result->body)["error"]["type"], "invalid_request_error");
+}
+
 TEST_F(WebServiceIntegrationTest, ResponsesModelNotFound) {
   auto client = MakeClient();
   json request_body = {

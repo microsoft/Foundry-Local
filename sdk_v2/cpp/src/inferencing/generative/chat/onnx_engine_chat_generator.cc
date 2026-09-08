@@ -104,6 +104,10 @@ std::string OnnxEngineChatGenerator::Decode() {
   return token_text ? std::string(token_text) : "";
 }
 
+std::optional<int32_t> OnnxEngineChatGenerator::CurrentTokenId() const {
+  return current_token_;
+}
+
 int OnnxEngineChatGenerator::TokenCount() const {
   return static_cast<int>(engine_.SequenceLength(conversation_));
 }

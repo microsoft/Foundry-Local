@@ -34,6 +34,18 @@ void ValidateTopK(int top_k) {
   }
 }
 
+void ValidatePenalties(const SearchOptions& options) {
+  if (options.frequency_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero frequency_penalty is not supported; ORT repetition_penalty has different semantics");
+  }
+
+  if (options.presence_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero presence_penalty is not supported; ORT diversity_penalty has different semantics");
+  }
+}
+
 }  // namespace
 
 int ResolveMaxOutputTokens(const SearchOptions& options, int default_max_output_tokens) {
@@ -61,8 +73,10 @@ int GetModelMaxContextLength(const GenAIConfig& config) {
 std::optional<TurnGuidanceOptions> ResolveTurnGuidanceOptions(const ToolCallContext& tool_ctx) {
   std::string guidance_type;
   std::string guidance_data;
+  const bool user_specified_guidance =
+      !tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty();
 
-  if (!tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty()) {
+  if (user_specified_guidance) {
     guidance_type = tool_ctx.guidance_type;
     guidance_data = tool_ctx.guidance_data;
   } else {
@@ -78,7 +92,8 @@ std::optional<TurnGuidanceOptions> ResolveTurnGuidanceOptions(const ToolCallCont
   }
 
   const bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
-  if (!guidance_type.empty() && !guidance_data.empty() && tool_call_only) {
+  if (!guidance_type.empty() && !guidance_data.empty() &&
+      (user_specified_guidance || tool_call_only)) {
     return TurnGuidanceOptions{std::move(guidance_type), std::move(guidance_data)};
   }
 
@@ -144,20 +159,11 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  const ToolCallContext& tool_ctx,
                                                  ChatBackendKind backend_kind,
                                                  int default_max_output_tokens) {
+  ValidatePenalties(options);
+
   EngineTurnOptionsPlan plan;
   plan.max_generated_tokens = ResolveMaxOutputTokens(options, default_max_output_tokens);
   plan.sampling = ResolveSamplingPlan(options);
-
-  // Preserve the existing Foundry/OpenAI mapping used by the Generator path. Zero is OpenAI's neutral value, so it
-  // must not overwrite a model-authored repetition penalty with ORT GenAI's invalid value zero.
-  if (options.frequency_penalty.has_value() && *options.frequency_penalty != 0.0f) {
-    if (!std::isfinite(*options.frequency_penalty) || *options.frequency_penalty <= 0.0f) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "frequency_penalty must be finite and greater than zero when specified");
-    }
-
-    plan.repetition_penalty = *options.frequency_penalty;
-  }
 
   // A per-turn seed is the only seed channel once Requests carry no generator params, and upstream refuses one
   // outside dynamic batching. Reject instead of dropping it: a caller asking for reproducible output must not be
@@ -182,10 +188,17 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
 
 void ApplyGuidanceOptions(const ToolCallContext& tool_ctx, OgaGeneratorParams& gen_params) {
   if (const auto guidance = ResolveTurnGuidanceOptions(tool_ctx)) {
+    const bool user_specified_guidance =
+        !tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty();
     try {
       gen_params.SetGuidance(guidance->type.c_str(), guidance->data.c_str());
-    } catch (const std::runtime_error&) {
-      // Some model/runtime combinations do not implement guidance. Preserve the existing unguided behavior.
+    } catch (const std::runtime_error& e) {
+      if (user_specified_guidance) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                 "failed to apply requested response guidance: " + std::string(e.what()));
+      }
+
+      // Auto-generated tool grammar remains best-effort for models that do not implement guidance.
     }
   }
 }
@@ -197,6 +210,8 @@ int ApplySearchOptions(const SearchOptions& options,
                        ExecutionProvider ep,
                        bool use_full_context,
                        int default_max_output_tokens) {
+  ValidatePenalties(options);
+
   const int model_max_length = GetModelMaxContextLength(config);
 
   // genai_config.json's search.max_length (read above) is the source of truth for the total input+output budget.
@@ -237,21 +252,6 @@ int ApplySearchOptions(const SearchOptions& options,
 
   if (sampling.top_k.has_value()) {
     gen_params.SetSearchOption("top_k", static_cast<double>(*sampling.top_k));
-  }
-
-  // Preserve the established Foundry mapping while treating OpenAI's neutral zero as no override. ORT GenAI uses
-  // multiplicative repetition_penalty semantics and rejects values at or below zero.
-  if (options.frequency_penalty.has_value() && *options.frequency_penalty != 0.0f) {
-    if (!std::isfinite(*options.frequency_penalty) || *options.frequency_penalty <= 0.0f) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "frequency_penalty must be finite and greater than zero when specified");
-    }
-
-    gen_params.SetSearchOption("repetition_penalty", static_cast<double>(*options.frequency_penalty));
-  }
-
-  if (options.presence_penalty.has_value() && *options.presence_penalty != 0.0f) {
-    gen_params.SetSearchOption("diversity_penalty", static_cast<double>(*options.presence_penalty));
   }
 
   // Random seed

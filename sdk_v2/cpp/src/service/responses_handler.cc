@@ -14,6 +14,7 @@
 #include "inferencing/session/session_manager.h"
 #include "inferencing/session/session_registration.h"
 #include "items/text_item.h"
+#include "items/tool_call_item.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
 
@@ -73,6 +74,12 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
     params = req_json.get<ResponseCreateParams>();
   } catch (const nlohmann::json::exception& ex) {
     return ErrorResponse(Status::CODE_400, "Invalid request parameters", ex.what());
+  }
+
+  if (params.frequency_penalty.value_or(0.0f) != 0.0f ||
+      params.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
   }
 
   return nullptr;
@@ -474,6 +481,17 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       push_event("response.content_part.added", part_added);
     };
 
+    auto emit_tool_call = [&](const fl::ToolCallItem& call) {
+      close_current();
+
+      const int output_index = next_output_index++;
+      auto output = ResponseConverter::BuildFunctionCallStreamOutput(call, output_index, seq);
+      for (const auto& event : output.events) {
+        push_event(StreamEventTypeToString(event.type), event);
+      }
+      closed_items.push_back(std::move(output.completed_item));
+    };
+
     try {
       // Register inside the try so a shutdown rejection (Register throws) is reported as a stream failure
       // instead of escaping this raw std::thread and calling std::terminate.
@@ -489,7 +507,18 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
           return 0;
         }
 
-        assert(item->type == FOUNDRY_LOCAL_ITEM_TEXT);
+        if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+          emit_tool_call(static_cast<const fl::ToolCallItem&>(*item));
+          return 0;
+        }
+
+        if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
+          logger.Log(LogLevel::Debug,
+                     fmt::format("Responses streaming: skipping non-text item type {}",
+                                 static_cast<int>(item->type)));
+          return 0;
+        }
+
         auto* text_item = static_cast<fl::TextItem*>(item.get());
 
         ItemKind incoming = (text_item->text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING)
