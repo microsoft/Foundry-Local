@@ -603,7 +603,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       // Continuous decoding: append only the new messages to the existing generator.
       pre_turn_token_count = cached_generator_->TokenCount();
       try {
-        prompt_tokens = cached_generator_->AppendMessages(new_messages, Model(), turn_tool_ctx, effective_options);
+        const int appended_prompt_tokens =
+            cached_generator_->AppendMessages(new_messages, Model(), turn_tool_ctx, effective_options);
+        prompt_tokens = pre_turn_token_count + appended_prompt_tokens;
 
         // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
         cached_tool_ctx_ = std::move(turn_tool_ctx);
