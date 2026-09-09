@@ -12,7 +12,7 @@ from model_lock import MARKER, select_model_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS = "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001"
-LINUX = "8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a"
+NON_WINDOWS = "8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a"
 
 
 class ModelInventoryTests(unittest.TestCase):
@@ -32,19 +32,40 @@ class ModelInventoryTests(unittest.TestCase):
                 self.assertEqual(rid, selected.pop("inventoryTarget"))
                 self.assertEqual(self.base, selected)
 
-    def test_linux_changes_only_the_observed_raw_marker_and_full_inventory_tuple(self):
-        selected = self.select()
-        self.assertEqual(LINUX, selected["manifestSha256"])
-        self.assertEqual(793344449, selected["installedBytes"])
+    def test_non_windows_observations_change_only_the_raw_marker_and_full_inventory_tuple(self):
         common = lambda files: [item for item in files if item["name"] != MARKER]
-        self.assertEqual(common(self.base["files"]), common(selected["files"]))
-        self.assertEqual(15, len(common(selected["files"])))
-        marker = next(item for item in selected["files"] if item["name"] == MARKER)
-        self.assertEqual({"name": MARKER, "bytes": 87,
-                          "sha256": "9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb"}, marker)
-        self.assertEqual(self.base["id"], selected["id"])
-        self.assertEqual(self.base["executionProvider"], selected["executionProvider"])
-        self.assertEqual(self.base["version"], selected["version"])
+        for rid in ("linux-x64", "linux-arm64", "osx-arm64"):
+            with self.subTest(rid=rid):
+                selected = self.select(rid)
+                self.assertEqual(rid, selected["inventoryTarget"])
+                self.assertEqual(NON_WINDOWS, selected["manifestSha256"])
+                self.assertEqual(793344449, selected["installedBytes"])
+                self.assertEqual(common(self.base["files"]), common(selected["files"]))
+                self.assertEqual(15, len(common(selected["files"])))
+                marker = next(item for item in selected["files"] if item["name"] == MARKER)
+                self.assertEqual({"name": MARKER, "bytes": 87,
+                                  "sha256": "9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb"}, marker)
+                self.assertEqual(self.base["id"], selected["id"])
+                self.assertEqual(self.base["executionProvider"], selected["executionProvider"])
+                self.assertEqual(self.base["version"], selected["version"])
+
+    def test_arm_inventories_retain_their_independent_public_provenance(self):
+        observations = {
+            "linux-arm64": ("34401279833", "10123587055"),
+            "osx-arm64": ("34401280998", "10123649414"),
+        }
+        for rid, (run, artifact) in observations.items():
+            with self.subTest(rid=rid):
+                evidence = self.targets["targets"][rid]["evidence"]
+                run_url = f"https://github.com/jiec-msft/foundry-local/actions/runs/{run}"
+                self.assertEqual(run_url, evidence["runUrl"])
+                self.assertEqual(f"{run_url}/artifacts/{artifact}", evidence["artifactUrl"])
+                self.assertEqual("b08a704a824fdfaeef33ccd7e670b90d3c404960", evidence["executionSha"])
+                self.assertEqual("complete-inventory-only", evidence["kind"])
+                self.assertEqual(6034, evidence["failureJsonBytes"])
+                self.assertEqual("4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45",
+                                 evidence["failureJsonSha256"])
+                self.assertNotEqual(self.targets["targets"]["linux-x64"]["evidence"]["runUrl"], run_url)
 
     def test_selection_does_not_modify_inputs_or_share_mutable_pins(self):
         before = copy.deepcopy((self.base, self.targets))
@@ -54,9 +75,13 @@ class ModelInventoryTests(unittest.TestCase):
         self.assertEqual(before, (self.base, self.targets))
 
     def test_unobserved_targets_do_not_inherit_linux_or_windows(self):
-        for rid in ("linux-arm64", "osx-arm64"):
-            with self.subTest(rid=rid), self.assertRaisesRegex(ValueError, "No reviewed observed"):
-                self.select(rid)
+        for rid in self.targets["targets"]:
+            for entry in ({"status": "unobserved"}, {**self.targets["targets"][rid], "status": "unobserved"}):
+                targets = copy.deepcopy(self.targets)
+                targets["targets"][rid] = entry
+                with self.subTest(rid=rid, stale_pins=len(entry) > 1):
+                    with self.assertRaisesRegex(ValueError, "No reviewed observed"):
+                        select_model_inventory(self.base, targets, rid)
 
     def test_unknown_targets_and_lane_aliases_fail_closed(self):
         for rid in (None, "", "linux", "windows-x64", "macos-arm64", "osx-x64", "linux-riscv64"):
@@ -119,8 +144,8 @@ class ModelInventoryTests(unittest.TestCase):
         selected = self.select()
         lines = lambda key: "".join(f"{item['name']}\t{item['bytes']}\t{item['sha256']}\n"
                                    for item in sorted(selected["files"], key=key))
-        self.assertEqual(LINUX, hashlib.sha256(lines(lambda item: item["name"]).encode("utf-8")).hexdigest())
-        self.assertNotEqual(LINUX, hashlib.sha256(
+        self.assertEqual(NON_WINDOWS, hashlib.sha256(lines(lambda item: item["name"]).encode("utf-8")).hexdigest())
+        self.assertNotEqual(NON_WINDOWS, hashlib.sha256(
             lines(lambda item: item["name"].lower()).encode("utf-8")).hexdigest())
 
 

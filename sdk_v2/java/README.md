@@ -30,8 +30,10 @@ it does not relabel that binary source or qualify non-Windows ASR.
 
 External model integrity consumers must use the observed per-target inventory
 contract in [MODEL_LOCK.md](MODEL_LOCK.md). The legacy Windows
-`model-lock.json` stays unchanged; the additive sidecar admits the observed
-Linux x64 raw generated marker while unobserved targets remain fail-closed.
+`model-lock.json` stays unchanged; all five target inventories are now
+independently observed, including the non-Windows raw generated marker.
+Inventory acceptance is not non-Windows ASR qualification, and unknown or
+unobserved entries still fail closed.
 This metadata revision does not change or relabel the qualified `d0946a0` binary.
 
 The source-tree baseline is

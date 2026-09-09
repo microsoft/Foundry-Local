@@ -33,15 +33,18 @@ provenance: metadata must also come from the separately reviewed immutable pin.
 | `win-x64` | observed | 90 | 793344452 | Hosted inventory and ASR |
 | `win-arm64` | observed | 90 | 793344452 | Hosted inventory and ASR |
 | `linux-x64` | observed | 87 | 793344449 | Hosted complete inventory only; no ASR qualification |
-| `linux-arm64` | unobserved; reject | unknown | unknown | Requires its own complete inventory |
-| `osx-arm64` | unobserved; reject | unknown | unknown | Requires its own complete inventory |
+| `linux-arm64` | observed | 87 | 793344449 | Independent hosted complete inventory only; no ASR qualification |
+| `osx-arm64` | observed | 87 | 793344449 | Independent hosted complete inventory only; no ASR qualification |
 
 Windows marker SHA-256:
 `881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef`.
-Observed Linux x64 marker SHA-256:
+Independently observed Linux x64, Linux ARM64 and macOS ARM64 marker SHA-256:
 `9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb`.
-Its complete sixteen-file manifest is
+Each has the complete sixteen-file manifest
 `8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a`.
+All five inventory tuples are now selectable. This is **not five-platform ASR
+qualification**: every non-Windows diagnostic stopped before transcription.
+Unknown targets and simulated unobserved entries still fail closed.
 
 ## Mandatory selection and verification
 
@@ -114,9 +117,9 @@ For the evaluator at public revision
    selected per-RID expectation, or explicitly retain the old field as Windows
    legacy metadata only. Record metadata revision, native RID, installed bytes
    and selected manifest without relabeling binary source provenance.
-4. Add evaluator-owned regressions for all observed selections, no fallback for
-   both unobserved targets, wrong raw marker, wrong common file, wrong complete
-   manifest/total, and metadata pin drift. Preserve existing architecture,
+4. Add evaluator-owned regressions for all five observed selections, no fallback
+   for simulated unobserved or unknown targets, wrong raw marker, wrong common
+   file, wrong complete manifest/total, and metadata pin drift. Preserve existing architecture,
    explicit-download consent, licensing, cleanup and unknown-byte gates.
 
 No evaluator source or workflow is changed here. Diagnostic collection of an
@@ -135,10 +138,29 @@ failed the old Windows-only external lock before ASR. Its reviewed 6,034-byte
 its SHA-256 and public artifact URL are pinned in the sidecar. All fifteen
 non-marker entries, including those after the marker, match exactly.
 
+Linux ARM64 and macOS ARM64 were subsequently observed independently, both
+executing `b08a704a824fdfaeef33ccd7e670b90d3c404960` with the unchanged `d0946a0`
+binary and diagnostic fix `e7fa302b54fe410d762bd47965fcb7e39d4ff1b6`:
+
+| Native RID | Separate diagnostic run | Separate artifact | Completed UTC |
+|---|---|---|---|
+| `linux-arm64` | [34401279833](https://github.com/jiec-msft/foundry-local/actions/runs/34401279833) | [10123587055](https://github.com/jiec-msft/foundry-local/actions/runs/34401279833/artifacts/10123587055) | 2026-09-09T20:30:17Z |
+| `osx-arm64` | [34401280998](https://github.com/jiec-msft/foundry-local/actions/runs/34401280998) | [10123649414](https://github.com/jiec-msft/foundry-local/actions/runs/34401280998/artifacts/10123649414) | 2026-09-09T20:31:54Z |
+
+[Evidence-only commit 384bbe5](https://github.com/jiec-msft/foundry-local/commit/384bbe55d63265c133285b1a2a86403db3417fb2)
+records each independent retrieval and all sixteen raw comparisons. Each
+6,034-byte `failure.json` has SHA-256
+`4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45`.
+The separate payloads are byte-identical; neither target was promoted merely
+by copying the Linux x64 conclusion. Both identified and explicitly prepared
+successfully, then failed at the old Windows marker gate with zero ASR
+processes, not a native cancellation, preparation failure or native skip.
+
 The public native writer uses a text-mode `std::ofstream` with `j.dump(2)`.
-That explains the newline distinction, but the Linux x64 pin is based on its
-actual complete hosted observation, not source inference. No other non-Windows
-target is promoted by analogy, and accepting this inventory is not ASR success.
+That explains the newline distinction, but all three non-Windows pins are based
+on their own complete hosted observations, not source inference or analogy.
+Accepting these reviewed inventories is not ASR success, and does not authorize
+learning new hashes automatically from later failures.
 
 Model/runtime redistribution remains unauthorized. Existing catalog-network,
 unknown transfer-byte, license-description discrepancy and old-JBR compatibility
