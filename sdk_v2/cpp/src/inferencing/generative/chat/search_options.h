@@ -65,7 +65,7 @@ struct SearchOptions {
   std::optional<float> presence_penalty;   // Currently only the neutral value 0 is supported.
   std::optional<int> seed;
   std::optional<bool> do_sample;
-  std::optional<bool> early_stopping;  // Legacy beam-search policy; unsupported by Engine backends.
+  std::optional<bool> early_stopping;  // Beam-search policy; unsupported by Engine backends.
   std::vector<std::string> stop_sequences;
 
   /// Controls whether the model is allowed/required to emit tool calls for this turn.
@@ -113,18 +113,13 @@ std::optional<TurnGuidanceOptions> ResolveTurnGuidanceOptions(const ToolCallCont
 SamplingPlan ResolveSamplingPlan(const SearchOptions& options);
 
 /// Whether Engine turn options may carry stop strings for this backend.
-/// Upstream rejects them outside dynamic batching ("Stop strings require an Engine configured for dynamic
-/// batching."), so OpenAI `stop` stays host-filtered on a static Engine.
 bool ShouldForwardStopSequencesToEngine(ChatBackendKind backend_kind);
 
 /// Whether Engine turn options may carry a per-turn seed for this backend.
-/// Upstream rejects one outside dynamic batching ("A per-turn seed requires an Engine configured for dynamic
-/// batching."), and there is no request-level seed on the newer no-params `CreateRequest`.
 bool SupportsPerTurnSeed(ChatBackendKind backend_kind);
 
 /// Resolve SearchOptions + ToolCallContext into the per-turn Engine settings used by newer OGA headers.
-/// Throws fl::Exception when the request asks for something this backend cannot honor per turn (for example a seed
-/// on a static-batching Engine), so it is rejected at the Foundry boundary instead of being silently dropped.
+/// Throws fl::Exception when the request asks for something this backend cannot honor per turn.
 EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  const ToolCallContext& tool_ctx,
                                                  ChatBackendKind backend_kind,

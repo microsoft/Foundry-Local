@@ -148,11 +148,11 @@ SamplingPlan ResolveSamplingPlan(const SearchOptions& options) {
 }
 
 bool ShouldForwardStopSequencesToEngine(ChatBackendKind backend_kind) {
-  return backend_kind == ChatBackendKind::kDynamicEngine;
+  return backend_kind == ChatBackendKind::kEngine;
 }
 
 bool SupportsPerTurnSeed(ChatBackendKind backend_kind) {
-  return backend_kind == ChatBackendKind::kDynamicEngine;
+  return backend_kind == ChatBackendKind::kEngine;
 }
 
 EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
@@ -162,7 +162,7 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
   ValidatePenalties(options);
   if (options.early_stopping.value_or(false)) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             "early_stopping is not supported by Engine backends; it is a legacy beam-search option and Engine "
+             "early_stopping is not supported by Engine backends; it is a beam-search option and Engine "
              "uses single-beam decoding");
   }
 
@@ -173,12 +173,6 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
   // Negative seeds preserve classic ORT GenAI's nondeterministic behavior and require no per-turn seed support.
   // Nonnegative seeds must be forwarded because zero is a valid deterministic seed.
   if (options.seed.has_value() && *options.seed >= 0) {
-    if (!SupportsPerTurnSeed(backend_kind)) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "seed is not supported by this model's static-batching Engine backend; "
-               "a per-turn seed requires an Engine configured for dynamic batching");
-    }
-
     plan.seed = *options.seed;
   }
 
@@ -263,21 +257,21 @@ int ApplySearchOptions(const SearchOptions& options,
     gen_params.SetSearchOption("random_seed", static_cast<double>(*options.seed));
   }
 
-  // Preserve the model default when neither do_sample nor temperature was supplied. An explicit temperature retains
-  // the established Foundry behavior of selecting sampling above zero and greedy decoding at zero.
+  // Preserve the established Generator default of sampling when the caller supplies no sampling policy.
   if (sampling.do_sample.has_value()) {
     gen_params.SetSearchOptionBool("do_sample", *sampling.do_sample);
+  } else {
+    gen_params.SetSearchOptionBool("do_sample", true);
   }
 
-  // Early stopping is the legacy beam-search policy, independent from decoded stop strings.
+  // Early stopping is a beam-search policy, independent from decoded stop strings.
   if (options.early_stopping.value_or(false)) {
     gen_params.SetSearchOptionBool("early_stopping", true);
   }
 
   // Preserve a positive model setting. ORT GenAI reports both an absent setting and explicit zero as zero; Foundry
   // Local intentionally treats both as unset. ORT GenAI decides whether the model consumes the resulting option.
-  if (config.GetChatBackendKind() != ChatBackendKind::kStaticEngine &&
-      gen_params.GetSearchNumber("chunk_size") <= 0) {
+  if (gen_params.GetSearchNumber("chunk_size") <= 0) {
     // The model's resolved EP is kDefault for the common load path, so use the provider declared in
     // genai_config.json. An empty provider means ORT's CPU fallback.
     ExecutionProvider effective_ep = ep;

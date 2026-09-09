@@ -17,11 +17,7 @@ namespace {
 std::optional<flFinishReason> MapFinishReason(OgaFinishReason reason) {
   switch (reason) {
     case OgaFinishReason_Eos:
-#if defined(OgaFinishReason_StopSequence)
-    case OgaFinishReason_StopSequence:
-#elif defined(OgaFinishReason_StopString)
     case OgaFinishReason_StopString:
-#endif
       return FOUNDRY_LOCAL_FINISH_STOP;
     case OgaFinishReason_MaxGeneratedTokens:
     case OgaFinishReason_MaxSessionTokens:

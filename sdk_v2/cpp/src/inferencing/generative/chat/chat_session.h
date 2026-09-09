@@ -99,11 +99,7 @@ bool ShouldEnforceHostOutputLimit(ChatBackendKind backend_kind, bool media_turn)
 
 /// Whether the retained generator must be rebuilt from full history before appending this turn.
 ///
-/// Guidance is baked into a classic generator at creation time, and ORT GenAI only allows continuous decoding on a
-/// static-batching Engine while exactly one request is resident in the batch
-/// (`Engine::ValidateRequestCanContinue`: "Continuous decoding requires exactly one resident request in a static
-/// engine batch"). Foundry sizes a static Engine from `engine.static_batching.max_batch_size` and lets a model host
-/// several conversations, so it can never prove that precondition — a static Engine always rebuilds.
+/// Guidance is baked into a Generator at creation time. Dynamic Engine options are applied per turn.
 bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
                                                 bool guidance_requirement_changed,
                                                 bool guidance_payload_changed,

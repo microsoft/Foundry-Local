@@ -65,7 +65,7 @@ TEST(SearchOptionsParsingTest, RetainedGenerationSettingsAreBackendAware) {
   second.temperature = 1.0f;
   second.seed = 2;
   EXPECT_FALSE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
-  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kDynamicEngine));
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kEngine));
 
   second = first;
   second.frequency_penalty = 0.0f;
@@ -213,7 +213,7 @@ TEST(SamplingPlanTest, OutOfRangeScalarsAreRejected) {
 }
 
 TEST(EngineTurnOptionsPlanTest, DefaultsToMaxOutputLimitAndNoInventedSampling) {
-  const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
+  const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, ToolCallContext{}, ChatBackendKind::kEngine);
   EXPECT_EQ(plan.max_generated_tokens, 2048);
   EXPECT_FALSE(plan.sampling.do_sample.has_value());
   EXPECT_FALSE(plan.sampling.temperature.has_value());
@@ -233,7 +233,7 @@ TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBacken
   tool_ctx.guidance_type = "json_schema";
   tool_ctx.guidance_data = R"({"type":"object"})";
 
-  const auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, ChatBackendKind::kDynamicEngine);
+  const auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, ChatBackendKind::kEngine);
   ASSERT_TRUE(plan.seed.has_value());
   EXPECT_EQ(*plan.seed, 42);
   EXPECT_EQ(plan.stop_sequences, (std::vector<std::string>{"END", "STOP"}));
@@ -242,29 +242,23 @@ TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBacken
   EXPECT_EQ(plan.guidance->data, R"({"type":"object"})");
 }
 
-TEST(EngineTurnOptionsPlanTest, NegativeSeedIsOmittedOnEveryEngineBackend) {
+TEST(EngineTurnOptionsPlanTest, NegativeSeedIsOmitted) {
   for (int seed : {-1, -2, std::numeric_limits<int>::min()}) {
-    for (ChatBackendKind backend : {ChatBackendKind::kDynamicEngine, ChatBackendKind::kStaticEngine}) {
-      SearchOptions options;
-      options.seed = seed;
+    SearchOptions options;
+    options.seed = seed;
 
-      const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, backend);
-      EXPECT_FALSE(plan.seed.has_value());
-    }
+    const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine);
+    EXPECT_FALSE(plan.seed.has_value());
   }
 }
 
-TEST(EngineTurnOptionsPlanTest, ZeroSeedIsForwardedOnDynamicBackendAndRejectedOnStaticBackend) {
+TEST(EngineTurnOptionsPlanTest, ZeroSeedIsForwarded) {
   SearchOptions options;
   options.seed = 0;
 
-  const auto plan =
-      BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine);
+  const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine);
   ASSERT_TRUE(plan.seed.has_value());
   EXPECT_EQ(*plan.seed, 0);
-
-  EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kStaticEngine),
-               fl::Exception);
 }
 
 TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
@@ -273,24 +267,11 @@ TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
   tool_ctx.guidance_data = R"({"type":"object","required":["answer"]})";
 
   const auto plan =
-      BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kDynamicEngine);
+      BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine);
 
   ASSERT_TRUE(plan.guidance.has_value());
   EXPECT_EQ(plan.guidance->type, "json_schema");
   EXPECT_EQ(plan.guidance->data, R"({"type":"object","required":["answer"]})");
-}
-
-TEST(EngineTurnOptionsPlanTest, StaticBackendKeepsStopStringsHostSideAndRejectsSeed) {
-  SearchOptions with_stop;
-  with_stop.stop_sequences = {"END"};
-
-  const auto plan = BuildEngineTurnOptionsPlan(with_stop, ToolCallContext{}, ChatBackendKind::kStaticEngine);
-  EXPECT_TRUE(plan.stop_sequences.empty());
-
-  SearchOptions with_seed;
-  with_seed.seed = 7;
-  EXPECT_THROW(BuildEngineTurnOptionsPlan(with_seed, ToolCallContext{}, ChatBackendKind::kStaticEngine),
-               fl::Exception);
 }
 
 TEST(EngineTurnOptionsPlanTest, NeutralPenaltiesDoNotOverrideModelDefaults) {
@@ -298,7 +279,7 @@ TEST(EngineTurnOptionsPlanTest, NeutralPenaltiesDoNotOverrideModelDefaults) {
   options.frequency_penalty = 0.0f;
   options.presence_penalty = 0.0f;
 
-  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine));
+  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine));
 }
 
 TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
@@ -309,30 +290,26 @@ TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
     options.frequency_penalty = frequency;
     options.presence_penalty = presence;
 
-    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kDynamicEngine),
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine),
                  fl::Exception);
   }
 }
 
 TEST(EngineTurnOptionsPlanTest, RejectsTrueEarlyStoppingAndAcceptsNeutralFalse) {
-  for (ChatBackendKind backend : {ChatBackendKind::kDynamicEngine, ChatBackendKind::kStaticEngine}) {
-    SearchOptions enabled;
-    enabled.early_stopping = true;
-    EXPECT_THROW(BuildEngineTurnOptionsPlan(enabled, ToolCallContext{}, backend), fl::Exception);
+  SearchOptions enabled;
+  enabled.early_stopping = true;
+  EXPECT_THROW(BuildEngineTurnOptionsPlan(enabled, ToolCallContext{}, ChatBackendKind::kEngine), fl::Exception);
 
-    SearchOptions disabled;
-    disabled.early_stopping = false;
-    EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(disabled, ToolCallContext{}, backend));
-  }
+  SearchOptions disabled;
+  disabled.early_stopping = false;
+  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(disabled, ToolCallContext{}, ChatBackendKind::kEngine));
 }
 
-TEST(SearchOptionsParsingTest, EngineStopStringsAndSeedRemainHostOnlyForStaticBackend) {
-  EXPECT_TRUE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kDynamicEngine));
-  EXPECT_FALSE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kStaticEngine));
+TEST(SearchOptionsParsingTest, EngineSupportsPerTurnStopStringsAndSeed) {
+  EXPECT_TRUE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kEngine));
   EXPECT_FALSE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kGenerator));
 
-  EXPECT_TRUE(SupportsPerTurnSeed(ChatBackendKind::kDynamicEngine));
-  EXPECT_FALSE(SupportsPerTurnSeed(ChatBackendKind::kStaticEngine));
+  EXPECT_TRUE(SupportsPerTurnSeed(ChatBackendKind::kEngine));
   EXPECT_FALSE(SupportsPerTurnSeed(ChatBackendKind::kGenerator));
 }
 
@@ -454,14 +431,13 @@ TEST_F(SearchOptionsTest, SampledTurnForwardsTopPAndTopK) {
   EXPECT_EQ(params->GetSearchNumber("top_k"), 25);
 }
 
-TEST_F(SearchOptionsTest, AbsentDoSamplePreservesModelPolicy) {
+TEST_F(SearchOptionsTest, AbsentDoSamplePreservesGeneratorSamplingDefault) {
   SearchOptions opts;
   auto params = MakeParams();
-  const bool model_do_sample = params->GetSearchBool("do_sample");
 
   ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
 
-  EXPECT_EQ(params->GetSearchBool("do_sample"), model_do_sample);
+  EXPECT_TRUE(params->GetSearchBool("do_sample"));
 }
 
 TEST_F(SearchOptionsTest, ExplicitDoSampleFalseIsForwarded) {

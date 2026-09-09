@@ -12,8 +12,7 @@ namespace fl {
 
 enum class ChatBackendKind {
   kGenerator,
-  kStaticEngine,
-  kDynamicEngine,
+  kEngine,
 };
 
 /// Represents the parsed contents of a genai_config.json file.
@@ -49,12 +48,7 @@ struct GenAIConfig {
       size_t max_scheduled_tokens = 2048;
     };
 
-    struct StaticBatching {
-      size_t max_batch_size = 4;
-    };
-
     std::optional<DynamicBatching> dynamic_batching;
-    std::optional<StaticBatching> static_batching;
   };
 
   std::optional<OnnxModel> model;

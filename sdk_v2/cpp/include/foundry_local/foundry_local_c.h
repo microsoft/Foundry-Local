@@ -299,7 +299,7 @@ typedef enum flTensorDataType {
 /// Float presence penalty. Currently only the neutral value 0 is supported.
 #define FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY "presence_penalty"
 #define FOUNDRY_LOCAL_PARAM_SEED "seed"  ///< int. for reproducible outputs
-/// Bool. Legacy beam-search policy; unsupported by Engine backends.
+/// Bool. Beam-search early-stopping policy; unsupported by Engine backends.
 #define FOUNDRY_LOCAL_PARAM_EARLY_STOPPING "early_stopping"
 #define FOUNDRY_LOCAL_PARAM_DO_SAMPLE "do_sample"  ///< bool. whether to sample (false = greedy decoding)
 

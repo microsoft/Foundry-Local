@@ -5,6 +5,7 @@
 #include "inferencing/generative/chat/search_options.h"
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -60,6 +61,7 @@ class OnnxChatEngine {
     TurnResult result;
     uint64_t turn_id = 0;
     size_t sequence_length = 0;
+    std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now();
     bool turn_finished = true;
     bool closed = false;
   };
@@ -110,7 +112,6 @@ class OnnxChatEngine {
   std::unique_ptr<OgaEngine> engine_;
   std::unique_ptr<OgaEngineEventBuffer> event_buffer_;
   std::unordered_map<Conversation*, std::unique_ptr<NativeConversation>> conversations_;
-  size_t consecutive_retry_events_ = 0;
 };
 
 }  // namespace fl

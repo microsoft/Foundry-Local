@@ -67,6 +67,8 @@ std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages
                                         GenAIModelInstance& model,
                                         const std::string& tools_json) {
   const auto rendered_inputs = BuildChatPrompt(messages, model, tools_json);
+  // The Engine retains the earlier turns, so apply the model template with a collision-free assistant marker and
+  // return only the suffix that represents the newly appended messages.
   constexpr std::string_view kMarkerPrefix = "__foundry_engine_assistant_boundary_";
   size_t marker_suffix = 0;
   std::string assistant_marker;

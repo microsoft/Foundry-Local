@@ -6,7 +6,10 @@
 #include "contracts/chat_completions.h"
 #include "contracts/chat_completions_converter.h"
 #include "inferencing/generative/chat/onnx_chat_generator.h"
+#include "inferencing/generative/chat/onnx_chat_engine.h"
+#if FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE
 #include "inferencing/generative/chat/onnx_engine_chat_generator.h"
+#endif
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
 #include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/genai_model_instance.h"
@@ -56,7 +59,12 @@ std::unique_ptr<ChatGenerator> CreateTextChatGenerator(const std::vector<Message
                                                        const ToolCallContext& tool_ctx,
                                                        bool use_full_context) {
   if (model.GetGenAIConfig().GetChatBackendKind() != ChatBackendKind::kGenerator) {
+#if FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE
     return OnnxEngineChatGenerator::Create(messages, options, model, tool_ctx);
+#else
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "model requires the ORT GenAI dynamic Engine API, but this build does not provide it");
+#endif
   }
 
   return OnnxChatGenerator::Create(messages, options, model, tool_ctx, use_full_context);
@@ -163,8 +171,8 @@ bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
                                                 bool guidance_requirement_changed,
                                                 bool guidance_payload_changed,
                                                 bool retained_generation_settings_changed) {
-  return guidance_requirement_changed || guidance_payload_changed || retained_generation_settings_changed ||
-         backend_kind == ChatBackendKind::kStaticEngine;
+  (void)backend_kind;
+  return guidance_requirement_changed || guidance_payload_changed || retained_generation_settings_changed;
 }
 
 bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
@@ -172,8 +180,8 @@ bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind 
                                                                 bool reasoning_was_active,
                                                                 bool stop_sequence_matched,
                                                                 bool host_output_limit_reached) {
-  return stop_sequence_matched || host_output_limit_reached || reasoning_was_active || grammar_was_active ||
-         backend_kind == ChatBackendKind::kStaticEngine;
+  (void)backend_kind;
+  return stop_sequence_matched || host_output_limit_reached || reasoning_was_active || grammar_was_active;
 }
 
 }  // namespace chat_session_internal

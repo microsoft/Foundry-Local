@@ -149,6 +149,8 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
 
         auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, model_.GetGenAIConfig().GetChatBackendKind(),
                                                kDefaultTextMaxOutputTokens);
+        // The per-turn limit is part of the caller contract. Validate that it fits after retained and newly appended
+        // input, then forward it to OGA so the Engine, rather than the host, terminates at the requested boundary.
         const uint64_t total_required = static_cast<uint64_t>(existing_tokens) + static_cast<uint64_t>(tokens.size()) +
                                         static_cast<uint64_t>(plan.max_generated_tokens);
         const uint64_t model_max_tokens = static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig()));
@@ -168,6 +170,7 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
           std::lock_guard<std::mutex> lock(conversation->mutex);
           conversation->turn_id = turn_id;
           conversation->sequence_length += tokens.size();
+          conversation->last_activity = std::chrono::steady_clock::now();
         }
         completion->set_value(turn_id);
       },
@@ -225,15 +228,17 @@ size_t OnnxChatEngine::SequenceLength(const std::shared_ptr<Conversation>& conve
 void OnnxChatEngine::Cancel(const std::shared_ptr<Conversation>& conversation) {
   Enqueue(
       [this, conversation]() {
-        auto& native = FindNative(conversation);
         uint64_t turn_id;
         {
           std::lock_guard<std::mutex> lock(conversation->mutex);
+          if (conversation->turn_finished || conversation->turn_id == 0) {
+            return;
+          }
           turn_id = conversation->turn_id;
         }
-        if (turn_id != 0) {
-          native.request->CancelTurn(turn_id);
-        }
+
+        auto& native = FindNative(conversation);
+        native.request->CancelTurn(turn_id);
       },
       [conversation](std::exception_ptr error) {
         std::lock_guard<std::mutex> lock(conversation->mutex);
@@ -289,6 +294,7 @@ void OnnxChatEngine::Enqueue(std::function<void()> command,
 void OnnxChatEngine::WorkerLoop(std::promise<void> initialized) {
   try {
     engine_ = OgaEngine::Create(model_.GetOgaModel());
+    // A request can emit a token event and a terminal event in the same Engine step.
     event_buffer_ = engine_->CreateEventBuffer(model_.GetGenAIConfig().EngineMaxBatchSize().value_or(1) * 2);
     initialized.set_value();
   } catch (...) {
@@ -356,24 +362,16 @@ void OnnxChatEngine::RouteEvents() {
                                  std::to_string(event->ErrorCode()));
       }
       if ((flags & OgaEngineEventFlag_CapacityBlocked) != 0 && EvictDormantConversation()) {
-        consecutive_retry_events_ = 0;
         continue;
       }
       if ((flags & (OgaEngineEventFlag_CapacityBlocked | OgaEngineEventFlag_Retryable)) != 0) {
-        constexpr size_t kMaxConsecutiveRetries = 100;
-        if (++consecutive_retry_events_ > kMaxConsecutiveRetries) {
-          throw std::runtime_error("ORT GenAI Engine made no progress after " +
-                                   std::to_string(kMaxConsecutiveRetries) +
-                                   " retryable events; last error code " +
-                                   std::to_string(event->ErrorCode()));
-        }
+        // Capacity pressure is transient while resident requests are active. Leave the request queued in OGA and
+        // return to the dispatcher so cancellation and close commands can still make progress.
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         continue;
       }
       throw std::runtime_error("ORT GenAI Engine returned an invalid request-less event");
     }
-    consecutive_retry_events_ = 0;
-
     auto it = std::find_if(conversations_.begin(), conversations_.end(), [&](const auto& entry) {
       return entry.second->request.get() == &request->get();
     });
@@ -395,12 +393,14 @@ void OnnxChatEngine::RouteEvents() {
         conversation->result.cached_prompt_tokens = usage.CachedPromptTokens();
         conversation->result.finish_reason = event->FinishReason();
         conversation->turn_finished = true;
+        conversation->last_activity = std::chrono::steady_clock::now();
       }
       if ((flags & OgaEngineEventFlag_Failed) != 0) {
         conversation->error = std::make_exception_ptr(
             std::runtime_error("ORT GenAI Engine request failed with error code " +
                                std::to_string(event->ErrorCode())));
         conversation->turn_finished = true;
+        conversation->last_activity = std::chrono::steady_clock::now();
       }
     }
     conversation->cv.notify_all();
@@ -408,22 +408,32 @@ void OnnxChatEngine::RouteEvents() {
 }
 
 bool OnnxChatEngine::EvictDormantConversation() {
+  auto victim = conversations_.end();
+  auto oldest_activity = std::chrono::steady_clock::time_point::max();
   for (auto it = conversations_.begin(); it != conversations_.end(); ++it) {
-    auto conversation = it->second->state;
-    {
-      std::lock_guard<std::mutex> lock(conversation->mutex);
-      if (!conversation->turn_finished || conversation->turn_id == 0) {
-        continue;
-      }
-      conversation->closed = true;
+    const auto& conversation = it->second->state;
+    std::lock_guard<std::mutex> lock(conversation->mutex);
+    if (conversation->turn_finished && conversation->turn_id != 0 &&
+        conversation->last_activity < oldest_activity) {
+      victim = it;
+      oldest_activity = conversation->last_activity;
     }
-
-    it->second->request->Close();
-    conversations_.erase(it);
-    conversation->cv.notify_all();
-    return true;
   }
-  return false;
+
+  if (victim == conversations_.end()) {
+    return false;
+  }
+
+  auto conversation = victim->second->state;
+  {
+    std::lock_guard<std::mutex> lock(conversation->mutex);
+    conversation->closed = true;
+  }
+
+  victim->second->request->Close();
+  conversations_.erase(victim);
+  conversation->cv.notify_all();
+  return true;
 }
 
 void OnnxChatEngine::FailAll(std::exception_ptr error) {
