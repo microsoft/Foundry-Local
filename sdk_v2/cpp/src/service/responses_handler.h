@@ -6,6 +6,8 @@
 
 #include "service/handler_utils.h"
 
+#include "inferencing/generative/openresponses/response_chain.h"
+
 #include <memory>
 #include <string>
 
@@ -45,13 +47,12 @@ class ResponsesHandler : public HttpRequestHandler {
   std::shared_ptr<OutgoingResponse> ResolveModel(const std::string& model_name,
                                                  Model*& model, GenAIModelInstance*& loaded);
 
-  /// Load previous response context when chaining via previous_response_id.
-  /// The json storage objects are passed by reference because the output pointers alias into them.
-  void LoadPreviousContext(const responses::ResponseCreateParams& params,
-                           const nlohmann::json*& previous_input,
-                           const nlohmann::json*& previous_output,
-                           nlohmann::json& prev_input_storage,
-                           nlohmann::json& prev_output_storage);
+  /// Reconstruct the full replay context for a chained request by walking `previous_response_id` to the root.
+  /// Only called when no cached session is available — a live session already holds the conversation.
+  /// Returns an error response when the chain cannot be reconstructed, nullptr on success.
+  std::shared_ptr<OutgoingResponse> LoadPreviousContext(const responses::ResponseCreateParams& params,
+                                                        ResponseChainContext& context_storage,
+                                                        const ResponseChainContext*& previous_context);
 
   // --- Inference dispatch ---
 

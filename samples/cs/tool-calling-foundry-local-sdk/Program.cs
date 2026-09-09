@@ -2,7 +2,6 @@
 // <imports>
 using Microsoft.AI.Foundry.Local;
 using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
-using Betalgo.Ranul.OpenAI.ObjectModels.ResponseModels;
 using Betalgo.Ranul.OpenAI.ObjectModels.SharedModels;
 using System.Text.Json;
 // </imports>
@@ -107,7 +106,7 @@ List<ToolDefinition> tools =
 
 // <tool_loop>
 // Get a streaming chat completion response
-var toolCallResponses = new List<ChatCompletionCreateResponse>();
+var toolCalls = new List<ToolCall>();
 Console.WriteLine("Chat completion response:");
 var streamingResponse = chatClient.CompleteChatStreamingAsync(messages, tools, ct);
 await foreach (var chunk in streamingResponse)
@@ -116,32 +115,42 @@ await foreach (var chunk in streamingResponse)
     Console.Write(content);
     Console.Out.Flush();
 
-    if (chunk.Choices[0].FinishReason == "tool_calls")
+    // Tool calls arrive in their own delta chunk, ahead of the final chunk that reports
+    // finish_reason — that last chunk carries no tool call data of its own. Each call is
+    // delivered complete in a single chunk, so collect them as they stream past.
+    var chunkToolCalls = chunk.Choices[0].Message.ToolCalls;
+    if (chunkToolCalls is { Count: > 0 })
     {
-        toolCallResponses.Add(chunk);
+        toolCalls.AddRange(chunkToolCalls);
     }
 }
 Console.WriteLine();
 
 
 // Invoke tools called and append responses to the chat
-foreach (var chunk in toolCallResponses)
+foreach (var toolCall in toolCalls)
 {
-    var call = chunk?.Choices[0].Message.ToolCalls?[0].FunctionCall;
+    var call = toolCall.FunctionCall;
     if (call?.Name == "multiply_numbers")
     {
         var arguments = JsonSerializer.Deserialize<Dictionary<string, int>>(call.Arguments!)!;
         var first = arguments["first"];
         var second = arguments["second"];
 
-        Console.WriteLine($"\nInvoking tool: {call?.Name} with arguments {first} and {second}");
+        Console.WriteLine($"\nInvoking tool: {call.Name} with arguments {first} and {second}");
         var result = Utils.MultiplyNumbers(first, second);
         Console.WriteLine($"Tool response: {result.ToString()}");
+
+        // Replay the assistant turn that issued the call before answering it. Each request is
+        // self-contained, so a tool result is only correlated with its call when that call is part
+        // of the same message list. Content stays null so the replayed turn matches the
+        // content-free turn the model generated, instead of feeding its marker text back.
+        messages.Add(new ChatMessage { Role = "assistant", ToolCalls = [toolCall] });
 
         var response = new ChatMessage
         {
             Role = "tool",
-            ToolCallId = chunk!.Choices[0].Message.ToolCalls![0].Id,
+            ToolCallId = toolCall.Id,
             Content = result.ToString(),
         };
         messages.Add(response);

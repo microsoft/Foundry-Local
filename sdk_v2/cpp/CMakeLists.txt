@@ -217,6 +217,8 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/session/session_manager.cc
     src/inferencing/generative/chat/chat_session.cc
     src/inferencing/generative/chat/chat_template.cc
+    src/inferencing/generative/chat/chat_transcript.cc
+    src/inferencing/generative/chat/media_input.cc
     src/configuration.cc
     src/download/blob_download_state.cc
     src/download/blob_downloader.cc

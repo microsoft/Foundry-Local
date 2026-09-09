@@ -18,16 +18,32 @@ namespace fl {
 // extended by ChatCompletionCreateRequestExtended (metadata field).
 // ========================================================================
 
+// --- Shared types (used by both requests and responses) ---
+
+/// A function call in a tool call. JSON keys: "name", "arguments"
+struct ChatCompletionFunctionCall {
+  std::string name;
+  std::string arguments;
+};
+
+/// A tool call issued by the assistant. JSON keys: "id", "type", "function"
+struct ChatCompletionToolCall {
+  std::string id;
+  std::string type = "function";
+  ChatCompletionFunctionCall function;
+  std::optional<int> index;  // streaming only — distinguishes parallel tool calls
+};
+
 // --- Request types ---
 
 /// A single message in the conversation. Maps to OpenAI ChatMessage.
 /// JSON keys: "role", "content", "name", "tool_call_id", "tool_calls"
 struct ChatCompletionMessage {
-  std::string role;                          // "system", "user", "assistant", "tool"
-  std::optional<std::string> content;        // nullable for assistant messages with tool_calls
-  std::optional<std::string> name;           // optional sender name
-  std::optional<std::string> tool_call_id;   // for role="tool": the tool call this is responding to
-  std::optional<nlohmann::json> tool_calls;  // for role="assistant": array of tool call objects
+  std::string role;                                // "system", "user", "assistant", "tool"
+  std::optional<std::string> content;              // nullable for assistant messages with tool_calls
+  std::optional<std::string> name;                 // optional sender name
+  std::optional<std::string> tool_call_id;         // for role="tool": the tool call this is responding to
+  std::vector<ChatCompletionToolCall> tool_calls;  // for role="assistant": the calls this message issued
 };
 
 /// Function definition within a tool. JSON keys: "name", "description", "parameters", "strict"
@@ -79,20 +95,6 @@ struct ChatCompletionRequest {
 };
 
 // --- Response types ---
-
-/// A function call in a tool call. JSON keys: "name", "arguments"
-struct ChatCompletionFunctionCall {
-  std::string name;
-  std::string arguments;
-};
-
-/// A tool call from the assistant. JSON keys: "id", "type", "function"
-struct ChatCompletionToolCall {
-  std::string id;
-  std::string type = "function";
-  ChatCompletionFunctionCall function;
-  std::optional<int> index;  // streaming only — distinguishes parallel tool calls
-};
 
 /// The message in a response choice. JSON keys: "role", "content", "reasoning_content", "refusal", "tool_calls"
 struct ChatCompletionResponseMessage {
@@ -178,6 +180,8 @@ struct ChatCompletionChunk {
 // ========================================================================
 
 // --- Request deserialization ---
+void from_json(const nlohmann::json& j, ChatCompletionFunctionCall& f);
+void from_json(const nlohmann::json& j, ChatCompletionToolCall& tc);
 void from_json(const nlohmann::json& j, ChatCompletionMessage& m);
 void from_json(const nlohmann::json& j, ChatCompletionFunctionDef& f);
 void from_json(const nlohmann::json& j, ChatCompletionTool& t);

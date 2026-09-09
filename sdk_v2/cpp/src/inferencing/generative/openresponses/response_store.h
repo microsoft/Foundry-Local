@@ -2,13 +2,17 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "inferencing/generative/openresponses/response_chain.h"
+
 #include <nlohmann/json.hpp>
 
 #include <list>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace fl {
 
@@ -30,6 +34,11 @@ class ResponseStore {
   /// Complements SessionManager's cached ChatSession instances: SessionManager caches a small number of live sessions
   /// (with their generators / KV cache) for fast continuation, while ResponseStore keeps a larger, lightweight history
   /// of completed responses and their input items for lookup and pagination beyond the session cache capacity.
+  ///
+  /// Eviction removes response metadata from lookup and pagination, but compacts the evicted hop into any retained
+  /// child. A complete stored chain therefore stays reconstructable after a session-cache miss as it exceeds capacity.
+  /// The entry capacity bounds response metadata, not replay history: compacted input/output remains resident while a
+  /// retained descendant needs it. Growth stops when the replayed conversation no longer fits a successful model turn.
   void Store(const std::string& response_id,
              nlohmann::json response,
              nlohmann::json input_items);
@@ -40,26 +49,73 @@ class ResponseStore {
   /// Retrieve stored input items for a response. Returns nullopt if not found.
   std::optional<nlohmann::json> GetInputItems(const std::string& response_id);
 
-  /// Delete a stored response. Returns true if it existed.
+  /// Reconstruct the complete replay context for a chained response: every hop from the root of the
+  /// `previous_response_id` chain to `response_id`, oldest first, each keeping its own input items and its own
+  /// output items.
+  ///
+  /// Each entry stores only its own request's input items — that is exactly what the /input_items endpoint must
+  /// return — so a caller that replayed a single hop would lose everything before it, including the assistant tool
+  /// calls that later tool results have to correlate against.
+  ///
+  /// The per-hop grouping is part of the contract: a hop's output is one assistant turn, and replay has to rebuild
+  /// it as one assistant message even when that turn produced only reasoning or nothing at all.
+  ///
+  /// A hop's input items are returned exactly as stored. Instructions are request-scoped and are not stored as
+  /// items at all, so the store never has to guess which system message was the caller's — every system message a
+  /// caller sent is replayed verbatim.
+  ///
+  /// Returns nullopt when the chain cannot be reconstructed: a link was never stored (or was explicitly deleted)
+  /// and has no compacted replay prefix, or the stored links form a cycle. Callers must fail explicitly rather than
+  /// run inference on a truncated conversation.
+  std::optional<ResponseChainContext> BuildChainContext(const std::string& response_id);
+
+  /// Mark every hop of a chain as recently used without materializing its context. Callers that continue a
+  /// conversation from a live session skip reconstruction entirely; without this the conversation's own early hops
+  /// would age out of the store while it is still active, and a later cache miss could no longer rebuild it.
+  /// Returns false when the chain is already broken; callers must not append another stored response in that case.
+  bool TouchChain(const std::string& response_id);
+
+  /// Delete a response and every retained descendant whose replay depends on it. Returns true if the response existed
+  /// either as stored metadata or inside a compacted replay prefix.
   bool Delete(const std::string& response_id);
+
+  /// Delete a response and every retained response whose replay depends on it. This also finds an evicted response
+  /// inside a compacted prefix, so content that remains replayable never becomes undeletable.
+  /// Returns the IDs whose response metadata was removed; an empty result means the response was unknown.
+  std::vector<std::string> DeleteWithDependents(const std::string& response_id);
+
+  /// One page of stored responses plus the exact continuation state.
+  struct Page {
+    std::vector<nlohmann::json> data;
+    /// True when at least one more response exists after this page. Derived from the store's own iteration, so a
+    /// final page that happens to hold exactly `limit` items is reported correctly.
+    bool has_more = false;
+  };
 
   /// List stored responses with cursor-based pagination.
   /// @param limit  Maximum number to return.
-  /// @param after  Cursor — return responses after this ID. Empty = from start.
+  /// @param after  Cursor — return responses after this ID. Empty (or unknown) = from the start.
   /// @param order  "asc" or "desc" (default: "desc" = newest first).
-  /// @return  Vector of response JSON objects.
-  std::vector<nlohmann::json> List(int limit = 20,
-                                   const std::string& after = "",
-                                   const std::string& order = "desc");
+  /// @return  One page of response JSON objects and whether more follow it.
+  Page List(int limit = 20, const std::string& after = "", const std::string& order = "desc");
 
   /// Number of responses currently stored.
   size_t Size() const;
 
  private:
+  /// Persistent replay prefix shared by every retained branch below an evicted hop. The head is the newest compacted
+  /// hop and `previous` walks toward the conversation root, so compacting a branch copies no prior input/output data.
+  struct ReplayPrefix {
+    std::string id;
+    std::shared_ptr<const ReplayPrefix> previous;
+    ResponseChainHop hop;
+  };
+
   struct Entry {
     std::string id;
     nlohmann::json response;
     nlohmann::json input_items;
+    std::shared_ptr<const ReplayPrefix> replay_prefix;
   };
 
   int capacity_;
@@ -68,7 +124,15 @@ class ResponseStore {
   std::unordered_map<std::string, std::list<Entry>::iterator> index_;
 
   void Evict();
+  void CompactAndEraseLocked(std::list<Entry>::iterator root);
+  static ResponseChainHop ToReplayHop(const Entry& entry);
+  static bool PrefixContains(const std::shared_ptr<const ReplayPrefix>& prefix, const std::string& response_id);
+  bool DependsOnLocked(const Entry& entry, const std::string& response_id) const;
   void TouchLocked(std::list<Entry>::iterator it);
+
+  /// Walk `response_id` back to the oldest retained hop. Returns the stored hops newest-first, or an empty vector
+  /// when a link is missing without a compacted prefix or the links form a cycle.
+  std::vector<std::list<Entry>::iterator> WalkChainLocked(const std::string& response_id);
 };
 
 }  // namespace fl

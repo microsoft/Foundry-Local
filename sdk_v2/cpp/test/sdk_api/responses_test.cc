@@ -602,3 +602,393 @@ TEST_F(WebServiceIntegrationTest, ResponsesNonStreamingThenChainStreaming) {
   EXPECT_NE(assembled_text.find("cherry"), std::string::npos)
       << "Expected 'cherry' in streaming chained response. Got: " << assembled_text;
 }
+
+// ----------------------------------------------------------------------
+// Cold-path replay: branching twice from the same previous_response_id.
+//
+// SessionManager::CheckOut removes the cached session, so the first
+// continuation consumes it and the second must rebuild the conversation from
+// the ResponseStore. That makes the cold path deterministic without touching
+// cache internals or waiting for an eviction.
+// ----------------------------------------------------------------------
+
+TEST_F(WebServiceIntegrationTest, ResponsesBranchingTwiceForcesChainRebuild) {
+  auto client = MakeClient();
+
+  json root_request = {
+      {"model", model_id()},
+      {"input", "Remember: the secret word is 'banana'. Reply with just 'ok'."},
+      {"store", true},
+      {"max_output_tokens", 1024},
+      {"temperature", 0},
+  };
+
+  auto root_result = client.Post("/v1/responses", root_request.dump(), "application/json");
+  ASSERT_TRUE(root_result) << "HTTP request failed";
+  ASSERT_EQ(root_result->status, 200) << root_result->body;
+
+  json root_response = json::parse(root_result->body);
+  ASSERT_EQ(root_response["status"], "completed") << root_result->body;
+  const std::string root_id = root_response["id"].get<std::string>();
+
+  auto ask_secret = [&](const char* label) {
+    json branch = {
+        {"model", model_id()},
+        {"input", "What is the secret word? Reply with just the word."},
+        {"previous_response_id", root_id},
+        {"store", true},
+        {"max_output_tokens", 1024},
+        {"temperature", 0},
+    };
+
+    auto result = client.Post("/v1/responses", branch.dump(), "application/json");
+    EXPECT_TRUE(result) << label << ": HTTP request failed";
+    return result;
+  };
+
+  // First branch: the session cached under the root id is still there, so this is the warm path. Checking it out
+  // is what leaves the cache empty for the second branch.
+  auto warm_result = ask_secret("warm branch");
+  ASSERT_TRUE(warm_result);
+  ASSERT_EQ(warm_result->status, 200) << warm_result->body;
+  json warm_response = json::parse(warm_result->body);
+  ASSERT_EQ(warm_response["status"], "completed") << warm_result->body;
+  EXPECT_EQ(warm_response["previous_response_id"], root_id);
+
+  // Second branch from the same root: no cached session remains, so the handler must reconstruct the whole chain
+  // from the store. A truncated or unbuildable chain would surface as a 404 here.
+  auto cold_result = ask_secret("cold branch");
+  ASSERT_TRUE(cold_result);
+  ASSERT_EQ(cold_result->status, 200) << "Rebuilding the chain from the store failed: " << cold_result->body;
+
+  json cold_response = json::parse(cold_result->body);
+  ASSERT_EQ(cold_response["status"], "completed") << cold_result->body;
+  EXPECT_EQ(cold_response["previous_response_id"], root_id);
+  EXPECT_NE(cold_response["id"], warm_response["id"]);
+  ASSERT_TRUE(cold_response.contains("output_text"));
+
+  // Both branches saw the same conversation, so both must be able to recall what only the root turn established.
+  EXPECT_NE(ToLower(cold_response["output_text"].get<std::string>()).find("banana"), std::string::npos)
+      << "The rebuilt chain lost the root turn. Output: " << cold_response["output_text"];
+}
+
+TEST_F(WebServiceIntegrationTest, ResponsesInputItemsExcludeInstructions) {
+  auto client = MakeClient();
+
+  json request_body = {
+      {"model", model_id()},
+      {"instructions", "You are terse."},
+      {"input", "Say 'ok'."},
+      {"store", true},
+      {"max_output_tokens", 256},
+      {"temperature", 0},
+  };
+
+  auto result = client.Post("/v1/responses", request_body.dump(), "application/json");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_EQ(result->status, 200) << result->body;
+
+  const std::string id = json::parse(result->body)["id"].get<std::string>();
+
+  auto items_result = client.Get(("/v1/responses/" + id + "/input_items").c_str());
+  ASSERT_TRUE(items_result) << "HTTP request failed";
+  ASSERT_EQ(items_result->status, 200) << items_result->body;
+
+  json items = json::parse(items_result->body);
+  ASSERT_TRUE(items.contains("data"));
+
+  // /input_items reports what the caller put in `input`. Instructions are request-scoped state, not an input item.
+  ASSERT_EQ(items["data"].size(), 1u) << items_result->body;
+  EXPECT_EQ(items["data"][0]["role"], "user");
+  for (const auto& item : items["data"]) {
+    EXPECT_NE(item.value("role", ""), "system") << "instructions must not be stored as an input item";
+  }
+}
+
+// ----------------------------------------------------------------------
+// Input-item validation: a reasoning item has no role and must be accepted;
+// a message item without a role must still be rejected.
+// ----------------------------------------------------------------------
+
+TEST_F(WebServiceIntegrationTest, ResponsesAcceptsReasoningInputItem) {
+  auto client = MakeClient();
+
+  json request_body = {
+      {"model", model_id()},
+      {"input", json::array({
+                    {{"role", "user"}, {"content", "Think about the number two."}},
+                    {{"type", "reasoning"},
+                     {"id", "rs_1"},
+                     {"summary", json::array({{{"type", "summary_text"}, {"text", "private scratchpad"}}})}},
+                    {{"role", "user"}, {"content", "Now say 'ok'."}},
+                })},
+      {"store", true},
+      {"max_output_tokens", 256},
+      {"temperature", 0},
+  };
+
+  auto result = client.Post("/v1/responses", request_body.dump(), "application/json");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_EQ(result->status, 200) << "A reasoning item echoed back by the caller must be accepted: " << result->body;
+
+  // /input_items reports what the caller sent. The reasoning item is stored exactly as supplied — its text is never
+  // replayed into a prompt, but the endpoint is a record of the request, not of what the prompt did with it.
+  const std::string id = json::parse(result->body)["id"].get<std::string>();
+  auto items_result = client.Get(("/v1/responses/" + id + "/input_items").c_str());
+  ASSERT_TRUE(items_result) << "HTTP request failed";
+  ASSERT_EQ(items_result->status, 200) << items_result->body;
+
+  json items = json::parse(items_result->body);
+  ASSERT_EQ(items["data"].size(), 3u) << items_result->body;
+
+  const json& reasoning = items["data"][1];
+  EXPECT_EQ(reasoning.value("type", ""), "reasoning") << items_result->body;
+  EXPECT_EQ(reasoning.value("id", ""), "rs_1") << "a supplied item id must not be rewritten";
+  ASSERT_TRUE(reasoning.contains("summary")) << items_result->body;
+  ASSERT_EQ(reasoning["summary"].size(), 1u);
+  EXPECT_EQ(reasoning["summary"][0].value("text", ""), "private scratchpad")
+      << "the stored item must round-trip unchanged";
+}
+
+TEST_F(WebServiceIntegrationTest, ResponsesRejectsMessageItemWithoutRole) {
+  auto client = MakeClient();
+
+  json request_body = {
+      {"model", model_id()},
+      {"input", json::array({{{"content", "no role here"}}})},
+      {"store", false},
+  };
+
+  auto result = client.Post("/v1/responses", request_body.dump(), "application/json");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  EXPECT_EQ(result->status, 400) << result->body;
+  EXPECT_NE(result->body.find("role"), std::string::npos) << result->body;
+}
+
+// ----------------------------------------------------------------------
+// Instruction scoping over HTTP.
+//
+// `instructions` is request-scoped: it never becomes a stored input item, it
+// is not carried across a chain, and the value on the current request is the
+// only one that applies. This has to hold on both the warm continuation and
+// the rebuilt one — the two used to disagree.
+// ----------------------------------------------------------------------
+
+TEST_F(WebServiceIntegrationTest, ResponsesInstructionsStayRequestScopedWarmAndCold) {
+  auto client = MakeClient();
+
+  auto create = [&](const std::string& instructions, const std::string& input, const std::string& previous_id) {
+    json body = {
+        {"model", model_id()},
+        {"instructions", instructions},
+        {"input", input},
+        {"store", true},
+        {"max_output_tokens", 256},
+        {"temperature", 0},
+    };
+
+    if (!previous_id.empty()) {
+      body["previous_response_id"] = previous_id;
+    }
+
+    auto result = client.Post("/v1/responses", body.dump(), "application/json");
+    EXPECT_TRUE(result) << "HTTP request failed";
+    return result;
+  };
+
+  // Every hop's stored input items must be exactly what the caller sent — never a synthesized system message.
+  auto expect_no_stored_system_item = [&](const std::string& id) {
+    auto items_result = client.Get(("/v1/responses/" + id + "/input_items").c_str());
+    ASSERT_TRUE(items_result) << "HTTP request failed";
+    ASSERT_EQ(items_result->status, 200) << items_result->body;
+
+    json items = json::parse(items_result->body);
+    for (const auto& item : items["data"]) {
+      EXPECT_NE(item.value("role", ""), "system") << "hop " << id << " stored instructions as an item";
+    }
+  };
+
+  auto root = create("You are terse.", "Say 'ok'.", "");
+  ASSERT_TRUE(root);
+  ASSERT_EQ(root->status, 200) << root->body;
+  json root_response = json::parse(root->body);
+  EXPECT_EQ(root_response["instructions"], "You are terse.");
+  const std::string root_id = root_response["id"].get<std::string>();
+  expect_no_stored_system_item(root_id);
+
+  // Warm continuation with the *same* instructions: the cached session keeps its KV cache and the prefix still
+  // applies. Consuming the cached session here is what makes the next branch cold.
+  auto warm = create("You are terse.", "Say 'ok' again.", root_id);
+  ASSERT_TRUE(warm);
+  ASSERT_EQ(warm->status, 200) << warm->body;
+  json warm_response = json::parse(warm->body);
+  EXPECT_EQ(warm_response["instructions"], "You are terse.");
+  EXPECT_EQ(warm_response["status"], "completed") << warm->body;
+  const std::string warm_id = warm_response["id"].get<std::string>();
+  expect_no_stored_system_item(warm_id);
+
+  // This continuation is warm and changes the prefix. It must rebuild the cached generator so the new instructions
+  // replace the old prefix instead of leaving the old tokens resident.
+  auto warm_changed = create("You are verbose.", "Say 'ok' after changing style.", warm_id);
+  ASSERT_TRUE(warm_changed);
+  ASSERT_EQ(warm_changed->status, 200) << warm_changed->body;
+  json warm_changed_response = json::parse(warm_changed->body);
+  EXPECT_EQ(warm_changed_response["instructions"], "You are verbose.");
+  EXPECT_EQ(warm_changed_response["status"], "completed") << warm_changed->body;
+  expect_no_stored_system_item(warm_changed_response["id"].get<std::string>());
+
+  // Cold continuation from the same root with *different* instructions: the chain is rebuilt from the store and
+  // takes its prefix from this request only. The old instructions must not come back with the replayed hops.
+  auto cold = create("You are verbose.", "Say 'ok' one more time.", root_id);
+  ASSERT_TRUE(cold);
+  ASSERT_EQ(cold->status, 200) << "Rebuilding the chain with changed instructions failed: " << cold->body;
+  json cold_response = json::parse(cold->body);
+  EXPECT_EQ(cold_response["instructions"], "You are verbose.");
+  EXPECT_EQ(cold_response["status"], "completed") << cold->body;
+  expect_no_stored_system_item(cold_response["id"].get<std::string>());
+}
+
+TEST_F(WebServiceIntegrationTest, ResponsesInstructionsAloneCanStartAConversation) {
+  auto client = MakeClient();
+
+  json body = {
+      {"model", model_id()},
+      {"instructions", "Reply with the single word ok."},
+      {"input", json::array()},
+      {"store", true},
+      {"max_output_tokens", 64},
+      {"temperature", 0},
+  };
+
+  auto result = client.Post("/v1/responses", body.dump(), "application/json");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  ASSERT_EQ(result->status, 200) << result->body;
+
+  json response = json::parse(result->body);
+  EXPECT_EQ(response["status"], "completed") << result->body;
+  EXPECT_EQ(response["instructions"], "Reply with the single word ok.");
+  EXPECT_FALSE(response.value("output_text", "").empty());
+}
+
+TEST_F(WebServiceIntegrationTest, ResponsesEmptyInputContinuesWarmAndCold) {
+  auto client = MakeClient();
+
+  json root_body = {
+      {"model", model_id()},
+      {"input", "Reply with the single word ok."},
+      {"store", true},
+      {"max_output_tokens", 64},
+      {"temperature", 0},
+  };
+
+  auto root = client.Post("/v1/responses", root_body.dump(), "application/json");
+  ASSERT_TRUE(root) << "HTTP request failed";
+  ASSERT_EQ(root->status, 200) << root->body;
+  const std::string root_id = json::parse(root->body)["id"].get<std::string>();
+
+  auto continue_empty = [&](const char* label) {
+    json body = {
+        {"model", model_id()},
+        {"input", json::array()},
+        {"previous_response_id", root_id},
+        {"store", true},
+        {"max_output_tokens", 64},
+        {"temperature", 0},
+    };
+
+    auto result = client.Post("/v1/responses", body.dump(), "application/json");
+    EXPECT_TRUE(result) << label << ": HTTP request failed";
+    return result;
+  };
+
+  auto warm = continue_empty("warm");
+  ASSERT_TRUE(warm);
+  ASSERT_EQ(warm->status, 200) << warm->body;
+  EXPECT_EQ(json::parse(warm->body)["status"], "completed");
+
+  auto cold = continue_empty("cold");
+  ASSERT_TRUE(cold);
+  ASSERT_EQ(cold->status, 200) << cold->body;
+  EXPECT_EQ(json::parse(cold->body)["status"], "completed");
+}
+
+TEST_F(WebServiceIntegrationTest, ResponsesTrulyEmptyNewConversationIsAClientError) {
+  auto client = MakeClient();
+
+  json body = {
+      {"model", model_id()},
+      {"input", json::array()},
+      {"store", false},
+  };
+
+  auto result = client.Post("/v1/responses", body.dump(), "application/json");
+  ASSERT_TRUE(result) << "HTTP request failed";
+  EXPECT_EQ(result->status, 400) << result->body;
+  EXPECT_NE(result->body.find("nothing to generate from"), std::string::npos) << result->body;
+}
+
+// ----------------------------------------------------------------------
+// Pagination: `has_more` must describe the store, not the page size.
+//
+// A final page holding exactly `limit` items used to claim a next page that
+// did not exist. The store is shared with every other test in this process,
+// so the assertions are about the relationship between a page and the page
+// that follows it rather than about absolute counts.
+// ----------------------------------------------------------------------
+
+TEST_F(WebServiceIntegrationTest, ResponsesListHasMoreAgreesWithTheNextPage) {
+  auto client = MakeClient();
+
+  for (int i = 0; i < 3; ++i) {
+    json body = {
+        {"model", model_id()},
+        {"input", "Say 'ok'."},
+        {"store", true},
+        {"max_output_tokens", 64},
+        {"temperature", 0},
+    };
+
+    auto result = client.Post("/v1/responses", body.dump(), "application/json");
+    ASSERT_TRUE(result) << "HTTP request failed";
+    ASSERT_EQ(result->status, 200) << result->body;
+  }
+
+  auto page = [&](const std::string& after) {
+    std::string url = "/v1/responses?limit=2&order=desc";
+    if (!after.empty()) {
+      url += "&after=" + after;
+    }
+
+    auto result = client.Get(url.c_str());
+    EXPECT_TRUE(result) << "HTTP request failed";
+    EXPECT_EQ(result->status, 200) << result->body;
+    return json::parse(result->body);
+  };
+
+  std::string cursor;
+  // Bounded walk: the store is capacity-limited, so this always terminates well before the bound.
+  for (int guard = 0; guard < 64; ++guard) {
+    json current = page(cursor);
+    ASSERT_TRUE(current.contains("has_more")) << current.dump();
+
+    const bool has_more = current["has_more"].get<bool>();
+    if (current["data"].empty()) {
+      EXPECT_FALSE(has_more) << "an empty page cannot have more after it: " << current.dump();
+      break;
+    }
+
+    const std::string last_id = current["last_id"].get<std::string>();
+    json next = page(last_id);
+
+    // The exact property that was broken: a page reporting has_more=false must not be followed by anything, and a
+    // page reporting has_more=true must be.
+    EXPECT_EQ(has_more, !next["data"].empty())
+        << "has_more disagreed with the following page. page=" << current.dump() << " next=" << next.dump();
+
+    if (!has_more) {
+      break;
+    }
+
+    cursor = last_id;
+  }
+}
