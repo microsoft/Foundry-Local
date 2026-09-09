@@ -94,6 +94,41 @@ internal sealed class ChatCompletionsRequestSerializationTests
         await Assert.That(toolMessage.TryGetProperty("tool_call_id", out _)).IsFalse();
     }
 
+    [Test]
+    public async Task MultiTurnTranscript_CarriesEveryPriorTurnInOrder()
+    {
+        // A plain chat continuation is self-contained for the same reason a tool continuation is:
+        // native correlates each request against an empty transcript, so the assistant turn the
+        // model produced only informs the next turn if the caller replays it. This is the
+        // model-free half of what OpenAIChatCompletionsTests.DirectChat_Streaming_Succeeds
+        // exercises live — it holds on every platform, with no model downloaded, and does not
+        // depend on a 0.5B model's answer being right.
+        var json = BuildRequestJson(
+        [
+            new ChatMessage { Role = "user", Content = "You are a calculator. Be precise. What is the answer to 7 multiplied by 6?" },
+            new ChatMessage { Role = "assistant", Content = "7 multiplied by 6 is 42." },
+            new ChatMessage { Role = "user", Content = "What number did you give as the answer? Reply with only that number." }
+        ]);
+
+        using var document = JsonDocument.Parse(json);
+        var messages = document.RootElement.GetProperty("messages");
+
+        await Assert.That(messages.GetArrayLength()).IsEqualTo(3);
+
+        await Assert.That(messages[0].GetProperty("role").GetString()).IsEqualTo("user");
+        await Assert.That(messages[0].GetProperty("content").GetString())
+            .IsEqualTo("You are a calculator. Be precise. What is the answer to 7 multiplied by 6?");
+
+        // The assistant turn is replayed verbatim, text and all — unlike an assistant turn that
+        // issues a tool call, this one has visible content and must keep it.
+        await Assert.That(messages[1].GetProperty("role").GetString()).IsEqualTo("assistant");
+        await Assert.That(messages[1].GetProperty("content").GetString()).IsEqualTo("7 multiplied by 6 is 42.");
+
+        await Assert.That(messages[2].GetProperty("role").GetString()).IsEqualTo("user");
+        await Assert.That(messages[2].GetProperty("content").GetString())
+            .IsEqualTo("What number did you give as the answer? Reply with only that number.");
+    }
+
     private static ChatMessage AssistantToolCallMessage()
     {
         return new ChatMessage
