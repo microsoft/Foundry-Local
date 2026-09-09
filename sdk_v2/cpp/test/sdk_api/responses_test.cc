@@ -8,6 +8,19 @@
 
 using fl::test::ToLower;
 
+class ResponsesCrossModelIntegrationTest : public WebServiceFixture {
+ protected:
+  static void SetUpTestSuite() {
+    SharedTestEnv::Get().AcquireModels({SharedTestEnv::Modality::Chat, SharedTestEnv::Modality::Reasoning});
+  }
+
+  void SetUp() override {
+    if (!SharedTestEnv::Get().chat_model() || !SharedTestEnv::Get().reasoning_model()) {
+      GTEST_SKIP() << "Two distinct loaded chat models are required";
+    }
+  }
+};
+
 // Find the first output item with the given "type" value, or nullptr if not found.
 static const json* FindOutputByType(const json& output, const std::string& type) {
   for (auto& item : output) {
@@ -349,6 +362,42 @@ TEST_F(WebServiceIntegrationTest, ResponsesPreviousResponseId) {
   json retrieved = json::parse(get_result->body);
   EXPECT_EQ(retrieved["id"], second_id);
   EXPECT_EQ(retrieved["previous_response_id"], first_id);
+}
+
+TEST_F(ResponsesCrossModelIntegrationTest, ContinuationRejectsADifferentResolvedModel) {
+  const std::string& first_model_id = SharedTestEnv::Get().chat_model_id();
+  const std::string& other_model_id = SharedTestEnv::Get().reasoning_model_id();
+  if (other_model_id.empty() || other_model_id == first_model_id) {
+    GTEST_SKIP() << "No distinct loaded model is available";
+  }
+
+  auto client = MakeClient();
+  json first_request = {
+      {"model", first_model_id},
+      {"input", "Remember the word amber."},
+      {"store", true},
+      {"max_output_tokens", 128},
+      {"temperature", 0},
+  };
+
+  auto first_result = client.Post("/v1/responses", first_request.dump(), "application/json");
+  ASSERT_TRUE(first_result);
+  ASSERT_EQ(first_result->status, 200) << first_result->body;
+  const std::string first_id = json::parse(first_result->body)["id"].get<std::string>();
+
+  json second_request = {
+      {"model", other_model_id},
+      {"input", "Continue."},
+      {"previous_response_id", first_id},
+      {"store", true},
+  };
+
+  auto second_result = client.Post("/v1/responses", second_request.dump(), "application/json");
+  ASSERT_TRUE(second_result);
+  EXPECT_EQ(second_result->status, 400) << second_result->body;
+
+  const auto error = json::parse(second_result->body);
+  EXPECT_NE(ToLower(error["error"].value("message", "")).find("different model"), std::string::npos);
 }
 
 TEST_F(WebServiceIntegrationTest, ResponsesCreateStreaming) {

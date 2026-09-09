@@ -26,6 +26,72 @@ namespace fl {
 
 using namespace fl::responses;
 
+namespace {
+
+/// Hands a finished session to the session cache on the store's behalf.
+///
+/// The store calls Admit() while holding its own lock, so the response's metadata and its warm session are published
+/// together. If the commit is refused the session is never admitted and dies with this object.
+class SessionCacheAdmission final : public IResponseAdmission {
+ public:
+  SessionCacheAdmission(SessionManager& manager, std::unique_ptr<ChatSession> session)
+      : manager_(manager), session_(std::move(session)) {}
+
+  void Admit(const std::string& response_id) override {
+    manager_.CheckIn(response_id, std::move(session_));
+  }
+
+ private:
+  SessionManager& manager_;
+  std::unique_ptr<ChatSession> session_;
+};
+
+/// Everything needed to publish a finished response. Shared by the streaming and non-streaming paths, which differ
+/// only in how they produced the response object.
+struct PublishRequest {
+  ResponseStore& store;
+  SessionManager& session_manager;
+  ILogger& logger;
+  ResponseLease& lease;
+  SessionRegistration& registration;
+  std::unique_ptr<ChatSession> session;
+  std::string response_id;
+  std::string model_id;
+  nlohmann::json response;
+  nlohmann::json input_items;
+};
+
+/// Publish a completed response: store its metadata and cache its session as one indivisible step.
+void PublishResponse(PublishRequest request) {
+  // Deregister before caching — the session is idle, not actively working. Must happen before admission, otherwise
+  // another thread could check the session out while this guard still holds it registered.
+  request.registration.Release();
+
+  // Clear the per-request streaming callback before caching. It captures stack-local state (SSE body, accumulators)
+  // that does not survive this scope, so a reused session would fire it into a dead frame.
+  request.session->SetStreamingCallback(nullptr);
+
+  SessionCacheAdmission admission(request.session_manager, std::move(request.session));
+
+  const bool published = request.store.Commit(
+      request.lease,
+      ResponseStore::StoredResponse{request.response_id, request.model_id, std::move(request.response),
+                                    std::move(request.input_items)},
+      &admission);
+
+  if (!published) {
+    // A response this conversation depends on was deleted while this request was generating. Nothing derived from
+    // deleted content may be reported as a completed stored response or survive in the session cache.
+    request.logger.Log(LogLevel::Warning,
+                       fmt::format("Response {} not stored: a response in its conversation was deleted while it ran",
+                                   request.response_id));
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "the response conversation was deleted while this request was running");
+  }
+}
+
+}  // namespace
+
 // ========================================================================
 // ResponsesHandler — POST /v1/responses
 // ========================================================================
@@ -109,6 +175,54 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveM
   return nullptr;
 }
 
+std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::BeginResponse(
+    const ResponseCreateParams& params, const std::string& model_id, ResponseLease& lease) {
+  const std::string previous_id = params.previous_response_id.value_or("");
+  auto continuation = ctx_.response_store.BeginResponse(previous_id, model_id);
+
+  switch (continuation.status) {
+    case ContinuationStatus::kChainUnavailable:
+      // Reported the same way whether or not a session is still cached: without its stored hops the conversation
+      // cannot survive the session's eviction, so continuing it would silently truncate later.
+      ctx_.logger.Log(LogLevel::Warning,
+                      fmt::format("Cannot reconstruct conversation from previous response {}", previous_id));
+      return ErrorResponse(Status::CODE_404, "Previous response not found",
+                           "Conversation history for '" + previous_id +
+                               "' is no longer available; resend the full conversation in 'input'");
+
+    case ContinuationStatus::kModelMismatch:
+      ctx_.logger.Log(LogLevel::Warning,
+                      fmt::format("Rejected continuation of {} with model {}: it was produced by model {}",
+                                  previous_id, model_id, continuation.parent_model_id));
+      return ErrorResponse(Status::CODE_400, "Model mismatch",
+                           "Previous response '" + previous_id + "' was produced by a different model; continue "
+                           "the conversation with that model or start a new one");
+
+    case ContinuationStatus::kOk:
+      break;
+  }
+
+  lease = std::move(continuation.lease);
+  return nullptr;
+}
+
+std::unique_ptr<ChatSession> ResponsesHandler::CheckOutCachedSession(const ResponseCreateParams& params) {
+  if (!params.previous_response_id) {
+    return nullptr;
+  }
+
+  // Safe to reuse without re-checking the session's own model: the lease already established that this conversation
+  // belongs to the resolved model, and a cached session pins its model loaded, so the id cannot have been rebound to
+  // a different instance underneath it.
+  auto session = ctx_.session_manager.CheckOut(*params.previous_response_id);
+  if (session) {
+    ctx_.logger.Log(LogLevel::Information,
+                    fmt::format("CreateResponse: reusing cached session from '{}'", *params.previous_response_id));
+  }
+
+  return session;
+}
+
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::LoadPreviousContext(
     const ResponseCreateParams& params,
     ResponseChainContext& context_storage,
@@ -175,36 +289,25 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
   tracker.SetModelId(model_name);
 
-  // 3. Obtain or reuse cached session
-  auto now = std::chrono::system_clock::now();
-  int64_t created_at = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-  std::string response_id = ResponseConverter::GenerateId("resp");
-
-  std::unique_ptr<ChatSession> session;
-
-  if (params.previous_response_id) {
-    session = ctx_.session_manager.CheckOut(*params.previous_response_id);
-
-    if (session) {
-      ctx_.logger.Log(LogLevel::Information,
-                      fmt::format("CreateResponse: reusing cached session from '{}'", *params.previous_response_id));
-
-      // The session already holds the conversation, but keep its stored hops warm: if this session is later evicted,
-      // rebuilding the chain from the store is the only way to continue.
-      if (!ctx_.response_store.TouchChain(*params.previous_response_id)) {
-        tracker.SetStatus(ActionStatus::kClientError);
-        ctx_.logger.Log(LogLevel::Warning,
-                        fmt::format("Cannot preserve conversation from previous response {}",
-                                    *params.previous_response_id));
-        return ErrorResponse(Status::CODE_404, "Previous response not found",
-                             "Conversation history for '" + *params.previous_response_id +
-                                 "' is no longer available; resend the full conversation in 'input'");
-      }
-    }
+  // 3. Open the response lease. For a continuation this validates the chain and its model before anything is reused,
+  //    and registers the request so a concurrent DELETE of any ancestor can refuse its result.
+  ResponseLease lease;
+  if (auto err = BeginResponse(params, model->Id(), lease)) {
+    tracker.SetStatus(ActionStatus::kClientError);
+    return err;
   }
 
+  // 4. Obtain or reuse cached session
+  auto now = std::chrono::system_clock::now();
+  ResponseTurn turn{.response_id = ResponseConverter::GenerateId("resp"),
+                    .created_at = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count(),
+                    .model_name = model_name,
+                    .model_id = model->Id()};
+
+  std::unique_ptr<ChatSession> session = CheckOutCachedSession(params);
+
   try {
-    // 4. Rebuild previous context only on a session-cache miss — a live session already holds the conversation in its
+    // 5. Rebuild previous context only on a session-cache miss — a live session already holds the conversation in its
     //    transcript and KV cache, so a chain that can no longer be reconstructed from the store is irrelevant there.
     ResponseChainContext previous_context_storage;
     const ResponseChainContext* previous_context = nullptr;
@@ -216,7 +319,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
       }
     }
 
-    // 5. Build session request
+    // 6. Build session request
     Request session_request = ResponseConverter::ToSessionRequest(params, previous_context);
 
     // Extract tools + tool_choice. Done outside ToSessionRequest to mirror the chat-completions
@@ -237,17 +340,17 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
     if (params.stream) {
       ctx_.logger.Log(LogLevel::Debug,
-                      fmt::format("Creating streaming response {} for model {}", response_id, model_name));
+                      fmt::format("Creating streaming response {} for model {}", turn.response_id, model_name));
       tracker.SetStatus(ActionStatus::kSuccess);
 
-      return HandleStreaming(std::move(session), std::move(session_request), model_name,
-                             response_id, created_at, params, req_json);
+      return HandleStreaming(std::move(session), std::move(session_request), turn, std::move(lease), params,
+                             req_json);
     } else {
       ctx_.logger.Log(LogLevel::Debug,
-                      fmt::format("Creating response {} for model {}", response_id, model_name));
+                      fmt::format("Creating response {} for model {}", turn.response_id, model_name));
 
-      auto response = HandleNonStreaming(std::move(session), session_request, model_name,
-                                         response_id, created_at, params, req_json);
+      auto response = HandleNonStreaming(std::move(session), session_request, turn, std::move(lease), params,
+                                         req_json);
       tracker.SetStatus(ActionStatus::kSuccess);
 
       return response;
@@ -260,22 +363,22 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
       // An incoherent conversation — an unknown or duplicate tool call ID, or tool arguments that are not a JSON
       // object — is the caller's mistake, so report it the same way the other request validation failures are.
       tracker.SetStatus(ActionStatus::kClientError);
-      ctx_.logger.Log(LogLevel::Warning, fmt::format("Response {} rejected: {}", response_id, ex.what()));
+      ctx_.logger.Log(LogLevel::Warning, fmt::format("Response {} rejected: {}", turn.response_id, ex.what()));
       return ErrorResponse(status, "Invalid request", ex.what());
     }
 
-    ctx_.logger.Log(LogLevel::Error, fmt::format("Response {} failed: {}", response_id, ex.what()));
+    ctx_.logger.Log(LogLevel::Error, fmt::format("Response {} failed: {}", turn.response_id, ex.what()));
 
-    auto failed = ResponseConverter::BuildFailedResponseObject(response_id, created_at, model_name, params,
+    auto failed = ResponseConverter::BuildFailedResponseObject(turn.response_id, turn.created_at, model_name, params,
                                                                "server_error", ex.what());
     nlohmann::json failed_json = failed;
     return JsonResponse(status, failed_json);
   } catch (const std::exception& ex) {
     tracker.RecordException(ex);
 
-    ctx_.logger.Log(LogLevel::Error, fmt::format("Response {} failed: {}", response_id, ex.what()));
+    ctx_.logger.Log(LogLevel::Error, fmt::format("Response {} failed: {}", turn.response_id, ex.what()));
 
-    auto failed = ResponseConverter::BuildFailedResponseObject(response_id, created_at, model_name, params,
+    auto failed = ResponseConverter::BuildFailedResponseObject(turn.response_id, turn.created_at, model_name, params,
                                                                "server_error", ex.what());
     nlohmann::json failed_json = failed;
     return JsonResponse(Status::CODE_500, failed_json);
@@ -285,10 +388,8 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 // --- Inference dispatch ---
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleNonStreaming(
-    std::unique_ptr<ChatSession> session, Request& session_request,
-    const std::string& model_name, const std::string& response_id,
-    int64_t created_at, const ResponseCreateParams& params,
-    const nlohmann::json& req_json) {
+    std::unique_ptr<ChatSession> session, Request& session_request, const ResponseTurn& turn,
+    ResponseLease lease, const ResponseCreateParams& params, const nlohmann::json& req_json) {
   SessionRegistration reg(ctx_.session_manager, *session);
 
   fl::Response session_response;
@@ -296,42 +397,34 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleNo
 
   auto [output, output_text] = ResponseConverter::FromSessionResponse(session_response);
 
-  auto response = ResponseConverter::BuildResponseObject(response_id, created_at, model_name, params,
+  auto response = ResponseConverter::BuildResponseObject(turn.response_id, turn.created_at, turn.model_name, params,
                                                          std::move(output), output_text, session_response.usage);
 
   nlohmann::json response_json = response;
 
-  // Store if requested
   if (params.store) {
-    auto input_items = ResponseConverter::ToInputItems(req_json);
-    ctx_.response_store.Store(response_id, response_json, std::move(input_items));
-
-    // Deregister before caching — session is idle, not actively working.
-    // Must happen before CheckIn to prevent a race where another thread
-    // checks out the session while it's still registered by this guard.
-    reg.Release();
-
-    // Clear per-request streaming callback before caching. The callback
-    // captures stack-local state (SSE body, accumulators) that won't survive
-    // past this scope. Without this, a reused session would fire a stale
-    // callback into a dead stack frame.
-    session->SetStreamingCallback(nullptr);
-
-    // Cache the session for potential reuse on the next turn
-    ctx_.session_manager.CheckIn(response_id, std::move(session));
+    PublishResponse(PublishRequest{.store = ctx_.response_store,
+                                   .session_manager = ctx_.session_manager,
+                                   .logger = ctx_.logger,
+                                   .lease = lease,
+                                   .registration = reg,
+                                   .session = std::move(session),
+                                   .response_id = turn.response_id,
+                                   .model_id = turn.model_id,
+                                   .response = response_json,
+                                   .input_items = ResponseConverter::ToInputItems(req_json)});
   }
 
   return JsonResponse(Status::CODE_200, response_json);
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleStreaming(
-    std::unique_ptr<ChatSession> session, Request session_request,
-    const std::string& model_name, const std::string& response_id,
-    int64_t created_at, const ResponseCreateParams& params,
-    const nlohmann::json& req_json) {
+    std::unique_ptr<ChatSession> session, Request session_request, const ResponseTurn& turn,
+    ResponseLease lease, const ResponseCreateParams& params, const nlohmann::json& req_json) {
   auto body = std::make_shared<SseStreamBody>();
 
-  auto initial_response = ResponseConverter::BuildInitialResponseObject(response_id, created_at, model_name, params);
+  auto initial_response =
+      ResponseConverter::BuildInitialResponseObject(turn.response_id, turn.created_at, turn.model_name, params);
 
   // IDs for the assistant message and any reasoning items are minted lazily by the streaming thread, one per item,
   // because the model may emit interleaved reasoning/visible runs and each contiguous run becomes its own
@@ -367,10 +460,14 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
 
   // Background thread is required: oatpp needs the Response returned immediately so it can
   // start writing SSE events. ProcessRequest blocks until generation completes.
+  //
+  // The lease travels into the thread: the request stays in flight until the response is committed there, so a
+  // DELETE arriving mid-stream still refuses the result.
   std::thread streaming_thread([body_ptr, &logger, &session_manager,
                                 session = std::move(session),
                                 req = std::move(session_request),
-                                model_name, response_id, created_at,
+                                turn,
+                                lease = std::move(lease),
                                 should_store, &store,
                                 req_copy = std::move(req_copy),
                                 params_copy = std::move(params_copy),
@@ -608,7 +705,24 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       close_current();
 
       auto completed_response = ResponseConverter::BuildResponseObject(
-          response_id, created_at, model_name, params_copy, std::move(closed_items), full_text, bg_response.usage);
+          turn.response_id, turn.created_at, turn.model_name, params_copy, std::move(closed_items), full_text,
+          bg_response.usage);
+
+      // Publish first when storage was requested. If deletion invalidated the lease, PublishResponse throws and the
+      // stream ends with response.failed rather than claiming an unstored descendant completed successfully.
+      if (should_store) {
+        nlohmann::json response_json = completed_response;
+        PublishResponse(PublishRequest{.store = store,
+                                       .session_manager = session_manager,
+                                       .logger = logger,
+                                       .lease = lease,
+                                       .registration = reg,
+                                       .session = std::move(session),
+                                       .response_id = turn.response_id,
+                                       .model_id = turn.model_id,
+                                       .response = std::move(response_json),
+                                       .input_items = ResponseConverter::ToInputItems(req_copy)});
+      }
 
       StreamEvent completed;
       completed.type = StreamEventType::kResponseCompleted;
@@ -616,24 +730,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       completed.response = completed_response;
       push_event("response.completed", completed);
 
-      // Store if requested
-      if (should_store) {
-        auto input_items = ResponseConverter::ToInputItems(req_copy);
-        nlohmann::json response_json = completed_response;
-        store.Store(response_id, response_json, std::move(input_items));
-
-        // Deregister before caching — see non-streaming path comment.
-        reg.Release();
-
-        // Clear per-request streaming callback before caching — see non-streaming path comment.
-        session->SetStreamingCallback(nullptr);
-
-        // Cache the session for potential reuse on the next turn
-        session_manager.CheckIn(response_id, std::move(session));
-      }
-
     } catch (const std::exception& ex) {
-      logger.Log(LogLevel::Error, fmt::format("Response {} failed during streaming: {}", response_id, ex.what()));
+      logger.Log(LogLevel::Error,
+                 fmt::format("Response {} failed during streaming: {}", turn.response_id, ex.what()));
 
       // The status line is already sent, so a rejected request can only be reported in the failure event. Keep the
       // error code honest so the caller can tell a client mistake from a service failure.
@@ -642,7 +741,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
                                                         : "server_error";
 
       auto error_response = ResponseConverter::BuildFailedResponseObject(
-          response_id, created_at, model_name, params_copy,
+          turn.response_id, turn.created_at, turn.model_name, params_copy,
           error_code, ex.what());
 
       StreamEvent failed;
@@ -655,6 +754,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
     // Terminal event per spec
     body_ptr->Push("data: [DONE]\n\n");
     body_ptr->Finish();
+
+    // Remove() detaches this thread and lets WebService teardown proceed without joining it. Release the RAII lease
+    // first so destruction of the lambda captures cannot call back into an already-destroyed ResponseStore.
+    lease.Release();
 
     tracker.Remove(std::this_thread::get_id());
   });
@@ -777,6 +880,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> DeleteResponseHandler::han
 
   ctx_.logger.Log(LogLevel::Debug, fmt::format("DeleteResponse: responseId={}", std::string(id->c_str())));
 
+  // Deleting the response also removes every retained descendant and drops their cached sessions, so deleted input
+  // cannot survive in a warm transcript after the store has purged it. Both happen inside the store's delete, which
+  // also refuses any continuation of this conversation that is generating right now.
   auto deleted_ids = ctx_.response_store.DeleteWithDependents(id->c_str());
   if (deleted_ids.empty()) {
     nlohmann::json error_body = {
@@ -788,12 +894,6 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> DeleteResponseHandler::han
                   }},
     };
     return JsonResponse(Status::CODE_404, error_body);
-  }
-
-  // Every descendant contains the deleted response in its conversation. Drop their cached sessions too so deleted
-  // input cannot survive in a warm transcript after the store has purged it.
-  for (const auto& deleted_id : deleted_ids) {
-    ctx_.session_manager.EvictCached(deleted_id);
   }
 
   nlohmann::json result = {
