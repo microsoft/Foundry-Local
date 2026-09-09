@@ -409,10 +409,6 @@ stages:
         versionSpec: '3.12'
         addToPath: true
         architecture: 'x64'
-    - task: PipAuthenticate@1
-      displayName: 'Authenticate AIFoundryLocal_PublicPackages for pip'
-      inputs:
-        artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
     - task: PowerShell@2
       displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
       inputs:

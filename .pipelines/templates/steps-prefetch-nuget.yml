@@ -66,9 +66,6 @@ steps:
     packageType: sdk
     version: '10.0.x'
 
-- task: NuGetAuthenticate@1
-  displayName: 'Authenticate NuGet feeds'
-
 - task: PowerShell@2
   displayName: 'Restore native packages'
   inputs:

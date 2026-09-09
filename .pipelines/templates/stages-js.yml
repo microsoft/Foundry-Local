@@ -391,10 +391,6 @@ stages:
         targetType: inline
         script: |
           Set-Content '$(Agent.TempDirectory)/js-sdk-package-test.npmrc' 'registry=https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
-    - task: npmAuthenticate@0
-      displayName: 'Authenticate AIFoundryLocal_PublicPackages for npm'
-      inputs:
-        workingFile: '$(Agent.TempDirectory)/js-sdk-package-test.npmrc'
     - task: PowerShell@2
       displayName: 'Run packaged JS basic_chat sample'
       inputs:

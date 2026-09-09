@@ -48,11 +48,6 @@ steps:
         Write-Host "##vso[task.prependpath]$userBin"
         Write-Host "Using system Python: $python3Path"
 
-- task: PipAuthenticate@1
-  displayName: 'Authenticate AIFoundryLocal_PublicPackages for pip'
-  inputs:
-    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
-
 - task: PowerShell@2
   displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
   inputs:

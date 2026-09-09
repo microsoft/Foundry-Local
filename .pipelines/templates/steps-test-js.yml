@@ -25,11 +25,6 @@ steps:
     Set-Content '$(Build.SourcesDirectory)/sdk_v2/js/.npmrc' 'registry=https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
   displayName: 'Configure AIFoundryLocal_PublicPackages npm registry'
 
-- task: npmAuthenticate@0
-  displayName: 'Authenticate AIFoundryLocal_PublicPackages for npm'
-  inputs:
-    workingFile: '$(Build.SourcesDirectory)/sdk_v2/js/.npmrc'
-
 - ${{ if or(eq(parameters.rid, 'win-x64'), eq(parameters.rid, 'win-arm64')) }}:
   - task: PowerShell@2
     displayName: 'Drop prebuild into sdk_v2/js/prebuilds'
