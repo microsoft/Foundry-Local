@@ -5,7 +5,9 @@ model, or JAR. The binary source remains
 `d0946a0764d9cfa4b3d684940d6d5c66165427b8`; its qualified Java 17 JAR remains
 64,000 bytes with SHA-256
 `bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`.
-Pin the metadata revision separately from that binary-source revision.
+The executed metadata revision is
+`22ebea63b07addb526a1792e0303ba2f572f444a`; pin it separately from the binary
+source and this later documentation revision.
 
 ## Backward-safe files and schema
 
@@ -28,13 +30,13 @@ An observed entry has exactly `status`, `generatedMarker`, `installedBytes`,
 it has no guessed hashes or totals. The schema is structural, not proof of
 provenance: metadata must also come from the separately reviewed immutable pin.
 
-| Native RID | Inventory gate | Raw marker bytes | Complete installed bytes | Evidence scope |
+| Native RID | Inventory gate | Raw marker bytes | Complete installed bytes | Original sidecar provenance |
 |---|---|---:|---:|---|
 | `win-x64` | observed | 90 | 793344452 | Hosted inventory and ASR |
 | `win-arm64` | observed | 90 | 793344452 | Hosted inventory and ASR |
-| `linux-x64` | observed | 87 | 793344449 | Hosted complete inventory only; no ASR qualification |
-| `linux-arm64` | observed | 87 | 793344449 | Independent hosted complete inventory only; no ASR qualification |
-| `osx-arm64` | observed | 87 | 793344449 | Independent hosted complete inventory only; no ASR qualification |
+| `linux-x64` | observed | 87 | 793344449 | Hosted complete-inventory diagnostic |
+| `linux-arm64` | observed | 87 | 793344449 | Independent hosted complete-inventory diagnostic |
+| `osx-arm64` | observed | 87 | 793344449 | Independent hosted complete-inventory diagnostic |
 
 Windows marker SHA-256:
 `881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef`.
@@ -42,9 +44,23 @@ Independently observed Linux x64, Linux ARM64 and macOS ARM64 marker SHA-256:
 `9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb`.
 Each has the complete sixteen-file manifest
 `8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a`.
-All five inventory tuples are now selectable. This is **not five-platform ASR
-qualification**: every non-Windows diagnostic stopped before transcription.
-Unknown targets and simulated unobserved entries still fail closed.
+All five inventory tuples are selectable. Their original non-Windows diagnostic
+provenance remains inventory-only and stopped before transcription; those
+sidecar records are unchanged. Actual ASR smoke was subsequently established on
+all five targets by [run 34411280765](https://github.com/jiec-msft/foundry-local/actions/runs/34411280765),
+using these exact metadata and binary pins. See
+[the current smoke summary](NATIVE_SMOKE.md#five-target-hosted-smoke) and the
+[immutable report](https://github.com/jiec-msft/foundry-local/blob/76706e3f8aa84a6500936a14d31eefa3fe96ce4c/sdk_v2/java/evaluation/SECOND_MATRIX_EVALUATION.md).
+Inventory acceptance alone still does not prove ASR, and unknown targets or
+simulated unobserved entries still fail closed.
+
+**Evidence boundary for that successful matrix:** the executed verifier requires
+all sixteen actual raw pins, the complete manifest and byte total before
+transcription; retained v3 metadata and installed totals match. Success artifacts
+omitted `model-verification.json`, so their new per-file observations cannot be
+independently replayed. The original diagnostic rows below are not substituted
+for those missing rows, and selected expected manifests are not called newly
+observed manifests.
 
 ## Mandatory selection and verification
 
@@ -99,8 +115,10 @@ measurement["model"]["sha256"] = model_lock["manifestSha256"]
 measurement["resources"]["model_install_bytes"] = installed
 ```
 
-For the evaluator at public revision
-`e7fa302b54fe410d762bd47965fcb7e39d4ff1b6`, its owner should:
+The following integration requirements were originally written against evaluator
+revision `e7fa302b54fe410d762bd47965fcb7e39d4ff1b6`. The successful matrix execution
+`07e40f066997d326c189f492225bc5a7bb193c0a` now consumes the separate pins; these
+remain consumer requirements, not a claim that its code is included here:
 
 1. Add a separate immutable `metadata_git_sha` pin and verify
    `model-target-lock.json`, `model-target-lock.schema.json`, and

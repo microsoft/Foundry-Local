@@ -5,6 +5,15 @@ Foundry Local C ABI. No Node runtime, local HTTP service, JNI shim, FFM requirem
 or inference reimplementation. This is a standalone proof of concept, not a
 production release or a Maven Central publication.
 
+**Five-target Java 17 smoke:** the exact binary and metadata pins below completed
+real ASR on Windows x64/ARM64, Linux x64/ARM64 and macOS ARM64 in
+[run 34411280765](https://github.com/jiec-msft/foundry-local/actions/runs/34411280765).
+Each target ran ten WAV transcriptions, ten paced streams and one cancelled
+stream with ordered cleanup. These reuse ten public utterances, not 100 unique
+recordings, and do not establish product, UI/plugin or microphone readiness.
+See [NATIVE_SMOKE.md](NATIVE_SMOKE.md#five-target-hosted-smoke) for exact evidence
+and its retention limitations.
+
 **Windows POC compatibility boundary:** native WAV/PCM/cancellation/lifecycle
 smoke succeeds with Temurin 17.0.20.1+1 and the explicitly selected official
 IU 2026.1.5 / JBR 25.0.4+1-b329.128 combination. The latter is a separately
@@ -16,15 +25,22 @@ selected. Microsoft OpenJDK 21 has load-only evidence, not ASR evidence.
 See [WINDOWS_LOADING.md](WINDOWS_LOADING.md) for the explicit matrix and failure
 guidance, [NATIVE_SMOKE.md](NATIVE_SMOKE.md) for evidence scope, and
 [API.md](API.md) for the API/JSONL contract. The universal minimum JBR/CRT version
-is unknown; this is not five-platform validation.
+is unknown; this JVM-specific boundary is distinct from the hosted Java 17 smoke.
 
 **Binary provenance:** the UTF-8 JSONL and cancellation-publication fixes in
 `d0946a0764d9cfa4b3d684940d6d5c66165427b8` have independent local native
-regression and hosted Windows x64/ARM64 Java17 evidence. Its qualified JAR is
+regression and hosted five-target Java 17 smoke evidence. Its qualified JAR is
 64,000 bytes, SHA-256
 `bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`.
-The additive external inventory metadata has a separate source revision;
-it does not relabel that binary source or qualify non-Windows ASR.
+The executed external inventory metadata is separately pinned to
+`22ebea63b07addb526a1792e0303ba2f572f444a`. This documentation revision changes
+neither pin and is not a new binary build.
+
+**Integrity evidence limitation:** the successful matrix artifacts omitted
+`model-verification.json`. Reviewed executed code enforces all sixteen actual
+raw file sizes/hashes, the complete manifest and total before transcription;
+retained provenance and totals match. The new per-file observations cannot be
+independently replayed, and earlier diagnostic rows are not substituted for them.
 
 ## Runtime compatibility is pinned, not inferred
 
@@ -32,9 +48,10 @@ External model integrity consumers must use the observed per-target inventory
 contract in [MODEL_LOCK.md](MODEL_LOCK.md). The legacy Windows
 `model-lock.json` stays unchanged; all five target inventories are now
 independently observed, including the non-Windows raw generated marker.
-Inventory acceptance is not non-Windows ASR qualification, and unknown or
-unobserved entries still fail closed.
-This metadata revision does not change or relabel the qualified `d0946a0` binary.
+Inventory acceptance alone is not ASR qualification. The separately linked
+matrix supplies actual ASR evidence; unknown or unobserved entries still fail closed.
+Neither that metadata nor this documentation revision relabels the qualified
+`d0946a0` binary.
 
 The source-tree baseline is
 `microsoft/foundry-local@afdb275c0b79f77dbbd1c901de235bfea124441d`.
@@ -67,10 +84,11 @@ The SDK rejects missing or hash-mismatched native files **before loading them**.
 Changing the native runtime requires deliberate revalidation and a new binding lock.
 
 Actual published artifact targets: **Windows x64/arm64, Linux x64/arm64,
-macOS arm64**. There is **no macOS x64 artifact**. Publication does not imply every
-target has been exercised by this POC. Linux requires the published runtime's
-glibc baseline (2.28+) and normal loader dependencies. Windows needs the
-Microsoft Visual C++ runtime. Use a JVM matching the native architecture.
+macOS arm64**. There is **no macOS x64 artifact**. The hosted matrix exercises
+these exact target tuples, not every OS/JVM/hardware configuration. Linux
+requires the published runtime's glibc baseline (2.28+) and normal loader
+dependencies. Windows needs the Microsoft Visual C++ runtime. Use a JVM matching
+the native architecture.
 
 ## Build
 
