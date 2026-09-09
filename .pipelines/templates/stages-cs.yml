@@ -226,6 +226,8 @@ stages:
       inputs:
         packageType: runtime
         version: '9.0.x'
+    - task: NuGetAuthenticate@1
+      displayName: 'Authenticate NuGet feeds'
     - task: PowerShell@2
       displayName: 'Run packaged C# basic chat sample'
       inputs:

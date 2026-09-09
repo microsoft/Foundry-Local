@@ -75,6 +75,9 @@ steps:
       Set-Content -Path $configPath -Value $nugetConfig
       Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
 
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
+
 - task: PowerShell@2
   displayName: 'Restore SDK'
   inputs:

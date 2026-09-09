@@ -22,6 +22,11 @@ parameters:
 
 steps:
 
+- task: PipAuthenticate@1
+  displayName: 'Authenticate AIFoundryLocal_PublicPackages for pip'
+  inputs:
+    artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
 - bash: |
     python3 -m pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
     python3 -m pip config unset global.extra-index-url || true

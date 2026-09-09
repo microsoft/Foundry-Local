@@ -109,6 +109,9 @@ steps:
       Set-Content -Path $configPath -Value $nugetConfig
       Write-Host "##vso[task.setvariable variable=customNugetConfig]$configPath"
 
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
+
 # Per-job NuGet isolation to prevent "Central Directory corrupt" / file-locking
 # errors when multiple C# test jobs run concurrently on the
 # same reused agent. Keyed by $(System.JobId); cleaned on each run.

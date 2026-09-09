@@ -232,7 +232,20 @@ stages:
 
           [source.AIFoundryLocal_PublicPackages]
           registry = "sparse+https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/Cargo/index/"
+
+          [registries.AIFoundryLocal_PublicPackages]
+          index = "sparse+https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/Cargo/index/"
+
+          [registry]
+          global-credential-providers = ["cargo:token"]
           "@ | Set-Content (Join-Path $cargoHome 'config.toml')
+
+          if (-not $env:SYSTEM_ACCESSTOKEN) { throw 'System.AccessToken is required for Cargo feed authentication.' }
+          $credential = 'Basic ' + [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("build:$($env:SYSTEM_ACCESSTOKEN)"))
+          $credential | cargo login --registry AIFoundryLocal_PublicPackages
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
     - task: PowerShell@2
       displayName: 'Set crate version from sdkVersion.txt'
       inputs:
