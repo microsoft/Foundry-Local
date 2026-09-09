@@ -54,14 +54,6 @@ steps:
     artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
 
 - task: PowerShell@2
-  displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
-  inputs:
-    targetType: inline
-    script: |
-      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
-      pip config unset global.extra-index-url 2>$null
-
-- task: PowerShell@2
   displayName: 'Bootstrap VC++ ARM64 runtime'
   condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'), eq(variables['Agent.OSArchitecture'], 'ARM64'))
   inputs:

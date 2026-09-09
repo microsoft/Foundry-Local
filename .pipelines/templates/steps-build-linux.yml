@@ -28,11 +28,6 @@ steps:
     artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
 
 - bash: |
-    python3 -m pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
-    python3 -m pip config unset global.extra-index-url || true
-  displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
-
-- bash: |
     set -euo pipefail
     case '${{ parameters.arch }}' in
       x64)
@@ -74,6 +69,7 @@ steps:
     version=$(tr -d '[:space:]' < "$(Pipeline.Workspace)/version-info/sdkVersion.txt")
     home_dir="$(Build.BinariesDirectory)/manylinux-home"
     mkdir -p "$home_dir"
+    : "${PIP_INDEX_URL:?PipAuthenticate did not set PIP_INDEX_URL}"
     user_id=$(id -u)
     group_id=$(id -g)
 
@@ -85,13 +81,15 @@ steps:
       --env "VCPKG_ROOT=$(Build.BinariesDirectory)/vcpkg" \
       --env "NUGET_CACHE=$(Build.BinariesDirectory)/nuget_packages" \
       --env "SDK_VERSION=$version" \
+      --env PIP_INDEX_URL \
+      --env PIP_NO_INPUT=1 \
       --workdir "$(Build.SourcesDirectory)/sdk_v2/cpp" \
       "$(manylinuxImage)" \
       bash -c '
         set -euo pipefail
         /opt/python/cp312-cp312/bin/python3.12 -m venv "$HOME/venv"
         python="$HOME/venv/bin/python"
-        "$python" -m pip install --upgrade --index-url "https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/" "cmake==3.31.6"
+        "$python" -m pip install --upgrade "cmake==3.31.6"
         git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
         "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
         "$python" build.py --configure --build \

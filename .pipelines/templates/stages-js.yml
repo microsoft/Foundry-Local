@@ -385,6 +385,13 @@ stages:
       displayName: 'Use Node.js 20'
       inputs:
         versionSpec: '20.x'
+    - task: UseDotNet@2
+      displayName: 'Use .NET 10 SDK for native package restore'
+      inputs:
+        packageType: sdk
+        version: '10.0.x'
+    - task: NuGetAuthenticate@1
+      displayName: 'Authenticate NuGet feeds'
     - task: PowerShell@2
       displayName: 'Configure AIFoundryLocal_PublicPackages npm registry'
       inputs:
@@ -425,5 +432,6 @@ stages:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
         FOUNDRY_LOCAL_SAMPLE_CACHE_DIR: '$(Agent.TempDirectory)/js-package-model-cache'
+        FOUNDRY_LOCAL_NUGET_MODE: 'dotnet'
         FOUNDRY_LOCAL_NUGET_FEEDS: 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json'
         NPM_CONFIG_USERCONFIG: '$(Agent.TempDirectory)/js-sdk-package-test.npmrc'

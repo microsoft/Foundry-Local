@@ -414,13 +414,6 @@ stages:
       inputs:
         artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
     - task: PowerShell@2
-      displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
-      inputs:
-        targetType: inline
-        script: |
-          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
-          pip config unset global.extra-index-url 2>$null
-    - task: PowerShell@2
       displayName: 'Run packaged Python chat_completion sample'
       inputs:
         targetType: inline

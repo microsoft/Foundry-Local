@@ -66,14 +66,6 @@ steps:
     artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
 
 - task: PowerShell@2
-  displayName: 'Configure pip to use AIFoundryLocal_PublicPackages'
-  inputs:
-    targetType: inline
-    script: |
-      pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/
-      pip config unset global.extra-index-url 2>$null
-
-- task: PowerShell@2
   displayName: 'Set package version from pyVersion.txt'
   inputs:
     targetType: inline
@@ -283,6 +275,7 @@ steps:
       out_dir="${{ parameters.outputDir }}"
       home_dir="$(Agent.TempDirectory)/manylinux-python-home"
       mkdir -p "$raw_dir" "$out_dir" "$home_dir"
+      : "${PIP_INDEX_URL:?PipAuthenticate did not set PIP_INDEX_URL}"
       user_id=$(id -u)
       group_id=$(id -g)
       docker version
@@ -298,13 +291,15 @@ steps:
         --env "RAW_WHEEL_DIR=$raw_dir" \
         --env "WHEEL_DIR=$out_dir" \
         --env "AUDITWHEEL_PLAT=$platform_tag" \
+        --env PIP_INDEX_URL \
+        --env PIP_NO_INPUT=1 \
         --workdir "$(Build.SourcesDirectory)/sdk_v2/python" \
         "$image" \
         bash -c '
           set -euo pipefail
           /opt/python/cp312-cp312/bin/python3.12 -m venv "$HOME/venv"
           python="$HOME/venv/bin/python"
-          "$python" -m pip install --upgrade --index-url "https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/" build setuptools wheel "cffi>=1.16" "auditwheel==6.8.1"
+          "$python" -m pip install --upgrade build setuptools wheel "cffi>=1.16" "auditwheel==6.8.1"
           "$python" -m build --wheel --outdir "$RAW_WHEEL_DIR"
           "$HOME/venv/bin/auditwheel" repair "$RAW_WHEEL_DIR"/*.whl \
             --wheel-dir "$WHEEL_DIR" \
@@ -333,7 +328,7 @@ steps:
             throw "Failed to create auditwheel virtual environment with exit code $LASTEXITCODE"
         }
         $hostPython = "$hostVenv/bin/python"
-        & $hostPython -m pip install --upgrade --index-url https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/pypi/simple/ pip "auditwheel==6.8.1"
+        & $hostPython -m pip install --upgrade pip "auditwheel==6.8.1"
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to install auditwheel with exit code $LASTEXITCODE"
         }

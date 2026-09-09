@@ -21,6 +21,15 @@ steps:
   inputs:
     versionSpec: '20.x'
 
+- task: UseDotNet@2
+  displayName: 'Use .NET 10 SDK for native package restore'
+  inputs:
+    packageType: sdk
+    version: '10.0.x'
+
+- task: NuGetAuthenticate@1
+  displayName: 'Authenticate NuGet feeds'
+
 - powershell: |
     Set-Content '$(Build.SourcesDirectory)/sdk_v2/js/.npmrc' 'registry=https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/npm/registry/'
   displayName: 'Configure AIFoundryLocal_PublicPackages npm registry'
@@ -104,6 +113,7 @@ steps:
       workingDir: '$(Build.SourcesDirectory)/sdk_v2/js'
       customCommand: 'ci --no-audit --no-fund'
     env:
+      FOUNDRY_LOCAL_NUGET_MODE: 'dotnet'
       FOUNDRY_LOCAL_NUGET_FEEDS: 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json'
 
   - task: PowerShell@2
@@ -138,6 +148,7 @@ steps:
       npm ci --no-audit --no-fund
     displayName: 'npm ci (runs install-native postinstall)'
     env:
+      FOUNDRY_LOCAL_NUGET_MODE: 'dotnet'
       FOUNDRY_LOCAL_NUGET_FEEDS: 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json'
 
   - bash: |
