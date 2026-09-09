@@ -219,6 +219,29 @@ class TestOrtPackageDiscovery:
         assert resolved == core
         find.assert_called_once_with("onnxruntime-genai-core", "libonnxruntime-genai.so")
 
+    def test_find_file_in_directory_prefers_exact_bundled_runtime(self, tmp_path):
+        bundled = tmp_path / "libonnxruntime-genai.so"
+        bundled.touch()
+
+        assert _ll._find_file_in_directory(tmp_path, "libonnxruntime-genai.so") == bundled
+
+    def test_prepare_native_dependencies_prefers_bundled_runtimes(self, tmp_path):
+        ort = tmp_path / "libonnxruntime.so"
+        genai = tmp_path / "libonnxruntime-genai.so"
+        ort.touch()
+        genai.touch()
+
+        with patch.object(_ll.sys, "platform", "linux"), \
+             patch.object(_ll, "_resolve_ort_package_path") as resolve_ort, \
+             patch.object(_ll, "_resolve_genai_package_path") as resolve_genai, \
+             patch("ctypes.CDLL", side_effect=["ort-handle", "genai-handle"]) as load:
+            handles = _ll.prepare_native_dependencies(tmp_path)
+
+        assert handles == ["ort-handle", "genai-handle"]
+        assert [call.args[0] for call in load.call_args_list] == [str(ort), str(genai)]
+        resolve_ort.assert_not_called()
+        resolve_genai.assert_not_called()
+
 
 class TestFindLibraryWheelBundled:
     """find_library() must return the wheel-bundled native lib for the current RID.

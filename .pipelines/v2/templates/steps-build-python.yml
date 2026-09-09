@@ -30,6 +30,10 @@ parameters:
   type: boolean
   default: false
   displayName: 'Use the agent system Python instead of the Azure Pipelines toolcache.'
+- name: bundleNativeDependencies
+  type: boolean
+  default: false
+  displayName: 'Bundle ORT and GenAI beside foundry_local for prerelease ABI validation.'
 
 steps:
 
@@ -115,14 +119,17 @@ steps:
 
         # The native artifact is produced by steps-build-{windows,linux,macos}.yml.
         # C++ bundles consume its co-located ORT/GenAI libraries, but Python gets
-        # those libraries from pip dependencies, so filter them out here. The
-        # remaining files are the primary foundry_local library plus (on Windows)
-        # its .pdb, .lib, and optional WinML companions:
+        # Stable wheels resolve these libraries from pip dependencies. Prerelease
+        # builds bundle the exact native dependencies used to link foundry_local
+        # so package tests validate the selected prerelease ABI.
         #   - Windows:  foundry_local.{dll,pdb,lib}
         #   - Linux:    libfoundry_local.so
         #   - macOS:    libfoundry_local.dylib
-        $files = Get-ChildItem -Path "${{ parameters.nativeArtifactDir }}" -Recurse -File |
-            Where-Object { $_.Name -notlike 'onnxruntime*' -and $_.Name -notlike 'libonnxruntime*' }
+        $files = Get-ChildItem -Path "${{ parameters.nativeArtifactDir }}" -Recurse -File
+        if (-not [System.Convert]::ToBoolean('${{ parameters.bundleNativeDependencies }}')) {
+            $files = $files |
+                Where-Object { $_.Name -notlike 'onnxruntime*' -and $_.Name -notlike 'libonnxruntime*' }
+        }
         if ($files.Count -eq 0) {
             throw "No native artifacts found under ${{ parameters.nativeArtifactDir }}"
         }

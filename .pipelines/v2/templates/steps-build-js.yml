@@ -33,6 +33,10 @@ parameters:
   type: boolean
   default: false
   displayName: 'ESRP-sign macOS .node + .dylib artifacts before staging'
+- name: bundleNativeDependencies
+  type: boolean
+  default: false
+  displayName: 'Bundle ORT and GenAI beside foundry_local for prerelease ABI validation.'
 
 steps:
 
@@ -201,6 +205,15 @@ steps:
       Copy-Item $nativeLibPath -Destination $dst -Force
       Write-Host "  staged $(nativeLib)"
 
+      if ([System.Convert]::ToBoolean('${{ parameters.bundleNativeDependencies }}')) {
+        $runtimeFiles = Get-ChildItem "${{ parameters.nativeArtifactDir }}" -File |
+          Where-Object { $_.Name -like 'onnxruntime*.dll' }
+        foreach ($runtime in $runtimeFiles) {
+          Copy-Item $runtime.FullName -Destination $dst -Force
+          Write-Host "  staged $($runtime.Name)"
+        }
+      }
+
       # WinML 2.x runtime ships next to foundry_local.dll so WinML EPs work out
       # of the box. It is Microsoft-signed (NuGet) — excluded from ESRP signing.
       $winmlDll = Join-Path "${{ parameters.nativeArtifactDir }}" 'Microsoft.Windows.AI.MachineLearning.dll'
@@ -233,6 +246,13 @@ steps:
       if [ ! -f "$nativeLibPath" ]; then echo "Native lib not found: $nativeLibPath" >&2; exit 1; fi
       cp -P "$nativeLibPath" "$dst/"
       echo "  staged $(nativeLib)"
+
+      if [ '${{ parameters.bundleNativeDependencies }}' = 'True' ] ||
+         [ '${{ parameters.bundleNativeDependencies }}' = 'true' ]; then
+        find "${{ parameters.nativeArtifactDir }}" -maxdepth 1 \( -type f -o -type l \) \
+          \( -name 'libonnxruntime*.so*' -o -name 'libonnxruntime*.dylib' -o -name 'libonnxruntime.*.dylib' \) \
+          -exec cp -P {} "$dst/" \;
+      fi
 
       ls -la "$dst"
     displayName: 'Stage prebuild directory'

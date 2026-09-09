@@ -54,7 +54,7 @@ class OnnxChatGenerator : public ChatGenerator {
 
   /// Rewind the generator to a previous token position.
   /// Used for error recovery — restores the KV cache to the state before the last turn.
-  bool CanRewind() const override { return true; }
+  bool CanRewind() const override { return !cancelled_; }
   void RewindTo(int token_count) override;
 
   /// Factory: create a text-only chat generator.
