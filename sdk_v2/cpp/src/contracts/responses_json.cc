@@ -259,6 +259,9 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
           items.push_back(entry.get<FunctionCallInputItem>());
         } else if (type == "function_call_output") {
           items.push_back(entry.get<FunctionCallResultInputItem>());
+        } else if (type == "reasoning") {
+          // Clients may replay prior reasoning output. Do not feed hidden reasoning back into the prompt.
+          continue;
         } else {
           // Default: message item
           items.push_back(entry.get<InputMessage>());

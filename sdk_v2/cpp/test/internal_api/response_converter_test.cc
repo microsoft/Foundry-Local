@@ -316,6 +316,28 @@ TEST(ResponseConverterTest, ToSessionRequest_FunctionCallAndOutput_PreserveToolT
   EXPECT_EQ(result->call_id, "call_1");
 }
 
+TEST(ResponseConverterTest, ToSessionRequest_ReplayedReasoningIsIgnored) {
+  nlohmann::json json = {
+      {"model", "test-model"},
+      {"input", nlohmann::json::array({
+                    {{"type", "reasoning"}, {"id", "reasoning_1"}, {"summary", nlohmann::json::array()}},
+                    {{"type", "function_call"},
+                     {"call_id", "call_1"},
+                     {"name", "shell"},
+                     {"arguments", R"({"cmd":"pwd"})"}},
+                    {{"type", "function_call_output"},
+                     {"call_id", "call_1"},
+                     {"output", "/testbed"}},
+                })}};
+
+  auto params = json.get<ResponseCreateParams>();
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 2u);
+  EXPECT_NE(dynamic_cast<ToolCallItem*>(request.items[0]), nullptr);
+  EXPECT_NE(dynamic_cast<ToolResultItem*>(request.items[1]), nullptr);
+}
+
 // ========================================================================
 // ToSessionRequest — vision input (input_image content)
 //

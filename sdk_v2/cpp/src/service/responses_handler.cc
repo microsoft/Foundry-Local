@@ -93,7 +93,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 
       std::string type = entry.value("type", "");
       std::string role = entry.value("role", "");
-      if (type != "function_call_output" && type != "function_call" && role.empty()) {
+      if (type != "function_call_output" && type != "function_call" && type != "reasoning" && role.empty()) {
         return ErrorResponse(Status::CODE_400, "Invalid input item", "Message items must have a 'role' field");
       }
     }
