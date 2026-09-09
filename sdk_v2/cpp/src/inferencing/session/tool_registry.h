@@ -58,16 +58,14 @@ class ToolRegistry {
   ToolRegistry(ToolRegistry&& other);
   ToolRegistry& operator=(ToolRegistry&&) = delete;
 
-  /// Register a definition, validating and normalizing it. An unnamed definition carries a
-  /// pre-serialized tools payload assembled elsewhere: it is not registrable by name, so uniqueness
-  /// does not apply to it and no generated call resolves against it.
-  /// @throws fl::Exception (FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT) if the name is already registered,
-  ///         a function definition's schema is not valid JSON text, or a custom definition supplies
-  ///         a schema or has no name.
+  /// Register a definition, validating and normalizing it.
+  /// @throws fl::Exception (FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT) if the definition has no name, the
+  ///         name is already registered, a function definition's schema is not valid JSON text, or a
+  ///         custom definition supplies a schema.
   void Add(ToolDefinition tool_def);
 
   /// Remove the definition registered under this exact name. Returns whether one was removed.
-  /// An empty name removes nothing: unnamed entries are not registered by name (see Add).
+  /// An empty name removes nothing: every definition is registered under a non-empty name.
   bool Remove(const std::string& name);
 
   /// Drop every definition. Needed when a session is reused across requests and the new request
@@ -76,6 +74,10 @@ class ToolRegistry {
 
   /// Snapshot of the registered definitions, in registration order.
   std::vector<ToolDefinition> Definitions() const;
+
+  /// Whether any definition is registered. A precondition check should ask this rather than copying every
+  /// definition out just to measure the result.
+  bool Empty() const;
 
  private:
   std::vector<ToolDefinition> definitions_;

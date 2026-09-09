@@ -4,6 +4,7 @@
 #include "inferencing/generative/chat/chat_session.h"
 
 #include "contracts/chat_completions.h"
+#include "contracts/tool_definitions.h"
 #include "contracts/chat_completions_converter.h"
 #include "inferencing/generative/chat/media_input.h"
 #include "inferencing/generative/chat/onnx_chat_generator.h"
@@ -98,21 +99,6 @@ TranscriptMessage MakeAssistantMessage(const std::vector<GeneratedOutputEvent>& 
   return assistant;
 }
 
-/// Name-to-kind index over a snapshot of tool definitions. Unnamed entries are whole pre-serialized tools payloads
-/// rather than registrable tools (see ToolRegistry::Add), so they are deliberately absent: no generated call
-/// resolves against them.
-std::unordered_map<std::string, ToolKind> KindsByName(const std::vector<ToolDefinition>& definitions) {
-  std::unordered_map<std::string, ToolKind> kinds;
-  kinds.reserve(definitions.size());
-
-  for (const auto& td : definitions) {
-    if (!td.name.empty()) {
-      kinds.emplace(td.name, td.kind);
-    }
-  }
-
-  return kinds;
-}
 
 ReasoningStreamSplitter CreateReasoningSplitter(const ToolCallContext& tool_ctx,
                                                 GenAIModelInstance& model,
@@ -297,44 +283,39 @@ ToolCallContext ChatSession::BuildToolCallContext(const Request& request,
     tool_ctx.reasoning_end = tag_info.eor_str;
   }
 
-  // Accumulate tool definitions from the session.
-  // Tool definitions may come from two sources:
-  // 1. Individual AddToolDefinition calls (name + description + parameters schema)
-  // 2. ChatCompletions converter (pre-serialized full OpenAI tools JSON array, no name)
-  // We need to produce a JSON array in OpenAI tools format for the chat template.
+  // Serialize the session's tool definitions into the OpenAI tools array the chat template expects.
+  // This is the only place tools are serialized for a prompt: every surface — the C ABI, Chat
+  // Completions and Responses — registers typed definitions and they are rendered here, so one turn
+  // cannot be prompted with a different tool shape than another.
+  //
   // Custom tools are already normalized by the registry into a function-shaped schema, so the
   // template and the guidance grammar only ever see function tools. Their kinds are carried on the
   // context, so this turn's output is read back with exactly the tool set that shaped its prompt
   // even if the session's registry changes underneath.
   nlohmann::json tools_array = nlohmann::json::array();
-  bool has_preserialized = false;
 
-  tool_ctx.tool_kinds = KindsByName(definitions);
+  tool_ctx.tool_kinds = tools::KindsByName(definitions);
 
   for (const auto& td : definitions) {
-    if (!td.name.empty()) {
-      // Individual tool: wrap in OpenAI format
-      nlohmann::json tool;
-      tool["type"] = "function";
-      tool["function"]["name"] = td.name;
+    // Every definition is named (the registry rejects an unnamed one), so each is wrapped
+    // individually — there is no pre-serialized array to pass through.
+    nlohmann::json tool;
+    tool["type"] = "function";
+    tool["function"]["name"] = td.name;
+
+    if (td.include_description_in_prompt) {
       tool["function"]["description"] = td.description;
-
-      if (!td.json_schema.empty()) {
-        tool["function"]["parameters"] = nlohmann::json::parse(td.json_schema);
-      }
-
-      tools_array.push_back(std::move(tool));
-    } else if (!td.json_schema.empty()) {
-      // Pre-serialized from ChatCompletions path — already a complete tools array
-      has_preserialized = true;
-      tool_ctx.tools_json += td.json_schema;
     }
+
+    if (td.include_parameters_in_prompt && !td.json_schema.empty()) {
+      tool["function"]["parameters"] = nlohmann::json::parse(td.json_schema);
+    }
+
+    tools_array.push_back(std::move(tool));
   }
 
   if (!tools_array.empty()) {
     tool_ctx.tools_json = tools_array.dump();
-  } else if (!has_preserialized) {
-    tool_ctx.tools_json.clear();
   }
 
   // Determine text_output / tool_output from tool_choice parameter.
@@ -497,8 +478,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // prompt, so there is no pre-turn boundary that undo could rewind back to.
   std::optional<int> pre_turn_token_count;
 
-  // A changed system prefix, an empty continuation, or tool activity all require rebuilding from complete history.
-  // None can be appended as an independent suffix that preserves the prompt the model should see.
+  // A changed system prefix, changed tool definitions, an empty continuation, or tool activity all require rebuilding
+  // from complete history. None can be appended as an independent suffix that preserves the prompt the model should
+  // see — and the definitions are both part of the rendered prompt and the contract generated calls are read back
+  // with, so a turn that changes them cannot continue on the cached prompt even without tool activity of its own.
   if (cached_generator_ &&
       (turn_system_prompt != system_prompt_ || !cached_tool_ctx_.HasSameTools(turn_tool_ctx) || inputs.empty() ||
        CarriesToolActivity(inputs))) {
@@ -774,7 +757,7 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
              "the request has nothing to generate from: `messages` carried no content");
   }
 
-  std::string tools_json = chat_completions::ExtractToolDefinitions(req, internal_request);
+  auto tool_definitions = chat_completions::ExtractToolDefinitions(req, internal_request);
   chat_completions::MapRequestParameters(req, internal_request);
   chat_completions::MapGuidance(req, internal_request);
   chat_completions::MapStopSequences(req, internal_request);
@@ -786,28 +769,25 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
     }
   }
 
-  // Build tool call context
-  if (!tools_json.empty()) {
+  // Register the request's tools. They go through the same registry as tools added directly to a
+  // session, so name uniqueness, custom-schema synthesis and kind resolution are decided in exactly
+  // one place no matter which surface the tools arrived on.
+  if (!tool_definitions.empty()) {
     // we don't expect a Session to get re-used on this path so this should always be empty
-    if (ToolDefinitions().size() > 0) {
+    if (HasToolDefinitions()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
                "Tool definitions cannot be used with OpenAI JSON input; the JSON payload must be fully self-contained");
     }
 
-    // Unnamed and function-shaped: this is a whole pre-serialized OpenAI tools array, not a tool
-    // that can be looked up or that a generated call resolves against.
-    AddToolDefinition({{}, {}, std::move(tools_json), ToolKind::kFunction});
+    for (auto& definition : tool_definitions) {
+      AddToolDefinition(std::move(definition));
+    }
   }
 
-  auto tool_definitions = ToolDefinitions();
-  const auto custom_tool = std::find_if(tool_definitions.begin(), tool_definitions.end(),
-                                        [](const ToolDefinition& tool) { return tool.kind == ToolKind::kCustom; });
-  if (custom_tool != tool_definitions.end()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-             "Custom tool definitions cannot be used with OpenAI JSON input");
-  }
-
-  auto tool_ctx = BuildToolCallContext(internal_request, tool_definitions);
+  // The one snapshot this turn resolves everything against: the prompt's tools payload, the kinds replayed calls are
+  // normalized with, and the kinds produced calls are read back with. Taken after registration so it carries the
+  // schemas the registry synthesized for custom tools.
+  auto tool_ctx = BuildToolCallContext(internal_request, ToolDefinitions());
 
   // Merge session-level and per-request options once.
   auto effective_kvp = MergedOptions(internal_request.options);
@@ -886,13 +866,14 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
       auto call = std::move(std::get<ParsedToolCall>(event));
       turn_guard.RecordToolCall();
 
+      if (tool_ctx.IsCustomTool(call.name)) {
+        call.arguments = ExtractCustomToolInput(call.arguments);
+      }
+
       if (is_streaming) {
-        ChatCompletionToolCall streamed;
+        auto streamed = chat_completions::MakeToolCall(call.id, call.name, call.arguments,
+                                                       tool_ctx.KindOf(call.name));
         streamed.index = next_tool_call_index++;
-        streamed.id = call.id;
-        streamed.type = "function";
-        streamed.function.name = call.name;
-        streamed.function.arguments = call.arguments;
         auto chunk_json = chat_completions::FormatToolCallStreamingChunk(
             {streamed}, completion_id, created, model_name);
         streaming_callback->PushItem(std::make_unique<TextItem>(
@@ -962,7 +943,8 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   response.metadata["model"] = model_name;
 
   // Build the ChatCompletionResponse and replace response items with a single OPENAI_JSON-tagged TextItem.
-  auto chat_response = chat_completions::BuildResponse(response, completion_id, created, model_name);
+  auto chat_response =
+      chat_completions::BuildResponse(response, completion_id, created, model_name, tool_ctx.tool_kinds);
   response.items.clear();
   response.items.push_back(std::make_unique<TextItem>(nlohmann::json(chat_response).dump(),
                                                       FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));

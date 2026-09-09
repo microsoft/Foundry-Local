@@ -184,8 +184,11 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ha
     ctx_.logger.Log(LogLevel::Error, fmt::format("Chat completion inference failed: {}", ex.what()));
     return ErrorResponse(status, "Inference failed", ex.what());
   } catch (const std::exception& ex) {
+    // Not an fl::Exception, so it carries no error code to classify: nothing below reports a client mistake this
+    // way, which makes it a service failure by construction.
     tracker.RecordException(ex);
     ctx_.logger.Log(LogLevel::Error, fmt::format("Chat completion inference failed: {}", ex.what()));
+
     return ErrorResponse(Status::CODE_500, "Inference failed", ex.what());
   }
 }
