@@ -263,7 +263,7 @@ fn download_and_extract(
             // expected native binary (the archive opened as a valid zip and the
             // expected file landed on disk). Cryptographic SHA-512 verification
             // against the feed's published packageHash is feed-specific — the
-            // registration layout differs between nuget.org and the Azure DevOps
+            // registration layout differs between NuGet service implementations and Azure DevOps
             // feed — and is left as future hardening.
             Ok(files) => {
                 let stage_result = http_extract::stage_files(&files, out_dir);

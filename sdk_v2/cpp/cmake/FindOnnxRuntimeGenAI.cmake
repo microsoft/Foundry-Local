@@ -4,7 +4,7 @@
 # All platforms / flavors: Microsoft.ML.OnnxRuntimeGenAI.Foundry
 #
 # When ORT_GENAI_HOME is set, uses the local ORT GenAI build instead of NuGet.
-# Otherwise uses FetchContent from nuget.org.
+# Otherwise uses FetchContent from the approved CFS feed.
 # Creates an IMPORTED target: OnnxRuntimeGenAI::OnnxRuntimeGenAI
 
 if(OnnxRuntimeGenAI_FOUND)
@@ -149,20 +149,10 @@ if(ANDROID)
     message(STATUS "OnnxRuntimeGenAI via GitHub AAR: ${_GENAI_AAR_DIR}")
 else()
     # Allow the pipeline or caller to override the download URL (e.g., to use a local
-    # file:// path when direct nuget.org access is blocked in CI).
+    # file:// path when direct feed access is blocked in CI).
     if(NOT GENAI_FETCH_URL)
-        # Dev builds come from the ADO nightly feed; release versions come from nuget.org.
-        if(ORT_GENAI_VERSION MATCHES "-dev-")
-            set(ORT_GENAI_FEED_ORG  "aiinfra")
-            set(ORT_GENAI_FEED_PROJECT "2692857e-05ef-43b4-ba9c-ccf1c22c437c")
-            set(ORT_GENAI_FEED_ID   "7982ae20-ed19-4a35-a362-a96ac99897b7")
-            set(GENAI_FETCH_URL "https://pkgs.dev.azure.com/${ORT_GENAI_FEED_ORG}/${ORT_GENAI_FEED_PROJECT}/_apis/packaging/feeds/${ORT_GENAI_FEED_ID}/nuget/packages/${_GENAI_PACKAGE_NAME}/versions/${ORT_GENAI_VERSION}/content?api-version=6.0-preview.1")
-            message(STATUS "Downloading ${_GENAI_PACKAGE_NAME} ${ORT_GENAI_VERSION} from ORT-Nightly feed")
-        else()
-            string(TOLOWER "${_GENAI_PACKAGE_NAME}" _GENAI_PACKAGE_LOWER)
-            set(GENAI_FETCH_URL "https://api.nuget.org/v3-flatcontainer/${_GENAI_PACKAGE_LOWER}/${ORT_GENAI_VERSION}/${_GENAI_PACKAGE_LOWER}.${ORT_GENAI_VERSION}.nupkg")
-            message(STATUS "Downloading ${_GENAI_PACKAGE_NAME} ${ORT_GENAI_VERSION} from nuget.org")
-        endif()
+        set(GENAI_FETCH_URL "https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_apis/packaging/feeds/AIFoundryLocal_PublicPackages/nuget/packages/${_GENAI_PACKAGE_NAME}/versions/${ORT_GENAI_VERSION}/content?api-version=6.0-preview.1")
+        message(STATUS "Downloading ${_GENAI_PACKAGE_NAME} ${ORT_GENAI_VERSION} from AIFoundryLocal_PublicPackages")
     else()
         message(STATUS "Using caller-provided GENAI_FETCH_URL: ${GENAI_FETCH_URL}")
     endif()

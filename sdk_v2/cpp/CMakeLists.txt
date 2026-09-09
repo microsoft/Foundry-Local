@@ -106,7 +106,7 @@ if(FOUNDRY_LOCAL_BUILD_TESTS)
     enable_testing()
 endif()
 
-# ORT and ORT GenAI — acquired via FetchContent from nuget.org.
+# ORT and ORT GenAI — acquired via FetchContent from the approved CFS feed.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
 find_package(OnnxRuntime REQUIRED)

@@ -62,7 +62,7 @@ endif()
 
 include(cmake/nuget.cmake)
 
-# WINML_EP_CATALOG_FETCH_URL can be set externally (e.g. for CI where nuget.org is blocked).
+# WINML_EP_CATALOG_FETCH_URL can be set externally, for example to a local prefetch archive.
 set(WINML_EP_CATALOG_FETCH_URL "" CACHE STRING "Override URL or local path for the WinML EP Catalog NuGet package")
 
 if(WINML_EP_CATALOG_FETCH_URL)
@@ -82,7 +82,7 @@ if(WINML_EP_CATALOG_FETCH_URL)
     message(STATUS "WinML EP Catalog via FetchContent: ${_WINML_EP_ROOT}")
 else()
     install_nuget_package(Microsoft.Windows.AI.MachineLearning ${WINML_EP_CATALOG_VERSION} _WINML_EP_ROOT
-        SOURCE https://api.nuget.org/v3/index.json)
+        SOURCE https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json)
 endif()
 
 # Load the package's first-party CMake config for target discovery and layout

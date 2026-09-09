@@ -34,8 +34,7 @@ const PLATFORM_MAP = {
 };
 
 const DEFAULT_FEEDS = [
-  "https://api.nuget.org/v3/index.json",
-  "https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/nuget/v3/index.json",
+  "https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/nuget/v3/index.json",
 ];
 
 const VALID_MODES = new Set(["http", "dotnet", "nuget"]);
