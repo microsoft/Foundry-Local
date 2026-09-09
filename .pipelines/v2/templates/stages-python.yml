@@ -11,11 +11,6 @@
 #
 # Each build stage emits one wheel under the `python-sdk-<rid>` pipeline artifact.
 
-parameters:
-- name: bundleNativeDependencies
-  type: boolean
-  default: false
-
 stages:
 
 # =====================================================================
@@ -51,7 +46,6 @@ stages:
         nativeArtifactDir: '$(Pipeline.Workspace)/cpp-native-win-x64'
         rid: 'win-x64'
         outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
-        bundleNativeDependencies: ${{ parameters.bundleNativeDependencies }}
 
 - stage: python_build_win_arm64
   displayName: 'Python SDK: Build Windows ARM64'
@@ -85,7 +79,6 @@ stages:
         rid: 'win-arm64'
         pythonArchitecture: 'arm64'
         outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
-        bundleNativeDependencies: ${{ parameters.bundleNativeDependencies }}
 
 - stage: python_build_linux_x64
   displayName: 'Python SDK: Build Linux x64'
@@ -117,7 +110,6 @@ stages:
         nativeArtifactDir: '$(Pipeline.Workspace)/cpp-native-linux-x64'
         rid: 'linux-x64'
         outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
-        bundleNativeDependencies: ${{ parameters.bundleNativeDependencies }}
 
 - stage: python_build_linux_arm64
   displayName: 'Python SDK: Build Linux ARM64'
@@ -151,7 +143,6 @@ stages:
         rid: 'linux-arm64'
         useSystemPython: true
         outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
-        bundleNativeDependencies: ${{ parameters.bundleNativeDependencies }}
 
 - stage: python_build_osx_arm64
   displayName: 'Python SDK: Build macOS ARM64'
@@ -186,7 +177,6 @@ stages:
         rid: 'osx-arm64'
         pythonArchitecture: 'arm64'
         outputDir: '$(Build.ArtifactStagingDirectory)/python-sdk'
-        bundleNativeDependencies: ${{ parameters.bundleNativeDependencies }}
 
 # ======================================================
 # Tests — win-x64, win-arm64, linux-x64, linux-arm64, osx-arm64.

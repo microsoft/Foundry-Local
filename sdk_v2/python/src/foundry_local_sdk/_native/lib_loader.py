@@ -173,16 +173,6 @@ def _find_file_in_package(package_name: str, filename: str) -> pathlib.Path | No
     return None
 
 
-def _find_file_in_directory(directory: pathlib.Path, filename: str) -> pathlib.Path | None:
-    """Locate an exact or versioned native binary directly in *directory*."""
-    if not directory.is_dir():
-        return None
-    for candidate in sorted(directory.iterdir()):
-        if candidate.is_file() and _matches_native_filename(candidate.name, filename):
-            return candidate
-    return None
-
-
 def _resolve_ort_package_path(filename: str) -> pathlib.Path | None:
     """Locate the shared library in the vanilla ORT package."""
     return _find_file_in_package("onnxruntime", filename)
@@ -217,17 +207,13 @@ def prepare_native_dependencies(foundry_local_dir: pathlib.Path) -> list:
     ``sdk/python/src/detail/core_interop.py::_initialize_native_libraries``)
     and the C# SDK uses (``sdk/cs/src/Detail/CoreInterop.cs::LoadOrtDllsIfInSameDir``).
 
-    Prerelease wheels may bundle the exact ORT/GenAI binaries used to build
-    ``libfoundry_local``. Stable wheels resolve them from sibling packages.
-    Bundled binaries take precedence so prerelease ABI validation cannot
-    accidentally preload older stable dependencies.
-
     Why explicit preload — and not just RPATH:
 
-    * Stable wheels ship libfoundry_local in ``_native/<rid>/`` while ORT and
-      GenAI live in sibling PyPI packages (``onnxruntime`` and
-      ``onnxruntime-genai-core``). They are not next to libfoundry_local, so
-      its RPATH (``$ORIGIN`` / ``@loader_path``) cannot find them.
+    * The wheel ships libfoundry_local in ``_native/<rid>/`` but ORT and GenAI
+      live in *sibling* PyPI packages (``onnxruntime`` and
+      ``onnxruntime-genai-core``). They are NOT next to libfoundry_local, so
+      libfoundry_local's RPATH (``$ORIGIN`` / ``@loader_path``) cannot find
+      them.
     * Once ORT and GenAI are loaded into the process by absolute path, the
       OS loader resolves libfoundry_local's references to them by *name* from
       the already-loaded module table — no filesystem search, no RPATH
@@ -246,8 +232,8 @@ def prepare_native_dependencies(foundry_local_dir: pathlib.Path) -> list:
     handles: list = []
 
     ort_name, genai_name = _native_binary_names()
-    ort_path = _find_file_in_directory(foundry_local_dir, ort_name) or _resolve_ort_package_path(ort_name)
-    genai_path = _find_file_in_directory(foundry_local_dir, genai_name) or _resolve_genai_package_path(genai_name)
+    ort_path = _resolve_ort_package_path(ort_name)
+    genai_path = _resolve_genai_package_path(genai_name)
 
     if ort_path is None or genai_path is None:
         logger.info(
