@@ -120,6 +120,12 @@ internal sealed class OpenAIChatCompletionsTests
             else
             {
                 await Assert.That(message.Content).IsNotNull();
+            }
+
+            // Accumulate independently of role framing so content is never coupled to a particular
+            // chunk boundary.
+            if (!string.IsNullOrEmpty(message.Content))
+            {
                 responseMessage.Append(message.Content);
             }
         };
@@ -136,25 +142,32 @@ internal sealed class OpenAIChatCompletionsTests
         Console.WriteLine(fullResponse);
         await Assert.That(fullResponse).Contains("42");
 
+        // Take a second streamed turn over the replayed transcript. Ask the model to recall its
+        // prior answer so the test measures streaming and multi-turn plumbing rather than another
+        // arithmetic problem. The model-free serialization test pins the exact replayed wire shape.
         messages.Add(new ChatMessage { Role = "assistant", Content = fullResponse });
         messages.Add(new ChatMessage
         {
             Role = "user",
-            Content = "Add 25 to the previous answer. Think hard to be sure of the answer."
+            Content = "What number did you give as the answer? Reply with only that number."
         });
 
         updates = chatClient.CompleteChatStreamingAsync(messages, CancellationToken.None).ConfigureAwait(false);
         responseMessage.Clear();
         isFirstChunk = true;
+        containsFinishReasonStop = false;
 
         await foreach (var response in updates)
         {
             await validateResponse(response);
         }
 
+        // Resetting the flag above makes this assertion specific to the second turn.
+        await Assert.That(containsFinishReasonStop).IsTrue();
+
         fullResponse = responseMessage.ToString();
         Console.WriteLine(fullResponse);
-        await Assert.That(fullResponse).Contains("67");
+        await Assert.That(fullResponse).Contains("42");
     }
 
     [Test]
