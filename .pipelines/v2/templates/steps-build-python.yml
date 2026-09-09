@@ -416,20 +416,39 @@ steps:
         $code = @'
         import sys, zipfile
 
-        whl, expected, rid = sys.argv[1], sys.argv[2], sys.argv[3]
+        whl, expected, rid, bundle_native_dependencies = sys.argv[1:5]
+        bundle_native_dependencies = bundle_native_dependencies.lower() == "true"
         with zipfile.ZipFile(whl) as wheel:
             names = wheel.namelist()
 
-        if rid.startswith("linux-"):
-            bundled_ort = [
-                name for name in names
-                if name.rsplit("/", 1)[-1].startswith("libonnxruntime") and ".so" in name
-            ]
-            if bundled_ort:
-                print("ERROR: ORT libraries must come from declared pip dependencies:")
-                for name in bundled_ort:
+        native_prefix = f"foundry_local_sdk/_native/{rid}/"
+        native_names = {
+            name.rsplit("/", 1)[-1]
+            for name in names
+            if name.startswith(native_prefix)
+        }
+        if rid.startswith("win-"):
+            required_runtimes = {"onnxruntime.dll", "onnxruntime-genai.dll"}
+            bundled_ort = {name for name in native_names if name.startswith("onnxruntime")}
+        elif rid.startswith("linux-"):
+            required_runtimes = {"libonnxruntime.so", "libonnxruntime-genai.so"}
+            bundled_ort = {name for name in native_names if name.startswith("libonnxruntime") and ".so" in name}
+        else:
+            required_runtimes = {"libonnxruntime.dylib", "libonnxruntime-genai.dylib"}
+            bundled_ort = {name for name in native_names if name.startswith("libonnxruntime") and ".dylib" in name}
+
+        if bundle_native_dependencies:
+            missing_runtimes = required_runtimes - native_names
+            if missing_runtimes:
+                print("ERROR: prerelease wheel is missing bundled native dependencies:")
+                for name in sorted(missing_runtimes):
                     print("  " + name)
                 sys.exit(1)
+        elif bundled_ort:
+            print("ERROR: stable wheel must use declared pip dependencies instead of bundled ORT:")
+            for name in sorted(bundled_ort):
+                print("  " + name)
+            sys.exit(1)
 
         hits = [name for name in names if name.endswith(expected)]
         if not hits:
@@ -441,6 +460,7 @@ steps:
 
         print("OK: found " + hits[0])
         '@
-        $code | python - "$($whl.FullName)" "$expected" "${{ parameters.rid }}"
+        $code | python - "$($whl.FullName)" "$expected" "${{ parameters.rid }}" `
+            "${{ parameters.bundleNativeDependencies }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host "Wheel validation passed."
