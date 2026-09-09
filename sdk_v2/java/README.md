@@ -18,12 +18,21 @@ guidance, [NATIVE_SMOKE.md](NATIVE_SMOKE.md) for evidence scope, and
 [API.md](API.md) for the API/JSONL contract. The universal minimum JBR/CRT version
 is unknown; this is not five-platform validation.
 
-**Current revision qualification:** the native evidence above belongs to source
-`06bf21e65f9a48518a0422558c5bbac42b2fd618` and its JAR. The subsequent UTF-8
-JSONL and cancellation-publication fixes have deterministic offline regressions;
-their rebuilt JAR still requires native smoke before consumer qualification.
+**Binary provenance:** the UTF-8 JSONL and cancellation-publication fixes in
+`d0946a0764d9cfa4b3d684940d6d5c66165427b8` have independent local native
+regression and hosted Windows x64/ARM64 Java17 evidence. Its qualified JAR is
+64,000 bytes, SHA-256
+`bf644d3127afff912683731094821a8f6a751f003c284a9c15ddceaecebe0863`.
+The additive external inventory metadata has a separate source revision;
+it does not relabel that binary source or qualify non-Windows ASR.
 
 ## Runtime compatibility is pinned, not inferred
+
+External model integrity consumers must use the observed per-target inventory
+contract in [MODEL_LOCK.md](MODEL_LOCK.md). The legacy Windows
+`model-lock.json` stays unchanged; the additive sidecar admits the observed
+Linux x64 raw generated marker while unobserved targets remain fail-closed.
+This metadata revision does not change or relabel the qualified `d0946a0` binary.
 
 The source-tree baseline is
 `microsoft/foundry-local@afdb275c0b79f77dbbd1c901de235bfea124441d`.

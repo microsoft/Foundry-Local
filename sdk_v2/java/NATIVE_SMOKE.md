@@ -8,8 +8,11 @@ Strict process-wide network isolation is also not established.
 The final-artifact native observations below refer to source
 `06bf21e65f9a48518a0422558c5bbac42b2fd618`, JAR SHA-256
 `d9620c6a40199f1bc8359c91dad4d07e3dc5b3f959a2ad6b3029e8053a45bbcf`.
-The subsequent UTF-8 JSONL and cancellation-publication fixes have only offline
-regression evidence so far; this report does not qualify their new JAR.
+The subsequent `d0946a0` UTF-8 JSONL and cancellation-publication fixes now have
+independent local regression and hosted Windows evidence. The earlier
+observations in this report remain attached to their original artifacts, not
+relabeled as that newer binary's measurements. See [MODEL_LOCK.md](MODEL_LOCK.md)
+for its unchanged binary provenance and the separate target metadata contract.
 
 ## Public tuples and scope
 
@@ -26,7 +29,9 @@ filename, TAB, decimal byte size, TAB, lowercase file SHA-256, LF.
 `d114900e0bc8ecf3474d8dd566a1b75c3f1e8771eb5f490fce97055fa2e080d8`.
 Its encoder chunk size is 8960 samples; VAD threshold is 0.3 and silence duration
 is 3360 ms. No model settings or weights were changed.
-The sanitized complete file manifest is [model-lock.json](model-lock.json).
+This Windows baseline manifest is [model-lock.json](model-lock.json).
+The additive [external target inventory contract](MODEL_LOCK.md) preserves it
+and distinguishes subsequently observed target metadata from ASR qualification.
 
 The model's MIT wrapper license, NVIDIA license references, upstream OpenMDW
 card and broken catalog license link are distinguished in README and the notices.
