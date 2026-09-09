@@ -164,13 +164,6 @@ void from_json(const nlohmann::json& j, FunctionCallResultInputItem& f) {
   f.output = j.at("output").get<std::string>();
 }
 
-void from_json(const nlohmann::json& j, FunctionCallInputItem& f) {
-  f.type = j.value("type", "function_call");
-  f.call_id = j.at("call_id").get<std::string>();
-  f.name = j.at("name").get<std::string>();
-  f.arguments = j.at("arguments").get<std::string>();
-}
-
 // ========================================================================
 // Tool types from_json
 // ========================================================================
@@ -255,13 +248,8 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
       for (const auto& entry : input) {
         std::string type = entry.value("type", "");
 
-        if (type == "function_call") {
-          items.push_back(entry.get<FunctionCallInputItem>());
-        } else if (type == "function_call_output") {
+        if (type == "function_call_output") {
           items.push_back(entry.get<FunctionCallResultInputItem>());
-        } else if (type == "reasoning") {
-          // Clients may replay prior reasoning output. Do not feed hidden reasoning back into the prompt.
-          continue;
         } else {
           // Default: message item
           items.push_back(entry.get<InputMessage>());

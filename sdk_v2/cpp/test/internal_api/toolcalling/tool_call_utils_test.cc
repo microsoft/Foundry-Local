@@ -129,13 +129,23 @@ TEST(ParseToolCallsTest, SingleKeyToolCallWithMissingArgumentsBrace) {
 }
 
 TEST(ParseToolCallsTest, RecoversNestedToolCallWithArgs) {
-  std::string text =
-      R"(<tool_call><exec_command","arguments":{"cmd":"ls"}<tool_call>{"name":"exec_command","args":{"cmd":"pwd"}}</tool_call>)";
+  std::string text = R"(<tool_call><exec_command","arguments":{"cmd":"ls"})"
+                     R"(<tool_call>{"name":"exec_command","args":{"cmd":"pwd"}}</tool_call>)";
   auto calls = ParseToolCalls(text, "<tool_call>", "</tool_call>");
 
   ASSERT_EQ(calls.size(), 1u);
   EXPECT_EQ(calls[0].name, "exec_command");
   EXPECT_EQ(calls[0].arguments, R"({"cmd":"pwd"})");
+}
+
+TEST(ParseToolCallsTest, MarkerInsideArgumentDoesNotTriggerNestedRecovery) {
+  std::string text =
+      R"(<tool_call>{"name":"shell","arguments":{"cmd":"grep '<tool_call>' output.txt"}}</tool_call>)";
+  auto calls = ParseToolCalls(text, "<tool_call>", "</tool_call>");
+
+  ASSERT_EQ(calls.size(), 1u);
+  EXPECT_EQ(calls[0].name, "shell");
+  EXPECT_EQ(calls[0].arguments, R"({"cmd":"grep '<tool_call>' output.txt"})");
 }
 
 TEST(ParseToolCallsTest, RecoversMissingNameObjectPrefix) {
@@ -289,6 +299,78 @@ TEST(ParseToolCallsTest, StringArguments) {
   EXPECT_EQ(calls[0].name, "fn");
   // String arguments are kept as-is
   EXPECT_NE(calls[0].arguments.find("key"), std::string::npos);
+}
+
+// ========================================================================
+// Atomic validation: malformed shape/type in any item rejects the whole block.
+// ========================================================================
+
+TEST(ParseToolCallsTest, NumericNameReturnsEmpty) {
+  std::string text = R"(<tc>{"name":123,"arguments":{}}</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, NullNameReturnsEmpty) {
+  std::string text = R"(<tc>{"name":null,"arguments":{}}</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, ObjectNameReturnsEmpty) {
+  std::string text = R"(<tc>{"name":{"first":"fn"},"arguments":{}}</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, EmptyStringNameReturnsEmpty) {
+  std::string text = R"(<tc>{"name":"","arguments":{}}</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, NonObjectArrayElementReturnsEmpty) {
+  std::string text = R"(<tc>[{"name":"fn1"},123]</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, MixedValidAndInvalidArrayReturnsEmpty) {
+  std::string text = R"(<tc>[{"name":"fn1","arguments":{}},{"name":123}]</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, MixedValidAndMissingNameArrayReturnsEmpty) {
+  std::string text = R"(<tc>[{"name":"fn1"},{"arguments":{"x":1}}]</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  EXPECT_TRUE(calls.empty());
+}
+
+TEST(ParseToolCallsTest, ValidSingleObjectStillAccepted) {
+  std::string text = R"(<tc>{"name":"fn","arguments":{"x":1}}</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  ASSERT_EQ(calls.size(), 1u);
+  EXPECT_EQ(calls[0].name, "fn");
+  EXPECT_FALSE(calls[0].id.empty());
+}
+
+TEST(ParseToolCallsTest, ValidArrayOfMultipleObjectsStillAccepted) {
+  std::string text =
+      R"(<tc>[{"name":"fn1","arguments":{}},{"name":"fn2","arguments":{"x":1}}]</tc>)";
+  auto calls = ParseToolCalls(text, "<tc>", "</tc>");
+
+  ASSERT_EQ(calls.size(), 2u);
+  EXPECT_EQ(calls[0].name, "fn1");
+  EXPECT_EQ(calls[1].name, "fn2");
 }
 
 // ========================================================================

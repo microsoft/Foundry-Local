@@ -74,15 +74,7 @@ struct FunctionCallResultInputItem {
   std::string output;
 };
 
-struct FunctionCallInputItem {
-  std::string type = "function_call";
-  std::string call_id;
-  std::string name;
-  std::string arguments;
-};
-
-using InputItem = std::variant<InputMessage, FunctionCallInputItem,
-                               FunctionCallResultInputItem>;
+using InputItem = std::variant<InputMessage, FunctionCallResultInputItem>;
 
 // ---------------------------------------------------------------------------
 // Tool calling types (AD-010)
@@ -145,8 +137,8 @@ struct ResponseCreateParams {
   std::optional<float> temperature;
   std::optional<int> max_output_tokens;
   std::optional<float> top_p;
-  std::optional<float> presence_penalty;
-  std::optional<float> frequency_penalty;
+  std::optional<float> presence_penalty;   // OpenAI semantics; only the neutral value 0 is currently supported.
+  std::optional<float> frequency_penalty;  // OpenAI semantics; only the neutral value 0 is currently supported.
   std::optional<int> seed;
   bool stream = false;
   bool store = false;
@@ -265,8 +257,8 @@ struct ResponseObject {
   std::optional<ToolChoice> tool_choice;
   std::optional<float> temperature;
   std::optional<float> top_p;
-  std::optional<float> presence_penalty;
-  std::optional<float> frequency_penalty;
+  std::optional<float> presence_penalty;   // OpenAI semantics; only the neutral value 0 is currently supported.
+  std::optional<float> frequency_penalty;  // OpenAI semantics; only the neutral value 0 is currently supported.
   std::optional<int> max_output_tokens;
   bool parallel_tool_calls = true;
   bool store = false;
@@ -344,7 +336,6 @@ void from_json(const nlohmann::json& j, InputImageContent& c);
 void from_json(const nlohmann::json& j, InputFileContent& c);
 void from_json(const nlohmann::json& j, InputAudioContent& c);
 void from_json(const nlohmann::json& j, InputMessage& m);
-void from_json(const nlohmann::json& j, FunctionCallInputItem& f);
 void from_json(const nlohmann::json& j, FunctionCallResultInputItem& f);
 
 // --- Tool types from_json ---

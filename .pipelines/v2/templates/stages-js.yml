@@ -61,9 +61,7 @@ stages:
   jobs:
   - job: build
     pool:
-      name: onnxruntime-native-arm64-16core
-      demands:
-        - ImageOverride -equals onnxruntime-Win2025-arm64
+      name: onnxruntime-medium-arm64-scus
       os: windows
       hostArchitecture: arm64
     variables:
@@ -210,7 +208,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'win-x64'
@@ -224,9 +222,7 @@ stages:
   jobs:
   - job: test
     pool:
-      name: onnxruntime-native-arm64-16core
-      demands:
-        - ImageOverride -equals onnxruntime-Win2025-arm64
+      name: onnxruntime-medium-arm64-scus
       os: windows
       hostArchitecture: arm64
     templateContext:
@@ -237,7 +233,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
       parameters:
         scriptType: ps
     - template: steps-test-js.yml
@@ -263,7 +259,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'linux-x64'
@@ -288,7 +284,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'linux-arm64'
@@ -314,7 +310,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-js.yml
       parameters:
         rid: 'osx-arm64'

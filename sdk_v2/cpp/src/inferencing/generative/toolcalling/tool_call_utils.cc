@@ -218,19 +218,20 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
       return results;
     }
 
-    auto parse_one = [&](const nlohmann::json& call) {
+    auto parse_one = [&](const nlohmann::json& call) -> std::optional<ParsedToolCall> {
       if (!call.is_object()) {
-        return;
+        return std::nullopt;
       }
 
       ParsedToolCall tc;
-      tc.id = GenerateToolCallId();
 
       if (call.contains("name") && call["name"].is_string()) {
         tc.name = call["name"].get<std::string>();
       } else if (call.contains("function") && call["function"].is_string()) {
         tc.name = call["function"].get<std::string>();
-      } else if (call.size() == 1) {
+      } else if (call.size() == 1 && !call.contains("name") &&
+             !call.contains("function") && !call.contains("arguments") &&
+             !call.contains("parameters") && !call.contains("args")) {
         const auto& [name, arguments] = *call.items().begin();
         tc.name = NormalizeToolName(name, advertised_tools);
         if (name == "cmd" && tc.name == "shell") {
@@ -238,13 +239,16 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
         } else {
           tc.arguments = arguments.is_string() ? arguments.get<std::string>() : arguments.dump();
         }
-        results.push_back(std::move(tc));
-        return;
+        return tc.name.empty() ? std::nullopt
+                               : std::optional<ParsedToolCall>(std::move(tc));
       } else {
-        return;
+        return std::nullopt;
       }
 
       tc.name = NormalizeToolName(std::move(tc.name), advertised_tools);
+      if (tc.name.empty()) {
+        return std::nullopt;
+      }
 
       // Arguments can be under "arguments", "parameters", or "args".
       if (call.contains("arguments")) {
@@ -274,18 +278,33 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
         }
       }
 
-      results.push_back(std::move(tc));
+      return tc;
     };
 
     if (json.is_array()) {
+      results.reserve(json.size());
       for (const auto& item : json) {
-        parse_one(item);
+        auto parsed = parse_one(item);
+        if (!parsed) {
+          return {};
+        }
+        results.push_back(std::move(*parsed));
       }
     } else if (json.is_object()) {
-      parse_one(json);
+      auto parsed = parse_one(json);
+      if (!parsed) {
+        return {};
+      }
+      results.push_back(std::move(*parsed));
+    } else {
+      return {};
+    }
+
+    for (auto& result : results) {
+      result.id = GenerateToolCallId();
     }
   } catch (const nlohmann::json::exception&) {
-    // Invalid tool-call shape — return whatever we have so far (may be empty)
+    return {};
   }
 
   return results;
@@ -324,15 +343,21 @@ std::vector<ParsedToolCall> ParseToolCalls(const std::string& text,
       break;
     }
 
-    // If a malformed call was left open before another call, parse the
-    // innermost complete block rather than combining both payloads.
-    size_t nested_start = text.rfind(tool_call_start, end_pos);
-    if (nested_start != std::string::npos && nested_start > start_pos) {
-      content_start = nested_start + tool_call_start.size();
-    }
-
     std::string content = text.substr(content_start, end_pos - content_start);
     auto calls = DeserializeToolCalls(content, advertised_tools);
+
+    // If a malformed call was left open before another call, parse the
+    // innermost complete block rather than combining both payloads. Only try
+    // this recovery after the outer payload fails because marker text may be
+    // valid JSON string content.
+    if (calls.empty()) {
+      size_t nested_start = text.rfind(tool_call_start, end_pos);
+      if (nested_start != std::string::npos && nested_start > start_pos) {
+        content_start = nested_start + tool_call_start.size();
+        content = text.substr(content_start, end_pos - content_start);
+        calls = DeserializeToolCalls(content, advertised_tools);
+      }
+    }
 
     for (auto& call : calls) {
       all_calls.push_back(std::move(call));

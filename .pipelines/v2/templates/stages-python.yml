@@ -55,9 +55,7 @@ stages:
   jobs:
   - job: build
     pool:
-      name: onnxruntime-native-arm64-16core
-      demands:
-        - ImageOverride -equals onnxruntime-Win2025-arm64
+      name: onnxruntime-medium-arm64-scus
       os: windows
       hostArchitecture: arm64
     templateContext:
@@ -215,9 +213,7 @@ stages:
   jobs:
   - job: test
     pool:
-      name: onnxruntime-native-arm64-16core
-      demands:
-        - ImageOverride -equals onnxruntime-Win2025-arm64
+      name: onnxruntime-medium-arm64-scus
       os: windows
       hostArchitecture: arm64
     templateContext:
@@ -228,7 +224,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
       parameters:
         scriptType: ps
     - template: steps-test-python.yml
@@ -254,11 +250,12 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-python.yml
       parameters:
         wheelDir: '$(Pipeline.Workspace)/python-sdk-linux-x64'
         testDataSharedDir: '$(Build.SourcesDirectory)/test-data-shared'
+        useSystemPython: true
 
 - stage: python_test_linux_arm64
   displayName: 'Python SDK: Test Linux ARM64'
@@ -278,7 +275,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-python.yml
       parameters:
         wheelDir: '$(Pipeline.Workspace)/python-sdk-linux-arm64'
@@ -304,7 +301,7 @@ stages:
     steps:
     - checkout: self
       clean: true
-    - template: ../../templates/fetch-test-data-from-blob.yml@self
+    - template: ../../templates/fetch-models-from-artifacts-feed.yml@self
     - template: steps-test-python.yml
       parameters:
         wheelDir: '$(Pipeline.Workspace)/python-sdk-osx-arm64'
