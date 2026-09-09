@@ -37,6 +37,9 @@ backpressure limits outstanding native-owned PCM to 64000 bytes. WAV files are
 bounded to 64 MiB and fed automatically, without pacing, through the native PCM
 queue. Do not call `writePcm` or `finishInput` for an automatic WAV transcription.
 Call `finishInput` for a manually fed stream to flush; `cancel` interrupts instead.
+Cancellation accepted before terminal result publication discards the final
+transcript, including cancellation during native result decoding. Once a result
+or error is committed, cancellation is too late and does not change its state.
 
 Close each request before reusing its session. The manager owns sessions, while
 catalog/model handles are borrowed. Close cascades, cancels and joins workers,
@@ -68,8 +71,10 @@ version or execution-provider fallback is performed.
 The machine-readable schema is [cli.schema.json](cli.schema.json). It describes
 one event per line, not a JSON array or the separate loader diagnostic output.
 
-Each stdout line is one JSON object. Field order is unspecified. Strings use JSON
-escaping, timestamps are milliseconds, byte counts are integers, and unavailable
+Each stdout line is one UTF-8 JSON object regardless of the platform's default
+encoding. Whole lines are serialized across callback threads. Field order is
+unspecified. Strings use JSON escaping, timestamps are milliseconds, byte counts
+are integers, and unavailable
 observations are JSON `null`, never invented zeros. Do not treat error messages
 as a stable machine interface.
 

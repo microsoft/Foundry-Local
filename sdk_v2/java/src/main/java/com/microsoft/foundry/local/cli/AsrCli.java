@@ -4,6 +4,7 @@ package com.microsoft.foundry.local.cli;
 import com.microsoft.foundry.local.*;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -191,7 +192,11 @@ public final class AsrCli {
         return options.containsKey(key) ? Long.parseLong(options.get(key)) : fallback;
     }
 
-    private static synchronized void emit(Object value) { System.out.println(json(value)); }
+    private static synchronized void emit(Object value) {
+        byte[] line = (json(value) + "\n").getBytes(StandardCharsets.UTF_8);
+        System.out.write(line, 0, line.length);
+        System.out.flush();
+    }
 
     static String json(Object value) {
         if (value == null) return "null";

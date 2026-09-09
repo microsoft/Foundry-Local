@@ -5,6 +5,12 @@ the explicitly selected IU 2026.1.5 / JBR 25 native ASR smoke succeed; the origi
 consumer JBR 21 remains incompatible with the pinned native dependencies.
 Strict process-wide network isolation is also not established.
 
+The final-artifact native observations below refer to source
+`06bf21e65f9a48518a0422558c5bbac42b2fd618`, JAR SHA-256
+`d9620c6a40199f1bc8359c91dad4d07e3dc5b3f959a2ad6b3029e8053a45bbcf`.
+The subsequent UTF-8 JSONL and cancellation-publication fixes have only offline
+regression evidence so far; this report does not qualify their new JAR.
+
 ## Public tuples and scope
 
 Native runtime/header/dependency pins are in the bundled runtime lock. The

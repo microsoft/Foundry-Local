@@ -18,6 +18,11 @@ guidance, [NATIVE_SMOKE.md](NATIVE_SMOKE.md) for evidence scope, and
 [API.md](API.md) for the API/JSONL contract. The universal minimum JBR/CRT version
 is unknown; this is not five-platform validation.
 
+**Current revision qualification:** the native evidence above belongs to source
+`06bf21e65f9a48518a0422558c5bbac42b2fd618` and its JAR. The subsequent UTF-8
+JSONL and cancellation-publication fixes have deterministic offline regressions;
+their rebuilt JAR still requires native smoke before consumer qualification.
+
 ## Runtime compatibility is pinned, not inferred
 
 The source-tree baseline is

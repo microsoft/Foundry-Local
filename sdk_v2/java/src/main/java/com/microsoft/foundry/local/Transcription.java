@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /** Owns a request, input buffers and callback lifetimes until the native worker has joined. */
 public final class Transcription implements AutoCloseable {
@@ -21,7 +22,7 @@ public final class Transcription implements AutoCloseable {
     private final NativeApi api;
     private final PcmFormat format;
     private final Consumer<SpeechEvent> listener;
-    private final CompletableFuture<TranscriptionResult> result = new CompletableFuture<>();
+    private final Completion completion = new Completion();
     private final AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
     private final Map<Long, Memory> buffers = new ConcurrentHashMap<>();
     private final NativeApi.StreamCallback callback = this::onEvent;
@@ -29,10 +30,10 @@ public final class Transcription implements AutoCloseable {
     private final Thread worker;
     private final Thread feeder;
     private Pointer request, queue;
-    private boolean finished, cancelled, closing, closed;
+    private boolean finished, closing, closed;
     private long bufferedBytes;
     private final long originNanos = System.nanoTime();
-    private long firstInputNanos, firstNonemptyNanos, inputClosedNanos, finalizedNanos, cancellationNanos, submittedBytes;
+    private long firstInputNanos, firstNonemptyNanos, inputClosedNanos, submittedBytes;
 
     Transcription(AudioSession session, byte[] wav, PcmFormat format, Consumer<SpeechEvent> listener) {
         this.session = session;
@@ -86,7 +87,7 @@ public final class Transcription implements AutoCloseable {
             finishInput();
         } catch (InterruptedException | RuntimeException e) {
             synchronized (this) {
-                if (!cancelled && !closing && !result.isDone()) {
+                if (!completion.isCancelled() && !closing && !isDone()) {
                     callbackFailure.compareAndSet(null, e);
                     cancel();
                 }
@@ -135,7 +136,7 @@ public final class Transcription implements AutoCloseable {
     }
 
     private void ensureWritable() {
-        if (closed || closing || finished || cancelled || result.isDone()) {
+        if (closed || closing || finished || completion.isCancelled() || isDone()) {
             throw new IllegalStateException("Transcription no longer accepts PCM");
         }
     }
@@ -157,9 +158,7 @@ public final class Transcription implements AutoCloseable {
 
     public synchronized void cancel() {
         NativeApi.outsideCallback();
-        if (closed || result.isDone()) return;
-        if (cancellationNanos == 0) cancellationNanos = System.nanoTime();
-        cancelled = true;
+        if (closed || !completion.cancel()) return;
         api.check(api.inference.pointer(6, request));
         if (queue != null && !finished) {
             api.item.call(29, queue);
@@ -168,27 +167,30 @@ public final class Transcription implements AutoCloseable {
         notifyAll();
     }
 
-    public boolean isDone() { return result.isDone(); }
+    public boolean isDone() { return completion.result.isDone(); }
     public synchronized boolean isClosed() { return closed; }
-    public synchronized boolean isCancelled() { return cancelled; }
+    public synchronized boolean isCancelled() { return completion.isCancelled(); }
 
     /** Milliseconds share one request-local monotonic origin; absent observations remain null. */
     public synchronized TranscriptionTiming timing() {
-        return new TranscriptionTiming(relative(firstInputNanos), relative(firstNonemptyNanos),
-                relative(inputClosedNanos), relative(finalizedNanos), relative(cancellationNanos), submittedBytes);
+        synchronized (completion) {
+            return new TranscriptionTiming(relative(firstInputNanos), relative(firstNonemptyNanos),
+                    relative(inputClosedNanos), relative(completion.finalizedNanos),
+                    relative(completion.cancellationNanos), submittedBytes);
+        }
     }
 
     private Double relative(long nanos) { return nanos == 0 ? null : (nanos - originNanos) / 1_000_000.0; }
 
     public TranscriptionResult await() throws InterruptedException {
         NativeApi.outsideCallback();
-        try { return result.get(); }
+        try { return completion.result.get(); }
         catch (ExecutionException e) { throw propagate(e.getCause()); }
     }
 
     public TranscriptionResult await(Duration timeout) throws InterruptedException, TimeoutException {
         NativeApi.outsideCallback();
-        try { return result.get(timeout.toMillis(), TimeUnit.MILLISECONDS); }
+        try { return completion.result.get(timeout.toMillis(), TimeUnit.MILLISECONDS); }
         catch (ExecutionException e) { throw propagate(e.getCause()); }
     }
 
@@ -224,7 +226,7 @@ public final class Transcription implements AutoCloseable {
                             optionalTime(data.start), optionalTime(data.end), data.utteranceStart != 0));
                 } finally { api.item.call(1, item); }
             }
-            synchronized (this) { return cancelled ? 1 : 0; }
+            return completion.isCancelled() ? 1 : 0;
         } catch (Throwable e) {
             callbackFailure.compareAndSet(null, e);
             return 1;
@@ -245,43 +247,72 @@ public final class Transcription implements AutoCloseable {
             try { api.check(status); }
             catch (FoundryLocalException e) {
                 if (e.code() != 5) throw e;
-                synchronized (this) { cancelled = true; }
+                synchronized (completion) { completion.cancelled = true; }
             }
-            int reason = response.getValue() == null ? 0 : api.inference.integer(11, response.getValue());
-            String text = "", language = "";
-            Long duration = null;
-            boolean wasCancelled;
-            synchronized (this) {
-                wasCancelled = cancelledResult(cancelled, response.getValue() != null, reason);
-            }
-            if (!wasCancelled) {
-                boolean found = false;
-                for (long i = 0; i < api.inference.size(9, response.getValue()); i++) {
-                    Pointer item = api.create(api.inference, 10, response.getValue(), i);
-                    if (api.item.integer(2, item) == 32) {
-                        NativeApi.ResultData data = new NativeApi.ResultData();
-                        data.write();
-                        api.check(api.item.pointer(20, item, data));
-                        data.read();
-                        text = NativeApi.text(data.text);
-                        language = NativeApi.text(data.language);
-                        duration = optionalTime(data.duration);
-                        found = true;
+            completion.complete(wasCancelled -> {
+                int reason = response.getValue() == null ? 0 : api.inference.integer(11, response.getValue());
+                String text = "", language = "";
+                Long duration = null;
+                wasCancelled = cancelledResult(wasCancelled, response.getValue() != null, reason);
+                if (!wasCancelled) {
+                    boolean found = false;
+                    for (long i = 0; i < api.inference.size(9, response.getValue()); i++) {
+                        Pointer item = api.create(api.inference, 10, response.getValue(), i);
+                        if (api.item.integer(2, item) == 32) {
+                            NativeApi.ResultData data = new NativeApi.ResultData();
+                            data.write();
+                            api.check(api.item.pointer(20, item, data));
+                            data.read();
+                            text = NativeApi.text(data.text);
+                            language = NativeApi.text(data.language);
+                            duration = optionalTime(data.duration);
+                            found = true;
+                        }
                     }
+                    if (!found) throw new IllegalStateException("Native ASR response has no speech result");
                 }
-                if (!found) throw new IllegalStateException("Native ASR response has no speech result");
-            }
-            synchronized (this) { finalizedNanos = System.nanoTime(); }
-            result.complete(new TranscriptionResult(text, language, duration, wasCancelled, reason,
-                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)));
+                return new TranscriptionResult(text, language, duration, wasCancelled, reason,
+                        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
+            });
         } catch (Throwable e) {
-            result.completeExceptionally(e);
+            completion.fail(e);
         } finally {
             if (response.getValue() != null) api.inference.call(8, response.getValue());
             synchronized (this) { notifyAll(); }
             Reference.reachabilityFence(callback);
             Reference.reachabilityFence(deleter);
         }
+    }
+
+    static final class Completion {
+        final CompletableFuture<TranscriptionResult> result = new CompletableFuture<>();
+        private boolean cancelled;
+        private long cancellationNanos, finalizedNanos;
+
+        synchronized boolean cancel() {
+            if (result.isDone()) return false;
+            if (cancellationNanos == 0) cancellationNanos = System.nanoTime();
+            cancelled = true;
+            return true;
+        }
+
+        synchronized boolean isCancelled() { return cancelled; }
+
+        void complete(Function<Boolean, TranscriptionResult> decode) {
+            boolean wasCancelled = isCancelled();
+            TranscriptionResult value = decode.apply(wasCancelled);
+            // Native decoding is outside the lock; only cancellation and terminal publication compete here.
+            synchronized (this) {
+                if (cancelled) {
+                    value = new TranscriptionResult("", "", null, true,
+                            value.nativeFinishReason(), value.elapsedMillis());
+                }
+                finalizedNanos = System.nanoTime();
+                result.complete(value);
+            }
+        }
+
+        synchronized void fail(Throwable error) { result.completeExceptionally(error); }
     }
 
     static boolean cancelledResult(boolean cancellationRequested, boolean hasResponse, int finishReason) {
