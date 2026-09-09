@@ -322,7 +322,7 @@ set(FOUNDRY_LOCAL_SOURCES
 if(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
     list(APPEND FOUNDRY_LOCAL_SOURCES
         src/inferencing/generative/chat/onnx_chat_engine.cc
-        src/inferencing/generative/chat/onnx_engine_chat_generator.cc
+        src/inferencing/generative/chat/onnx_engine_chat_stream.cc
     )
 endif()
 

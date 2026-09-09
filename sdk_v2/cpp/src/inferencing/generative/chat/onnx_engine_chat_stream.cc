@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-#include "inferencing/generative/chat/onnx_engine_chat_generator.h"
+#include "inferencing/generative/chat/onnx_engine_chat_stream.h"
 
 #include "exception.h"
 #include "inferencing/generative/chat/chat_template.h"
@@ -33,7 +33,7 @@ std::optional<flFinishReason> MapFinishReason(OgaFinishReason reason) {
 
 }  // namespace
 
-OnnxEngineChatGenerator::OnnxEngineChatGenerator(
+OnnxEngineChatStream::OnnxEngineChatStream(
     OnnxChatEngine& engine,
     std::shared_ptr<OnnxChatEngine::Conversation> conversation,
     std::unique_ptr<OgaTokenizerStream> stream,
@@ -45,18 +45,18 @@ OnnxEngineChatGenerator::OnnxEngineChatGenerator(
       model_(model),
       prompt_token_count_(prompt_token_count) {}
 
-OnnxEngineChatGenerator::~OnnxEngineChatGenerator() {
+OnnxEngineChatStream::~OnnxEngineChatStream() {
   try {
     engine_.Close(conversation_);
   } catch (...) {
   }
 }
 
-bool OnnxEngineChatGenerator::IsDone() const {
+bool OnnxEngineChatStream::IsDone() const {
   return cancelled_ || engine_.IsTurnFinished(conversation_);
 }
 
-void OnnxEngineChatGenerator::GenerateNextToken() {
+void OnnxEngineChatStream::GenerateNextToken() {
   if (cancelled_) {
     return;
   }
@@ -70,7 +70,7 @@ void OnnxEngineChatGenerator::GenerateNextToken() {
   }
 }
 
-std::string OnnxEngineChatGenerator::Decode() {
+std::string OnnxEngineChatStream::Decode() {
   if (!current_token_) {
     return "";
   }
@@ -100,27 +100,27 @@ std::string OnnxEngineChatGenerator::Decode() {
   return token_text ? std::string(token_text) : "";
 }
 
-std::optional<int32_t> OnnxEngineChatGenerator::CurrentTokenId() const {
+std::optional<int32_t> OnnxEngineChatStream::CurrentTokenId() const {
   return current_token_;
 }
 
-int OnnxEngineChatGenerator::TokenCount() const {
+int OnnxEngineChatStream::TokenCount() const {
   return static_cast<int>(engine_.SequenceLength(conversation_));
 }
 
-int OnnxEngineChatGenerator::PromptTokenCount() const {
+int OnnxEngineChatStream::PromptTokenCount() const {
   return prompt_token_count_;
 }
 
-void OnnxEngineChatGenerator::Cancel() {
+void OnnxEngineChatStream::Cancel() {
   cancelled_ = true;
   engine_.Cancel(conversation_);
 }
 
-int OnnxEngineChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
-                                            GenAIModelInstance& model,
-                                            const ToolCallContext& tool_ctx,
-                                            const SearchOptions& options) {
+int OnnxEngineChatStream::AppendMessages(const std::vector<MessageItem>& new_messages,
+                                         GenAIModelInstance& model,
+                                         const ToolCallContext& tool_ctx,
+                                         const SearchOptions& options) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
   }
@@ -141,14 +141,14 @@ int OnnxEngineChatGenerator::AppendMessages(const std::vector<MessageItem>& new_
   return count;
 }
 
-void OnnxEngineChatGenerator::ResetTurnDecoder() {
+void OnnxEngineChatStream::ResetTurnDecoder() {
   // OgaTokenizerStream has no reset, and a stream that ended mid-code-point (or mid-BPE-merge) would otherwise
   // corrupt the first chunk of the next turn. Drop any token the previous turn left undecoded for the same reason.
   current_token_.reset();
   stream_ = model_.GetPreprocessor().CreateTokenizerStream();
 }
 
-std::optional<ChatTurnUsage> OnnxEngineChatGenerator::GetTurnUsage() const {
+std::optional<ChatTurnUsage> OnnxEngineChatStream::GetTurnUsage() const {
   const auto result = engine_.GetTurnResult(conversation_);
   return ChatTurnUsage{
       static_cast<int>(result.prompt_tokens + result.cached_prompt_tokens),
@@ -157,7 +157,7 @@ std::optional<ChatTurnUsage> OnnxEngineChatGenerator::GetTurnUsage() const {
   };
 }
 
-std::unique_ptr<OnnxEngineChatGenerator> OnnxEngineChatGenerator::Create(
+std::unique_ptr<OnnxEngineChatStream> OnnxEngineChatStream::Create(
     const std::vector<MessageItem>& messages,
     const SearchOptions& options,
     GenAIModelInstance& model,
@@ -181,9 +181,9 @@ std::unique_ptr<OnnxEngineChatGenerator> OnnxEngineChatGenerator::Create(
     engine->BeginTurn(conversation, std::span<const int32_t>(data, static_cast<size_t>(prompt_token_count)), options,
                       tool_ctx);
 
-    return std::unique_ptr<OnnxEngineChatGenerator>(
-        new OnnxEngineChatGenerator(*engine, std::move(conversation), std::move(stream), model,
-                                    prompt_token_count));
+    return std::unique_ptr<OnnxEngineChatStream>(
+        new OnnxEngineChatStream(*engine, std::move(conversation), std::move(stream), model,
+                                 prompt_token_count));
   } catch (...) {
     try {
       engine->Close(conversation);

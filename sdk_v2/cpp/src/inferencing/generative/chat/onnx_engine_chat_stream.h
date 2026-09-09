@@ -17,10 +17,10 @@ namespace fl {
 
 class GenAIModelInstance;
 
-/// ChatGenerator adapter for a conversation scheduled by a model-owned ORT GenAI Engine.
-class OnnxEngineChatGenerator final : public ChatGenerator {
+/// ChatGenerator stream for a conversation scheduled by a model-owned ORT GenAI Engine.
+class OnnxEngineChatStream final : public ChatGenerator {
  public:
-  ~OnnxEngineChatGenerator() override;
+  ~OnnxEngineChatStream() override;
 
   bool IsDone() const override;
   void GenerateNextToken() override;
@@ -35,18 +35,18 @@ class OnnxEngineChatGenerator final : public ChatGenerator {
                      const SearchOptions& options) override;
   std::optional<ChatTurnUsage> GetTurnUsage() const override;
 
-  static std::unique_ptr<OnnxEngineChatGenerator> Create(
+  static std::unique_ptr<OnnxEngineChatStream> Create(
       const std::vector<MessageItem>& messages,
       const SearchOptions& options,
       GenAIModelInstance& model,
       const ToolCallContext& tool_ctx);
 
  private:
-  OnnxEngineChatGenerator(OnnxChatEngine& engine,
-                          std::shared_ptr<OnnxChatEngine::Conversation> conversation,
-                          std::unique_ptr<OgaTokenizerStream> stream,
-                          GenAIModelInstance& model,
-                          int prompt_token_count);
+  OnnxEngineChatStream(OnnxChatEngine& engine,
+                       std::shared_ptr<OnnxChatEngine::Conversation> conversation,
+                       std::unique_ptr<OgaTokenizerStream> stream,
+                       GenAIModelInstance& model,
+                       int prompt_token_count);
 
   /// Replace this turn's token decoder. Called only once the Engine has admitted a turn.
   void ResetTurnDecoder();
