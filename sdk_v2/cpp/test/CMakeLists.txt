@@ -60,6 +60,7 @@ add_executable(foundry_local_tests
     internal_api/platform_path_test.cc
     internal_api/replay_equivalence_test.cc
     internal_api/response_converter_test.cc
+    internal_api/response_lifecycle_test.cc
     internal_api/response_store_test.cc
     internal_api/responses_json_test.cc
     internal_api/scope_guard_test.cc

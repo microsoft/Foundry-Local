@@ -5,27 +5,62 @@
 
 #include <algorithm>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace fl {
 
-ResponseStore::ResponseStore(int capacity)
-    : capacity_(std::clamp(capacity, 1, kMaxCapacity)) {
+// --- ResponseLease ---
+
+ResponseLease::~ResponseLease() {
+  Release();
+}
+
+ResponseLease::ResponseLease(ResponseLease&& other) noexcept
+    : store_(std::exchange(other.store_, nullptr)), id_(std::exchange(other.id_, 0)) {
+}
+
+ResponseLease& ResponseLease::operator=(ResponseLease&& other) noexcept {
+  if (this != &other) {
+    Release();
+    store_ = std::exchange(other.store_, nullptr);
+    id_ = std::exchange(other.id_, 0);
+  }
+
+  return *this;
+}
+
+void ResponseLease::Release() noexcept {
+  if (store_ != nullptr) {
+    store_->ReleaseLease(id_);
+    store_ = nullptr;
+    id_ = 0;
+  }
+}
+
+// --- ResponseStore ---
+
+ResponseStore::ResponseStore(int capacity, IResponseCacheCoordinator* cache)
+    : capacity_(std::clamp(capacity, 1, kMaxCapacity)), cache_(cache) {
 }
 
 void ResponseStore::Store(const std::string& response_id,
                           nlohmann::json response,
-                          nlohmann::json input_items) {
+                          nlohmann::json input_items,
+                          std::string model_id) {
   std::lock_guard<std::mutex> lock(mutex_);
+  StoreLocked(StoredResponse{response_id, std::move(model_id), std::move(response), std::move(input_items)});
+}
 
+void ResponseStore::StoreLocked(StoredResponse response) {
   std::shared_ptr<const ReplayPrefix> replay_prefix;
 
   // If already exists, preserve its compacted ancestry when the replacement keeps the same parent.
-  auto it = index_.find(response_id);
+  auto it = index_.find(response.id);
   if (it != index_.end()) {
     const auto old_previous = it->second->response.find("previous_response_id");
-    const auto new_previous = response.find("previous_response_id");
-    if (old_previous != it->second->response.end() && new_previous != response.end() &&
+    const auto new_previous = response.response.find("previous_response_id");
+    if (old_previous != it->second->response.end() && new_previous != response.response.end() &&
         *old_previous == *new_previous) {
       replay_prefix = it->second->replay_prefix;
     }
@@ -35,10 +70,105 @@ void ResponseStore::Store(const std::string& response_id,
   }
 
   // Insert at front (most recently used)
-  entries_.push_front(Entry{response_id, std::move(response), std::move(input_items), std::move(replay_prefix)});
-  index_[response_id] = entries_.begin();
+  entries_.push_front(Entry{.id = response.id,
+                            .model_id = std::move(response.model_id),
+                            .response = std::move(response.response),
+                            .input_items = std::move(response.input_items),
+                            .replay_prefix = std::move(replay_prefix)});
+  index_[response.id] = entries_.begin();
 
   Evict();
+}
+
+ResponseStore::ContinuationResult ResponseStore::BeginResponse(const std::string& previous_response_id,
+                                                               const std::string& model_id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  PendingResponse pending;
+
+  if (!previous_response_id.empty()) {
+    auto chain = WalkChainLocked(previous_response_id);
+    if (chain.empty()) {
+      ContinuationResult unavailable;
+      unavailable.status = ContinuationStatus::kChainUnavailable;
+      return unavailable;
+    }
+
+    // The chain belongs to the model that produced it: its cached session holds that model's KV cache, and its
+    // replayed transcript was written by that model's template. Refuse before anything is reused, so warm and cold
+    // continuation agree and no answer is labelled with a model that did not produce it.
+    const std::string& parent_model_id = chain.front()->model_id;
+    if (!parent_model_id.empty() && !model_id.empty() && parent_model_id != model_id) {
+      ContinuationResult mismatch;
+      mismatch.status = ContinuationStatus::kModelMismatch;
+      mismatch.parent_model_id = parent_model_id;
+      return mismatch;
+    }
+
+    // Keep the whole chain warm even when the caller continues from a live session and never rebuilds it: without
+    // this the conversation's own early hops would age out while it is still active, and a later session-cache miss
+    // could no longer reconstruct it. Touch oldest-first so the requested endpoint ends up most recent.
+    for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
+      TouchLocked(*hop);
+    }
+
+    pending.ancestors = ChainIdsLocked(chain);
+  }
+
+  const uint64_t lease_id = next_lease_id_++;
+  pending_.emplace(lease_id, std::move(pending));
+
+  ContinuationResult accepted;
+  accepted.lease = ResponseLease(*this, lease_id);
+  return accepted;
+}
+
+bool ResponseStore::Commit(ResponseLease& lease, StoredResponse response, IResponseAdmission* admission) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  // A lease issued by a different store is not ours to consume: clearing it here would orphan that store's
+  // registration forever. Refuse and leave it to its owner.
+  if (lease.store_ != this) {
+    return false;
+  }
+
+  // Our own lease is consumed either way: a rejected commit is final, and the caller must not retry into a
+  // conversation whose ancestor is gone.
+  auto pending = pending_.find(lease.id_);
+  const bool valid = pending != pending_.end() && !pending->second.invalidated;
+
+  if (pending != pending_.end()) {
+    pending_.erase(pending);
+  }
+
+  lease.store_ = nullptr;
+  lease.id_ = 0;
+
+  if (!valid) {
+    return false;
+  }
+
+  const std::string response_id = response.id;
+  StoreLocked(std::move(response));
+
+  // Admit under the same lock that published the metadata. A delete that arrives after this point sees the stored
+  // entry, so it removes the metadata and drops the cached session together; one that arrived earlier invalidated
+  // the lease and never reaches here. There is no ordering in between for a session to be resurrected in.
+  if (admission != nullptr) {
+    admission->Admit(response_id);
+  }
+
+  return true;
+}
+
+size_t ResponseStore::InFlightResponses() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return pending_.size();
+}
+
+void ResponseStore::ReleaseLease(uint64_t lease_id) noexcept {
+  std::lock_guard<std::mutex> lock(mutex_);
+  pending_.erase(lease_id);
 }
 
 std::optional<nlohmann::json> ResponseStore::Get(const std::string& response_id) {
@@ -137,18 +267,6 @@ std::optional<ResponseChainContext> ResponseStore::BuildChainContext(const std::
   return context;
 }
 
-bool ResponseStore::TouchChain(const std::string& response_id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  auto chain = WalkChainLocked(response_id);
-  // Touch oldest-first so the requested endpoint finishes as the most-recent entry.
-  for (auto hop = chain.rbegin(); hop != chain.rend(); ++hop) {
-    TouchLocked(*hop);
-  }
-
-  return !chain.empty();
-}
-
 bool ResponseStore::Delete(const std::string& response_id) {
   return !DeleteWithDependents(response_id).empty();
 }
@@ -176,6 +294,30 @@ std::vector<std::string> ResponseStore::DeleteWithDependents(const std::string& 
   if (!deleted_ids.empty() &&
       std::find(deleted_ids.begin(), deleted_ids.end(), response_id) == deleted_ids.end()) {
     deleted_ids.push_back(response_id);
+  }
+
+  if (deleted_ids.empty()) {
+    return deleted_ids;
+  }
+
+  // Requests already generating cannot be recalled, but their results can be refused: any conversation that contains
+  // a deleted response may no longer produce a stored or cached child.
+  const std::unordered_set<std::string> deleted(deleted_ids.begin(), deleted_ids.end());
+  for (auto& [lease_id, pending] : pending_) {
+    if (pending.invalidated) {
+      continue;
+    }
+
+    pending.invalidated = std::any_of(pending.ancestors.begin(), pending.ancestors.end(),
+                                      [&deleted](const std::string& id) { return deleted.count(id) != 0; });
+  }
+
+  // Drop live sessions inside this critical section. Doing it after the lock would leave a window in which a session
+  // is still checked out under an id whose metadata is already gone.
+  if (cache_ != nullptr) {
+    for (const auto& deleted_id : deleted_ids) {
+      cache_->Drop(deleted_id);
+    }
   }
 
   return deleted_ids;
@@ -330,6 +472,22 @@ ResponseChainHop ResponseStore::ToReplayHop(const Entry& entry) {
   }
 
   return replay;
+}
+
+std::unordered_set<std::string> ResponseStore::ChainIdsLocked(
+    const std::vector<std::list<Entry>::iterator>& chain) {
+  std::unordered_set<std::string> ids;
+  for (const auto& hop : chain) {
+    ids.insert(hop->id);
+  }
+
+  // The oldest retained hop carries the compacted prefix, so the ids of already-evicted hops are still reachable —
+  // deleting one of those must invalidate this conversation too.
+  for (auto node = chain.back()->replay_prefix.get(); node != nullptr; node = node->previous.get()) {
+    ids.insert(node->id);
+  }
+
+  return ids;
 }
 
 void ResponseStore::TouchLocked(std::list<Entry>::iterator it) {

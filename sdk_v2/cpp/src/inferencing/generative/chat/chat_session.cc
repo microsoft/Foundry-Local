@@ -497,7 +497,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   if (cached_generator_) {
     // Continuous decoding: append only the new messages to the existing generator.
     pre_turn_token_count = cached_generator_->TokenCount();
-    prompt_tokens = cached_generator_->AppendMessages(inputs, Model(), cached_tool_ctx_.tools_json);
+    cached_generator_->AppendMessages(inputs, Model(), cached_tool_ctx_.tools_json);
+    // Public usage describes the complete logical prompt, not only the suffix appended to the KV cache. Taking the
+    // count after AppendMessages also makes total - prompt exactly this turn's generated token count.
+    prompt_tokens = cached_generator_->TokenCount();
 
     // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
     UpdateToolContextForTurn(request, cached_tool_ctx_);
@@ -643,6 +646,12 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   // then drain the tool accumulator.
   emit_segments(splitter.Flush());
   flush_accumulator();
+
+  // Callback delivery is asynchronous. Drain it before the final cancellation check and commit decision so a callback
+  // that rejects the last queued item cannot arrive after this turn has already changed the transcript.
+  if (streaming_callback) {
+    streaming_callback->Drain();
+  }
 
   int total_tokens = cached_generator_->TokenCount();
 

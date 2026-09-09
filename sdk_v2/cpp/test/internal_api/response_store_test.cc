@@ -606,7 +606,9 @@ TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) 
   StoreHop(store, "resp_tip", "resp_root", json::array(), json::array());
   StoreHop(store, "resp_other", "", json::array(), json::array());
 
-  ASSERT_TRUE(store.TouchChain("resp_tip"));
+  // Opening a continuation refreshes the whole chain without materializing it — what a caller that continues from a
+  // live session relies on.
+  ASSERT_EQ(store.BeginResponse("resp_tip", "").status, ContinuationStatus::kOk);
   EXPECT_EQ(PageIds(store.List(3, "", "desc")),
             (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
 
@@ -956,7 +958,7 @@ TEST(ResponseStoreChainTest, NonArrayStoredInputItemsBecomeAnEmptyHopInput) {
   EXPECT_TRUE((*context)[0].output_items.empty());
 }
 
-TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
+TEST(ResponseStoreChainTest, OpeningAContinuationKeepsAnActiveConversationResident) {
   ResponseStore store(3);
 
   StoreHop(store, "resp_1", "", json::array({{{"type", "message"}, {"role", "user"}, {"content", "one"}}}),
@@ -965,7 +967,7 @@ TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
            json::array());
 
   // Unrelated traffic would otherwise evict the conversation's root before it is ever replayed.
-  EXPECT_TRUE(store.TouchChain("resp_2"));
+  EXPECT_EQ(store.BeginResponse("resp_2", "").status, ContinuationStatus::kOk);
   StoreHop(store, "other_1", "", json::array(), json::array());
 
   auto context = store.BuildChainContext("resp_2");
@@ -974,12 +976,12 @@ TEST(ResponseStoreChainTest, TouchChainKeepsAnActiveConversationResident) {
   EXPECT_EQ((*context)[0].input_items[0]["content"], "one");
 }
 
-TEST(ResponseStoreChainTest, TouchChainReportsABrokenChain) {
+TEST(ResponseStoreChainTest, OpeningAContinuationReportsABrokenChain) {
   ResponseStore store;
   StoreHop(store, "resp_2", "resp_1", json::array(), json::array());
 
-  EXPECT_FALSE(store.TouchChain("resp_2"));
-  EXPECT_FALSE(store.TouchChain("resp_missing"));
+  EXPECT_EQ(store.BeginResponse("resp_2", "").status, ContinuationStatus::kChainUnavailable);
+  EXPECT_EQ(store.BeginResponse("resp_missing", "").status, ContinuationStatus::kChainUnavailable);
 }
 
 TEST(ResponseStoreChainTest, NonStringRolesAndContentDoNotBreakReconstruction) {
