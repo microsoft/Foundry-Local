@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.microsoft.foundry</groupId>
+  <artifactId>foundry-local-java</artifactId>
+  <version>0.1.0-poc</version>
+  <name>Foundry Local Java ASR POC</name>
+  <description>Standalone in-process Java speech recognition binding to the Foundry Local C ABI.</description>
+  <licenses>
+    <license><name>MIT</name><url>https://opensource.org/license/mit</url></license>
+  </licenses>
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.build.outputTimestamp>2026-09-09T00:00:00Z</project.build.outputTimestamp>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>5.17.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.12.2</version><scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.3</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.2</version>
+        <configuration>
+          <archive><manifest>
+            <mainClass>com.microsoft.foundry.local.cli.AsrCli</mainClass>
+            <addClasspath>true</addClasspath><classpathPrefix>lib/</classpathPrefix>
+          </manifest></archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.8.1</version>
+        <executions><execution><id>runtime-libraries</id><phase>package</phase><goals><goal>copy-dependencies</goal></goals>
+          <configuration><includeScope>runtime</includeScope><outputDirectory>${project.build.directory}/lib</outputDirectory></configuration>
+        </execution></executions>
+      </plugin>
+    </plugins>
+    <resources>
+      <resource><directory>src/main/resources</directory></resource>
+      <resource><directory>../..</directory><includes><include>LICENSE</include></includes><targetPath>META-INF</targetPath></resource>
+      <resource><directory>.</directory><includes><include>THIRD_PARTY_NOTICES.md</include></includes><targetPath>META-INF</targetPath></resource>
+    </resources>
+  </build>
+</project>
