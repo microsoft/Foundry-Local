@@ -314,12 +314,23 @@ export abstract class Session {
   }
 }
 
-/** A tool definition exposed to {@link ChatSession.addToolDefinition}. */
+/**
+ * A tool definition exposed to {@link ChatSession.addToolDefinition}.
+ *
+ * A `function` tool (the default) takes JSON arguments conforming to `jsonSchema`, which is
+ * required. A `custom` tool takes a single free-form text payload: it must not carry a
+ * `jsonSchema`, the schema the model is prompted with is synthesized natively, and the `arguments`
+ * of a generated tool call carry the raw text the model produced.
+ */
 export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
-  readonly jsonSchema: string;
+  readonly jsonSchema?: string;
+  readonly kind?: ToolKind;
 }
+
+/** The kind of a {@link ToolDefinition}. Defaults to `"function"`. */
+export type ToolKind = "function" | "custom";
 
 export class ChatSession extends Session {
   /**
@@ -345,10 +356,21 @@ export class ChatSession extends Session {
   /**
    * Register a tool definition available to the model for the rest of the
    * session. Mirrors `foundry_local::ChatSession::AddToolDefinition`.
+   *
+   * Names are case-sensitive and must be unique within the session across kinds; re-registering a
+   * name throws until the existing definition is removed.
    */
   addToolDefinition(definition: ToolDefinition): this {
     this.#nativeChat.addToolDefinition(definition);
     return this;
+  }
+
+  /**
+   * Register a custom tool: one whose arguments are a single free-form text payload rather than a
+   * JSON object. Convenience for `addToolDefinition({ name, description, kind: "custom" })`.
+   */
+  addCustomToolDefinition(name: string, description: string): this {
+    return this.addToolDefinition({ name, description, kind: "custom" });
   }
 
   /**

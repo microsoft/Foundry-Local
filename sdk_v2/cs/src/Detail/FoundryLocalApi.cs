@@ -53,7 +53,9 @@ internal static class Api
             if (apiPtr == IntPtr.Zero)
             {
                 throw new InvalidOperationException(
-                    $"FoundryLocalGetApi returned null for version {NativeMethods.ApiVersion}.");
+                    "FoundryLocalGetApi returned null: the loaded native runtime does not implement Foundry Local "
+                    + $"C API version {NativeMethods.ApiVersion}, which this build of the SDK requires. Update the "
+                    + $"native Foundry Local runtime ({NativeMethods.LibraryName} and the libraries shipped with it).");
             }
 
             Root = Marshal.PtrToStructure<FlApi>(apiPtr);
@@ -737,8 +739,16 @@ public sealed class Session : IDisposable
         Ptr = ptr;
     }
 
-    /// <summary>Add a tool definition to the session. The session copies the data.</summary>
+    /// <summary>
+    /// Add a tool definition to the session. The session copies the data, so the marshalled buffers
+    /// are freed as soon as the call returns.
+    /// </summary>
     public Session AddToolDefinition(string name, string description, string jsonSchema)
+    {
+        return AddToolDefinition(name, description, jsonSchema, FlToolKind.Function);
+    }
+
+    public Session AddToolDefinition(string name, string description, string jsonSchema, FlToolKind kind)
     {
         var nameNative = Utf8.StringToCoTaskMem(name);
         var descNative = Utf8.StringToCoTaskMem(description);
@@ -751,6 +761,7 @@ public sealed class Session : IDisposable
                 Name = nameNative,
                 Description = descNative,
                 JsonSchema = schemaNative,
+                Kind = kind,
             };
             Api.CheckStatus(Api.Inference.SessionAddToolDefinition(Ptr, ref toolDef));
         }

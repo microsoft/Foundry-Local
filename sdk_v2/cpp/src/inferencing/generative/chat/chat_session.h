@@ -75,8 +75,11 @@ class ChatSession : public Session {
   /// success commits the turn to the transcript.
   void ProcessRequestImpl(const Request& request, Response& response) override;
 
-  /// Build tool calling context from request parameters and session tool definitions.
-  ToolCallContext BuildToolCallContext(const Request& request) const;
+  /// Build tool calling context from request parameters and a snapshot of the session's tool definitions.
+  ///
+  /// The snapshot is supplied by the caller rather than read here so that one turn resolves its replayed calls, its
+  /// prompt, and its produced calls against the same tool set.
+  ToolCallContext BuildToolCallContext(const Request& request, const std::vector<ToolDefinition>& definitions) const;
 
   /// Update per-turn fields (tool_choice, guidance) on an existing tool context.
   /// Called on the cached-generator path so each turn gets fresh per-request settings
