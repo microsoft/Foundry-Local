@@ -294,8 +294,8 @@ void OnnxChatEngine::Enqueue(std::function<void()> command,
 void OnnxChatEngine::WorkerLoop(std::promise<void> initialized) {
   try {
     engine_ = OgaEngine::Create(model_.GetOgaModel());
-    // A request can emit a token event and a terminal event in the same Engine step.
-    event_buffer_ = engine_->CreateEventBuffer(model_.GetGenAIConfig().EngineMaxBatchSize().value_or(1) * 2);
+    // Drain an ordinary full decode batch in one call. OGA retains speculative or fatal overflow for later runs.
+    event_buffer_ = engine_->CreateEventBuffer(model_.GetGenAIConfig().EngineMaxBatchSize().value_or(1));
     initialized.set_value();
   } catch (...) {
     event_buffer_.reset();
