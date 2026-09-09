@@ -187,27 +187,28 @@ GenAIConfig GenAIConfig::LoadFromFile(const std::string& path) {
     const auto& je = j["engine"];
     Engine engine;
 
-    if (je.contains("dynamic_batching") && !je["dynamic_batching"].is_null()) {
-      if (!je["dynamic_batching"].is_object()) {
-        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-                 "genai_config.json engine.dynamic_batching must be an object");
-      }
-
-      const auto& batching = je["dynamic_batching"];
-      Engine::DynamicBatching dynamic_batching;
-      dynamic_batching.max_batch_size = ParsePositiveSize(
-          batching, "engine.dynamic_batching", "max_batch_size", dynamic_batching.max_batch_size);
-      dynamic_batching.max_scheduled_tokens =
-          ParsePositiveSize(batching, "engine.dynamic_batching", "max_scheduled_tokens",
-                            dynamic_batching.max_scheduled_tokens);
-      engine.dynamic_batching = dynamic_batching;
-    }
-
     if (je.contains("static_batching") && !je["static_batching"].is_null()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
                "genai_config.json engine.static_batching is not supported");
     }
 
+    if (!je.contains("dynamic_batching")) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+               "genai_config.json engine must contain dynamic_batching");
+    }
+    if (!je["dynamic_batching"].is_object()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+               "genai_config.json engine.dynamic_batching must be an object");
+    }
+
+    const auto& batching = je["dynamic_batching"];
+    Engine::DynamicBatching dynamic_batching;
+    dynamic_batching.max_batch_size = ParsePositiveSize(
+        batching, "engine.dynamic_batching", "max_batch_size", dynamic_batching.max_batch_size);
+    dynamic_batching.max_scheduled_tokens =
+        ParsePositiveSize(batching, "engine.dynamic_batching", "max_scheduled_tokens",
+                          dynamic_batching.max_scheduled_tokens);
+    engine.dynamic_batching = dynamic_batching;
     config.engine = std::move(engine);
   }
 

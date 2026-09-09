@@ -210,19 +210,25 @@ TEST_F(GenAIConfigTest, LoadMissingOptionalFields) {
   EXPECT_FALSE(config.model->decoder.has_value());
 }
 
-TEST_F(GenAIConfigTest, SelectsGeneratorWhenEngineBatchingIsAbsent) {
-  auto path = WriteFile("genai_config.json", R"({"engine": {}})");
-
-  auto config = GenAIConfig::LoadFromFile(path);
-
-  EXPECT_EQ(config.GetChatBackendKind(), ChatBackendKind::kGenerator);
-  EXPECT_FALSE(config.EngineMaxBatchSize().has_value());
+TEST_F(GenAIConfigTest, RejectsEngineWithoutDynamicBatching) {
+  for (const auto& invalid_engine : {R"({})", R"({"dynamic-batching": {}})"}) {
+    auto path = WriteFile("genai_config.json", std::string(R"({"engine": )") + invalid_engine + "}");
+    ExpectConfigError(path, "genai_config.json engine must contain dynamic_batching");
+  }
 }
 
 TEST_F(GenAIConfigTest, RejectsNonObjectEngineConfiguration) {
   for (const auto& invalid_engine : {"null", R"("dynamic_batching")", "[]"}) {
     auto path = WriteFile("genai_config.json", std::string(R"({"engine": )") + invalid_engine + "}");
     ExpectConfigError(path, "genai_config.json engine must be an object");
+  }
+}
+
+TEST_F(GenAIConfigTest, RejectsNonObjectDynamicBatchingConfiguration) {
+  for (const auto& invalid_batching : {"null", R"("enabled")", "[]"}) {
+    auto path = WriteFile("genai_config.json",
+                          std::string(R"({"engine": {"dynamic_batching": )") + invalid_batching + "}}");
+    ExpectConfigError(path, "genai_config.json engine.dynamic_batching must be an object");
   }
 }
 
