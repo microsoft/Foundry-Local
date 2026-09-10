@@ -4,6 +4,7 @@
 
 #include "exception.h"
 #include "inferencing/generative/chat/chat_template.h"
+#include "inferencing/generative/chat/onnx_chat_generator.h"
 #include "inferencing/generative/genai_model_instance.h"
 
 #include <ort_genai.h>
@@ -29,6 +30,14 @@ std::optional<flFinishReason> MapFinishReason(OgaFinishReason reason) {
     default:
       return std::nullopt;
   }
+}
+
+bool DetectPromptOpensReasoning(const std::string& prompt,
+                                const OgaSequences& sequences,
+                                const ToolCallContext& tool_ctx,
+                                GenAIModelInstance& model) {
+  const std::span<const int32_t> token_ids(sequences.SequenceData(0), sequences.SequenceCount(0));
+  return PromptOpensReasoning(token_ids, ResolveReasoningMarkers(tool_ctx, model), prompt);
 }
 
 }  // namespace
@@ -119,8 +128,8 @@ void OnnxEngineChatStream::Cancel() {
   engine_.Cancel(conversation_);
 }
 
-int OnnxEngineChatStream::AppendMessages(const std::vector<MessageItem>& new_messages,
-                                         const std::vector<MessageItem>& full_messages,
+int OnnxEngineChatStream::AppendMessages(const std::vector<TranscriptMessage>& new_messages,
+                                         const std::vector<TranscriptMessage>& full_messages,
                                          GenAIModelInstance& model,
                                          const ToolCallContext& tool_ctx,
                                          const SearchOptions& options) {
@@ -164,6 +173,7 @@ int OnnxEngineChatStream::AppendMessages(const std::vector<MessageItem>& new_mes
   ResetTurnDecoder();
 
   prompt_token_count_ = submitted_tokens;
+  prompt_opens_reasoning_ = DetectPromptOpensReasoning(prompt, *sequences, tool_ctx, model);
   cancelled_ = false;
   return submitted_tokens;
 }
@@ -185,7 +195,7 @@ std::optional<ChatTurnUsage> OnnxEngineChatStream::GetTurnUsage() const {
 }
 
 std::unique_ptr<OnnxEngineChatStream> OnnxEngineChatStream::Create(
-    const std::vector<MessageItem>& messages,
+    const std::vector<TranscriptMessage>& messages,
     const SearchOptions& options,
     GenAIModelInstance& model,
     const ToolCallContext& tool_ctx) {
@@ -208,9 +218,11 @@ std::unique_ptr<OnnxEngineChatStream> OnnxEngineChatStream::Create(
     engine->BeginTurn(conversation, std::span<const int32_t>(data, static_cast<size_t>(prompt_token_count)), options,
                       tool_ctx);
 
-    return std::unique_ptr<OnnxEngineChatStream>(
+    auto result = std::unique_ptr<OnnxEngineChatStream>(
         new OnnxEngineChatStream(*engine, std::move(conversation), std::move(stream), model,
                                  prompt_token_count));
+    result->prompt_opens_reasoning_ = DetectPromptOpensReasoning(prompt, *sequences, tool_ctx, model);
+    return result;
   } catch (...) {
     try {
       engine->Close(conversation);

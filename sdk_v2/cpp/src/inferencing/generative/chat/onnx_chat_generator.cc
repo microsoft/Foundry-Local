@@ -203,15 +203,17 @@ void OnnxChatGenerator::Cancel() {
 // ---------------------------------------------------------------------------
 
 int OnnxChatGenerator::AppendMessages(const std::vector<TranscriptMessage>& new_messages,
+                                      const std::vector<TranscriptMessage>& /*full_messages*/,
                                       GenAIModelInstance& model,
-                                      const std::string& tools_json) {
+                                      const ToolCallContext& tool_ctx,
+                                      const SearchOptions& /*options*/) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
   }
 
   // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
   // produces the correct continuation tokens (e.g. <|im_end|>\n<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n)
-  std::string prompt = BuildChatPrompt(new_messages, model, tools_json);
+  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx.tools_json);
   auto sequences = EncodePrompt(prompt, model);
   int new_token_count = static_cast<int>(sequences->SequenceCount(0));
 
@@ -418,51 +420,11 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::stri
 
   // 3. Apply search options (temperature, top_p, max_length, etc.) and validate token budget.
   //    Media inputs use a larger default because preprocessing expands them into tokens.
-  int default_max_output = media_branch ? 3072 : 2048;
   ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, model.EP(),
-                     use_full_context, default_max_output);
+                     use_full_context, GetDefaultMaxOutputTokens(media_branch));
 
-  // 4. Compute guidance for constrained decoding.
-  // Priority: user-specified guidance (from response_format) > auto-generated LARK grammar.
-  // Matches C# GetGuidance() — always compute, then guard application.
-  std::string guidance_type;
-  std::string guidance_data;
-
-  if (!tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty()) {
-    // User specified guidance via response_format
-    guidance_type = tool_ctx.guidance_type;
-    guidance_data = tool_ctx.guidance_data;
-  } else {
-    // Auto-generate LARK grammar from tool definitions and reasoning state
-    std::string json_schema;
-    if (tool_ctx.HasTools()) {
-      json_schema = BuildToolJsonSchema(tool_ctx);
-    }
-
-    guidance_data = BuildLarkGrammar(tool_ctx, json_schema);
-    if (!guidance_data.empty()) {
-      guidance_type = "lark_grammar";
-    }
-  }
-
-  // Guard: apply guidance based on its source.
-  // User-specified guidance (via response_format) is always applied — the user explicitly requested it.
-  // Auto-generated tool grammar is only applied for tool-call-only mode (tool output requested, no text output).
-  // Text-only reasoning (cot_text_only) cannot use auto-generated grammar because a completed grammar signals EOS
-  // to the ORT GenAI generator — making IsDone() return true immediately on the next turn, breaking multi-turn
-  // continuous decoding. For tool-call-only mode the generator is typically invalidated after a successful call
-  // anyway, so this is acceptable.
-  bool user_specified_guidance = !tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty();
-  bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
-
-  if (!guidance_type.empty() && !guidance_data.empty() && (user_specified_guidance || tool_call_only)) {
-    try {
-      gen_params->SetGuidance(guidance_type.c_str(), guidance_data.c_str());
-    } catch (const std::runtime_error& e) {
-      // SetGuidance may not be supported by all models; continue without guidance
-      (void)e;
-    }
-  }
+  // 4. Apply constrained decoding for tool-only output or an explicit response format.
+  ApplyGuidanceOptions(tool_ctx, *gen_params);
 
   // 5. Create the Generator and feed it the prompt.
   //    Text path: append the encoded token sequences.

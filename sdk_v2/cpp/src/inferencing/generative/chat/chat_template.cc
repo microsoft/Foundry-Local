@@ -11,7 +11,23 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace fl {
+
+namespace chat_internal {
+
+std::optional<size_t> FindUnmatchedPromptSuffix(std::span<const int32_t> resident_tokens,
+                                                std::span<const int32_t> full_prompt) noexcept {
+  if (resident_tokens.size() > full_prompt.size() ||
+      !std::equal(resident_tokens.begin(), resident_tokens.end(), full_prompt.begin())) {
+    return std::nullopt;
+  }
+
+  return resident_tokens.size();
+}
+
+}  // namespace chat_internal
 
 namespace {
 

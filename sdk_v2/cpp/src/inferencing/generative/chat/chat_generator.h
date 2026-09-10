@@ -12,7 +12,7 @@
 namespace fl {
 
 class GenAIModelInstance;
-struct MessageItem;
+struct TranscriptMessage;
 struct SearchOptions;
 struct ToolCallContext;
 
@@ -64,11 +64,14 @@ class ChatGenerator {
   ///
   /// full_messages contains the complete structured transcript through new_messages. Backends that reconcile
   /// retained tokens against a freshly rendered prompt use it to decide whether the retained state is reusable.
-  virtual int AppendMessages(const std::vector<MessageItem>& new_messages,
-                             const std::vector<MessageItem>& full_messages,
+  virtual int AppendMessages(const std::vector<TranscriptMessage>& new_messages,
+                             const std::vector<TranscriptMessage>& full_messages,
                              GenAIModelInstance& model,
                              const ToolCallContext& tool_ctx,
                              const SearchOptions& options) = 0;
+
+  /// Whether the prompt for the active turn ends inside a reasoning block opened by the chat template.
+  virtual bool PromptOpensReasoning() const { return false; }
 
   /// Returns whether this backend can rewind retained model state directly.
   virtual bool CanRewind() const { return false; }

@@ -5,6 +5,7 @@
 #include "inferencing/generative/chat/chat_transcript.h"
 #include "inferencing/generative/chat/reasoning_stream_splitter.h"
 #include "inferencing/generative/chat/search_options.h"
+#include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/generative/toolcalling/tool_call_utils.h"
 #include "inferencing/session/session.h"
@@ -12,14 +13,93 @@
 #include "logger.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
 namespace fl {
 
 class GenAIModelInstance;
-class OnnxChatGenerator;
+class ChatGenerator;
+
+namespace chat_session_internal {
+
+template <typename SegmentProcessor>
+bool PushDecodedFragment(const std::string& fragment,
+                         std::optional<int32_t> token_id,
+                         StopStringFilter* stop_filter,
+                         ReasoningStreamSplitter& splitter,
+                         SegmentProcessor&& process_segments) {
+  if (stop_filter == nullptr) {
+    if (token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, fragment));
+    } else if (!fragment.empty()) {
+      process_segments(splitter.Push(fragment));
+    }
+
+    return false;
+  }
+
+  if (stop_filter->matched()) {
+    return true;
+  }
+
+  if (fragment.empty()) {
+    if (token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, fragment));
+    }
+
+    return false;
+  }
+
+  auto filtered = stop_filter->PushWithTokenAlignment(fragment);
+  if (!filtered.text.empty()) {
+    if (filtered.token_aligned && token_id.has_value()) {
+      process_segments(splitter.Push(*token_id, std::move(filtered.text)));
+    } else {
+      process_segments(splitter.Push(filtered.text));
+    }
+  }
+
+  return stop_filter->matched();
+}
+
+template <typename SegmentProcessor>
+void FlushDecodedStream(StopStringFilter* stop_filter,
+                        ReasoningStreamSplitter& splitter,
+                        SegmentProcessor&& process_segments) {
+  if (stop_filter != nullptr && !stop_filter->matched()) {
+    auto tail = stop_filter->Flush();
+    if (!tail.empty()) {
+      process_segments(splitter.Push(tail));
+    }
+  }
+
+  process_segments(splitter.Flush());
+}
+
+flFinishReason ResolveGeneratedFinishReason(bool canceled,
+                                            bool has_tool_calls,
+                                            bool stop_sequence_matched,
+                                            bool host_output_limit_reached,
+                                            std::optional<flFinishReason> backend_finish_reason,
+                                            int completion_tokens,
+                                            std::optional<int> max_output_tokens);
+bool DidHostOutputLimitTruncate(int output_tokens, int max_output_tokens, bool backend_finished);
+bool ShouldEnforceHostOutputLimit(ChatBackendKind backend_kind, bool media_turn);
+bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
+                                                bool guidance_requirement_changed,
+                                                bool guidance_payload_changed,
+                                                bool retained_generation_settings_changed);
+bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
+                                                                bool grammar_was_active,
+                                                                bool reasoning_was_active,
+                                                                bool stop_sequence_matched,
+                                                                bool host_output_limit_reached);
+
+}  // namespace chat_session_internal
 
 using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, ParsedToolCall>;
 
@@ -27,10 +107,9 @@ using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, Pars
 /// Designed for multi-turn conversations where visible text, reasoning, and tool calls accumulate in event order
 /// and are sent with each generation request (for use with the OpenAI Responses API pattern).
 ///
-/// Generator caching: after the first non-JSON request, the ORT GenAI generator is cached.
-/// Subsequent turns append only new messages to the cached generator, reusing the KV cache. Turns that carry tool
-/// calls or tool results rebuild from the full committed transcript instead, because a tool-only suffix is not
-/// something chat templates can render on its own.
+/// Retained inference state: compatible turns reuse backend state. Engine backends render the complete authoritative
+/// transcript and reuse resident tokens only when they are an exact prefix; classic Generator backends rebuild for
+/// transcript shapes that cannot be appended independently.
 /// OpenAI chat completions JSON requests (TextItem with text_type == OPENAI_JSON) always create a fresh
 /// generator and never use the cache.
 class ChatSession : public Session {
@@ -78,16 +157,17 @@ class ChatSession : public Session {
   /// Build tool calling context from request parameters and session tool definitions.
   ToolCallContext BuildToolCallContext(const Request& request) const;
 
-  /// Update per-turn fields (tool_choice, guidance) on an existing tool context.
-  /// Called on the cached-generator path so each turn gets fresh per-request settings
-  /// while keeping session-level tool definitions and marker tokens stable.
-  void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
-
   /// Build final response items from the typed segments and tool calls produced during generation.
   void ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,
-                              const SearchOptions& effective_options, bool canceled,
-                              Response& response, int prompt_tokens, int total_tokens,
-                              int reasoning_tokens);
+                              const SearchOptions& effective_options,
+                              bool canceled,
+                              bool stop_sequence_matched,
+                              bool host_output_limit_reached,
+                              Response& response,
+                              int prompt_tokens,
+                              int total_tokens,
+                              int reasoning_tokens,
+                              std::optional<flFinishReason> backend_finish_reason);
 
   /// Process a request whose first item is a TextItem tagged OPENAI_JSON containing an OpenAI chat completions
   /// request. Parses the JSON, converts to internal items, runs generation, and produces an OPENAI_JSON-tagged
@@ -114,11 +194,14 @@ class ChatSession : public Session {
 
   // Cached generator for continuous decoding (non-JSON path only).
   // Null until first non-JSON ProcessRequestImpl call.
-  std::unique_ptr<OnnxChatGenerator> cached_generator_;
+  std::unique_ptr<ChatGenerator> cached_generator_;
 
   // Tool context used when creating the cached generator.
   // Reused for subsequent turns to maintain tool definition consistency.
   ToolCallContext cached_tool_ctx_;
+
+  // Settings baked into classic Generator state. Dynamic Engine applies supported settings per turn.
+  SearchOptions cached_search_options_;
 
   // The system prefix baked into cached_generator_'s prompt (the kSystemPromptOption value of the turn that built
   // it). Deliberately not part of the transcript: it is request state, so it can never accumulate a copy per turn

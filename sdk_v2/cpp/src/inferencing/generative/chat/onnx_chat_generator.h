@@ -57,17 +57,20 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Used for continuous decoding — only the new turn's messages are encoded and appended.
   /// Returns the number of new prompt tokens appended.
   int AppendMessages(const std::vector<TranscriptMessage>& new_messages,
+                     const std::vector<TranscriptMessage>& full_messages,
                      GenAIModelInstance& model,
-                     const std::string& tools_json);
+                     const ToolCallContext& tool_ctx,
+                     const SearchOptions& options) override;
 
   /// Rewind the generator to a previous token position.
   /// Used for error recovery — restores the KV cache to the state before the last turn.
-  void RewindTo(int token_count);
+  bool CanRewind() const override { return true; }
+  void RewindTo(int token_count) override;
 
   /// True when the most recent prompt fed to the generator ends inside an open reasoning block, because the model's
   /// chat template emitted the opening marker itself. Callers seed their reasoning splitter with this so generation
   /// that only ever emits the closing marker is still classified as reasoning.
-  bool PromptOpensReasoning() const { return prompt_opens_reasoning_; }
+  bool PromptOpensReasoning() const override { return prompt_opens_reasoning_; }
 
   /// Factory: create a text-only chat generator.
   ///
