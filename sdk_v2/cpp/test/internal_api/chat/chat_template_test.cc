@@ -188,6 +188,12 @@ TEST_F(ChatTemplateKwargsTest, TypedKwargsChangePromptAndOmissionClearsPriorStat
 #else
 TEST_F(ChatTemplateTest, TemplateKwargsRequireSupportedGenAI) {
   std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "Hello!"}};
+  ToolCallContext empty_context;
+  empty_context.template_kwargs_json = "{}";
+
+  EXPECT_EQ(BuildChatPrompt(messages, GetModel(), empty_context),
+            BuildChatPrompt(messages, GetModel()))
+      << "An empty kwargs object should remain a no-op with the stable GenAI dependency";
 
   try {
     (void)BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":false})");

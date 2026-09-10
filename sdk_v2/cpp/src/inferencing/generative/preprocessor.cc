@@ -6,6 +6,8 @@
 
 #include <ort_genai.h>
 
+#include <nlohmann/json.hpp>
+
 namespace fl {
 
 std::unique_ptr<Preprocessor> Preprocessor::Create(OgaModel& model, bool create_multimodal_processor) {
@@ -79,8 +81,16 @@ std::string Preprocessor::ApplyChatTemplateWithOptions(const char* messages_json
   tokenizer_->UpdateOptions(options.Keys().data(), options.Values().data(), options.size());
 #else
   if (template_kwargs_json && *template_kwargs_json) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-             "chat_template_kwargs requires a newer ONNX Runtime GenAI package");
+    auto template_kwargs = nlohmann::json::parse(
+        template_kwargs_json, nullptr, /*allow_exceptions=*/false);
+    if (!template_kwargs.is_object()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               "chat_template_kwargs must be a valid JSON object");
+    }
+    if (!template_kwargs.empty()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+               "chat_template_kwargs requires a newer ONNX Runtime GenAI package");
+    }
   }
 #endif
   OgaString result = tokenizer_->ApplyChatTemplate(
