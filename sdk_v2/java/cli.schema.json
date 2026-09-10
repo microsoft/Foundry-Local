@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Foundry Local Java ASR POC JSON Lines event v1",
+  "description": "One stdout JSON object per line. Human-readable --help and the separate Windows loader diagnostic are outside this schema.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "version", "apiVersion", "nativeTarget", "javaVersion", "javaVendor", "pid"],
+      "properties": {
+        "event": {"const": "runtime"},
+        "version": {"type": "string"},
+        "apiVersion": {"const": 1},
+        "nativeTarget": {"enum": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-arm64"]},
+        "javaVersion": {"type": "string"},
+        "javaVendor": {"type": "string"},
+        "pid": {"type": "integer", "minimum": 1}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "model"],
+      "dependentRequired": {"cached": ["loaded"], "loaded": ["cached"]},
+      "properties": {
+        "event": {"const": "model"},
+        "model": {"$ref": "#/$defs/modelInfo"},
+        "cached": {"type": "boolean"},
+        "loaded": {"type": "boolean"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "percent"],
+      "properties": {
+        "event": {"const": "download"},
+        "percent": {"type": "number", "minimum": 0, "maximum": 100}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "modelId", "cached", "elapsedMillis"],
+      "properties": {
+        "event": {"const": "prepared"},
+        "modelId": {"type": "string"},
+        "cached": {"type": "boolean"},
+        "elapsedMillis": {"$ref": "#/$defs/elapsed"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "elapsedMillis"],
+      "properties": {
+        "event": {"const": "loaded"},
+        "elapsedMillis": {"$ref": "#/$defs/elapsed"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "speech", "elapsedMillis"],
+      "properties": {
+        "event": {"const": "speech"},
+        "speech": {"$ref": "#/$defs/speechEvent"},
+        "elapsedMillis": {"$ref": "#/$defs/elapsed"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "modelId", "result", "mode", "audioSeconds", "timing", "chunkMillis", "processChildren"],
+      "properties": {
+        "event": {"const": "result"},
+        "modelId": {"type": "string"},
+        "result": {"$ref": "#/$defs/transcriptionResult"},
+        "mode": {"enum": ["transcribe", "stream"]},
+        "audioSeconds": {"type": "number", "exclusiveMinimum": 0},
+        "timing": {"$ref": "#/$defs/transcriptionTiming"},
+        "chunkMillis": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "processChildren": {"type": "integer", "minimum": 0}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "elapsedMillis"],
+      "properties": {
+        "event": {"const": "requestClosed"},
+        "elapsedMillis": {"$ref": "#/$defs/elapsed"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event"],
+      "properties": {"event": {"enum": ["modelUnloaded", "managerClosed"]}}
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event", "errorType", "code", "message"],
+      "properties": {
+        "event": {"const": "error"},
+        "errorType": {"type": "string"},
+        "code": {"type": "integer"},
+        "message": {"type": "string"}
+      }
+    }
+  ],
+  "$defs": {
+    "elapsed": {"type": "integer", "minimum": 0},
+    "optionalNativeTime": {"type": ["integer", "null"]},
+    "optionalMonotonicTime": {"type": ["number", "null"], "minimum": 0},
+    "modelInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "alias", "name", "version", "uri", "executionProvider", "task", "license", "licenseDescription"],
+      "properties": {
+        "id": {"type": "string"},
+        "alias": {"type": "string"},
+        "name": {"type": "string"},
+        "version": {"type": "integer"},
+        "uri": {"type": "string"},
+        "executionProvider": {"type": "string"},
+        "task": {"type": "string"},
+        "license": {"type": "string"},
+        "licenseDescription": {"type": "string"}
+      }
+    },
+    "speechEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text", "startTimeMs", "endTimeMs", "utteranceStart"],
+      "properties": {
+        "kind": {"enum": ["TOKEN", "PARTIAL", "FINAL"]},
+        "text": {"type": "string"},
+        "startTimeMs": {"$ref": "#/$defs/optionalNativeTime"},
+        "endTimeMs": {"$ref": "#/$defs/optionalNativeTime"},
+        "utteranceStart": {"type": "boolean"}
+      }
+    },
+    "transcriptionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "language", "durationMs", "cancelled", "nativeFinishReason", "elapsedMillis"],
+      "properties": {
+        "text": {"type": "string"},
+        "language": {"type": "string"},
+        "durationMs": {"$ref": "#/$defs/optionalNativeTime"},
+        "cancelled": {"type": "boolean"},
+        "nativeFinishReason": {"type": "integer"},
+        "elapsedMillis": {"$ref": "#/$defs/elapsed"}
+      }
+    },
+    "transcriptionTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["firstInputMillis", "firstNonemptyMillis", "inputClosedMillis", "finalizedMillis", "cancellationRequestedMillis", "submittedBytes"],
+      "properties": {
+        "firstInputMillis": {"$ref": "#/$defs/optionalMonotonicTime"},
+        "firstNonemptyMillis": {"$ref": "#/$defs/optionalMonotonicTime"},
+        "inputClosedMillis": {"$ref": "#/$defs/optionalMonotonicTime"},
+        "finalizedMillis": {"$ref": "#/$defs/optionalMonotonicTime"},
+        "cancellationRequestedMillis": {"$ref": "#/$defs/optionalMonotonicTime"},
+        "submittedBytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

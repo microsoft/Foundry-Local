@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "nativeHashes": "native-lock.properties",
+  "targets": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-arm64"],
+  "header": {
+    "package": "runtime",
+    "entry": "build/native/include/foundry_local/foundry_local_c.h",
+    "sha256": "f220cf707a309b805b3d3a6b2084208927cf17151e68da5d991b9af16a44ae6f",
+    "matchingPublicRevision": "450e857c5695085beafe92e701c6f3309e181675",
+    "exactNativeBuildSourceCommit": null
+  },
+  "aliases": {
+    "libonnxruntime.so.1": "libonnxruntime.so",
+    "libonnxruntime.1.dylib": "libonnxruntime.dylib"
+  },
+  "packages": [
+    {
+      "key": "runtime",
+      "id": "Microsoft.AI.Foundry.Local.Runtime",
+      "version": "2.0.1",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ai.foundry.local.runtime/2.0.1/microsoft.ai.foundry.local.runtime.2.0.1.nupkg",
+      "sha256": "f509b4509f3fd452bfe9dd0721feabc407689b9d105da71c63e5a2f87bd9f03c",
+      "license": "MIT",
+      "notices": ["LICENSE.txt", "ThirdPartyNotices.txt"]
+    },
+    {
+      "key": "ort",
+      "id": "Microsoft.ML.OnnxRuntime",
+      "version": "1.28.0",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.28.0/microsoft.ml.onnxruntime.1.28.0.nupkg",
+      "sha256": "769d1d3ea8ab6cd69f737c9dd4d4462aa4ad0ccfa106eaf506efc40d7bead5db",
+      "license": "MIT",
+      "notices": ["LICENSE", "ThirdPartyNotices.txt"]
+    },
+    {
+      "key": "genai",
+      "id": "Microsoft.ML.OnnxRuntimeGenAI.Foundry",
+      "version": "0.15.2",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntimegenai.foundry/0.15.2/microsoft.ml.onnxruntimegenai.foundry.0.15.2.nupkg",
+      "sha256": "b37cc5163008b817fd83ce601d598d1b5305103e40cd76f25e35ae7c45ee7229",
+      "license": "MIT",
+      "notices": ["LICENSE", "ThirdPartyNotices.txt"]
+    }
+  ]
+}

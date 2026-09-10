@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed Foundry Java ASR external target inventories v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "baseLock", "modelId", "baseManifestSha256", "targets"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "baseLock": {"const": "model-lock.json"},
+    "modelId": {"const": "nemotron-3.5-asr-streaming-0.6b-generic-cpu:3"},
+    "baseManifestSha256": {"$ref": "#/$defs/sha256"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["win-x64", "win-arm64", "linux-x64", "linux-arm64", "osx-arm64"],
+      "properties": {
+        "win-x64": {"$ref": "#/$defs/inventory"},
+        "win-arm64": {"$ref": "#/$defs/inventory"},
+        "linux-x64": {"$ref": "#/$defs/inventory"},
+        "linux-arm64": {"$ref": "#/$defs/inventory"},
+        "osx-arm64": {"$ref": "#/$defs/inventory"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "unobserved"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "generatedMarker", "installedBytes", "manifestSha256", "evidence"],
+          "properties": {
+            "status": {"const": "observed"},
+            "generatedMarker": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "bytes", "sha256"],
+              "properties": {
+                "name": {"const": "inference_model.json"},
+                "bytes": {"type": "integer", "minimum": 1},
+                "sha256": {"$ref": "#/$defs/sha256"}
+              }
+            },
+            "installedBytes": {"type": "integer", "minimum": 1},
+            "manifestSha256": {"$ref": "#/$defs/sha256"},
+            "evidence": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "runUrl", "executionSha"],
+              "dependentRequired": {
+                "artifactUrl": ["failureJsonBytes", "failureJsonSha256"],
+                "failureJsonBytes": ["artifactUrl", "failureJsonSha256"],
+                "failureJsonSha256": ["artifactUrl", "failureJsonBytes"]
+              },
+              "properties": {
+                "kind": {"enum": ["complete-inventory-only", "complete-inventory-and-asr"]},
+                "runUrl": {"type": "string", "pattern": "^https://github\\.com/jiec-msft/foundry-local/actions/runs/[0-9]+$"},
+                "executionSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                "artifactUrl": {"type": "string", "pattern": "^https://github\\.com/jiec-msft/foundry-local/actions/runs/[0-9]+/artifacts/[0-9]+$"},
+                "failureJsonBytes": {"type": "integer", "minimum": 1},
+                "failureJsonSha256": {"$ref": "#/$defs/sha256"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

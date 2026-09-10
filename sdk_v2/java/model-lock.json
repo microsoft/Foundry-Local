@@ -1,0 +1,28 @@
+{
+  "id": "nemotron-3.5-asr-streaming-0.6b-generic-cpu:3",
+  "version": 3,
+  "executionProvider": "CPUExecutionProvider",
+  "sourceUri": "azureml://registries/azureml/models/nemotron-3.5-asr-streaming-0.6b-generic-cpu/versions/3",
+  "purpose": "Observed public model provenance only; no model redistribution or inferred network byte totals",
+  "installedBytes": 793344452,
+  "manifestSha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
+  "manifestHashMethod": "SHA256 of UTF-8 ordinal filename TAB decimal size TAB lowercase SHA256 LF, sorted by filename",
+  "files": [
+    {"name":"LICENSE","bytes":1082,"sha256":"a6f5b307e3ff1acc20fa2fca4ff20fa19c2e2e605fa1f2993e434683803eb61f"},
+    {"name":"NOTICES","bytes":370,"sha256":"d0c99253ea5ea9f98a8b8259d01de047811287ae53fdca59536eaf11a76a56ea"},
+    {"name":"audio_processor_config.json","bytes":413,"sha256":"ab28d41eb87ce3922006edeb9c3fad4d5ce451f9a56a12d84f470f02a5ec157b"},
+    {"name":"decoder.onnx","bytes":4696,"sha256":"6a9f608dcbab71ebd81ffa4c198e82a5b6bb10f1c1830a94c752c5f543454df3"},
+    {"name":"decoder.onnx.data","bytes":59785216,"sha256":"e5fd55cbeeb268f9d383e2ee72735b9fbbb13aea4bc7cd38cb73b8e16f1366c7"},
+    {"name":"encoder.onnx","bytes":2677548,"sha256":"0b05217594ec0bda442e43a90a298ac2471a3bdcea9b169de34214e61a730e17"},
+    {"name":"encoder.onnx.data","bytes":690089984,"sha256":"2f27295855aeb99ab1f8cd2254418d9ad7a087ea8dbe85f5596b4d887ea7d630"},
+    {"name":"genai_config.json","bytes":2142,"sha256":"d114900e0bc8ecf3474d8dd566a1b75c3f1e8771eb5f490fce97055fa2e080d8"},
+    {"name":"inference_model.json","bytes":90,"sha256":"881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef"},
+    {"name":"joint.onnx","bytes":2136,"sha256":"e2c7d2fa40a243bf82eaca36c15698c52129de9361d2875d7f223f67fcd9482d"},
+    {"name":"joint.onnx.data","bytes":37830656,"sha256":"2e0fb1c060f3777a1a76e78d5589dd54f01505a06dffbd2588e315508b402c12"},
+    {"name":"model_config.json","bytes":365,"sha256":"f41f943eeb1310a89dd58cf3e11e654a8ae1a788fceeb6cd1eacce3a6d081965"},
+    {"name":"silero_vad.onnx","bytes":2243022,"sha256":"a4a068cd6cf1ea8355b84327595838ca748ec29a25bc91fc82e6c299ccdc5808"},
+    {"name":"tokenizer.json","bytes":642525,"sha256":"24e1e8335c8396884a86f06880271376ae46a29381cfc35c82c6295d407acec7"},
+    {"name":"tokenizer_config.json","bytes":183,"sha256":"ea4b35353f468fea11f436f837d9621a29b4ba9d1c73c1ed0aa5743f5a53919e"},
+    {"name":"vocab.txt","bytes":64024,"sha256":"ca88922ac5a92c911b79985b69634d7a4c2ef604d61b71bbe2982210dd77cd43"}
+  ]
+}

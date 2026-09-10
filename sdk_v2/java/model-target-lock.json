@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "baseLock": "model-lock.json",
+  "modelId": "nemotron-3.5-asr-streaming-0.6b-generic-cpu:3",
+  "baseManifestSha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
+  "targets": {
+    "win-x64": {
+      "status": "observed",
+      "generatedMarker": {"name":"inference_model.json","bytes":90,"sha256":"881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef"},
+      "installedBytes": 793344452,
+      "manifestSha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
+      "evidence": {
+        "kind": "complete-inventory-and-asr",
+        "runUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34396100361",
+        "executionSha": "b14d37fdc848777b1ff744a5d960e3940c3d3aae"
+      }
+    },
+    "win-arm64": {
+      "status": "observed",
+      "generatedMarker": {"name":"inference_model.json","bytes":90,"sha256":"881e9c5b34349dabe826cf88857835d15623c1a92a311d002812c399fe1128ef"},
+      "installedBytes": 793344452,
+      "manifestSha256": "483ce0b37c44b952a369de4257161df7ca42c8621109f20222ad1a9126f55001",
+      "evidence": {
+        "kind": "complete-inventory-and-asr",
+        "runUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34396100361",
+        "executionSha": "b14d37fdc848777b1ff744a5d960e3940c3d3aae"
+      }
+    },
+    "linux-x64": {
+      "status": "observed",
+      "generatedMarker": {"name":"inference_model.json","bytes":87,"sha256":"9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb"},
+      "installedBytes": 793344449,
+      "manifestSha256": "8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a",
+      "evidence": {
+        "kind": "complete-inventory-only",
+        "runUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34398826339",
+        "executionSha": "e7fa302b54fe410d762bd47965fcb7e39d4ff1b6",
+        "artifactUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34398826339/artifacts/10122627320",
+        "failureJsonBytes": 6034,
+        "failureJsonSha256": "4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45"
+      }
+    },
+    "linux-arm64": {
+      "status": "observed",
+      "generatedMarker": {"name":"inference_model.json","bytes":87,"sha256":"9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb"},
+      "installedBytes": 793344449,
+      "manifestSha256": "8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a",
+      "evidence": {
+        "kind": "complete-inventory-only",
+        "runUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34401279833",
+        "executionSha": "b08a704a824fdfaeef33ccd7e670b90d3c404960",
+        "artifactUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34401279833/artifacts/10123587055",
+        "failureJsonBytes": 6034,
+        "failureJsonSha256": "4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45"
+      }
+    },
+    "osx-arm64": {
+      "status": "observed",
+      "generatedMarker": {"name":"inference_model.json","bytes":87,"sha256":"9bb2dbe6766fb9a5e3e1c8407a88141a480363d0aca7d4df4f88aa3e0399adeb"},
+      "installedBytes": 793344449,
+      "manifestSha256": "8d02c1ffd0c9532751ef736ea5941c0733b2219c15ec68c038063dada7e29b8a",
+      "evidence": {
+        "kind": "complete-inventory-only",
+        "runUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34401280998",
+        "executionSha": "b08a704a824fdfaeef33ccd7e670b90d3c404960",
+        "artifactUrl": "https://github.com/jiec-msft/foundry-local/actions/runs/34401280998/artifacts/10123649414",
+        "failureJsonBytes": 6034,
+        "failureJsonSha256": "4c1f6c49793f28076c86753934e6e3c704e992d71e0451768f0ae2d70bdf2d45"
+      }
+    }
+  }
+}
