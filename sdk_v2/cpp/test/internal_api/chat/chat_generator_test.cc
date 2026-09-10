@@ -233,7 +233,7 @@ TEST_F(ChatGeneratorTest, CancelStopsGeneration) {
   EXPECT_FALSE(gen->IsDone());
   EXPECT_EQ(gen->TokenCount(), 0);
 
-  EXPECT_GT(gen->AppendMessages(messages, GetModel(), {}, opts), 0);
+  EXPECT_GT(gen->AppendMessages(messages, messages, GetModel(), {}, opts), 0);
   EXPECT_GE(gen->TokenCount(), initial_prompt_token_count);
 
   EXPECT_FALSE(gen->GenerateAll().empty());

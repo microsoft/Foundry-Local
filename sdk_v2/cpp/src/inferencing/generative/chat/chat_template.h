@@ -4,7 +4,10 @@
 
 #include "items/message_item.h"
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -14,6 +17,14 @@ struct OgaSequences;
 namespace fl {
 
 class GenAIModelInstance;
+
+namespace chat_internal {
+
+/// Return the first unmatched full-prompt token when the resident sequence is an exact prefix.
+std::optional<size_t> FindUnmatchedPromptSuffix(std::span<const int32_t> resident_tokens,
+                                                std::span<const int32_t> full_prompt) noexcept;
+
+}  // namespace chat_internal
 
 /// Render a MessageItem's content as a plain string suitable for the chat template.
 ///
@@ -38,17 +49,6 @@ std::string RenderMessageForPrompt(const MessageItem& msg);
 std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
                             GenAIModelInstance& model,
                             const std::string& tools_json = "");
-
-/// Build the model-specific fragment that continues a retained conversation.
-///
-/// The chat-template API renders complete conversations, not suffixes for retained token state. This helper prepends
-/// a synthetic assistant message with a collision-free marker, renders it with the new messages, and removes
-/// everything through the marker. The marker is never tokenized or submitted for inference. The remaining fragment
-/// contains the template-defined assistant-turn boundary, new messages, and next assistant prefix without repeating
-/// conversation-start framing such as a BOS token or default system prompt.
-std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
-                                        GenAIModelInstance& model,
-                                        const std::string& tools_json = "");
 
 /// Encode a prompt string into token sequences using the model's shared tokenizer (thread-safe).
 /// Returns a unique_ptr to OgaSequences. Caller takes ownership.

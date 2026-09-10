@@ -30,6 +30,7 @@ class OnnxEngineChatStream final : public ChatGenerator {
   int PromptTokenCount() const override;
   void Cancel() override;
   int AppendMessages(const std::vector<MessageItem>& new_messages,
+                     const std::vector<MessageItem>& full_messages,
                      GenAIModelInstance& model,
                      const ToolCallContext& tool_ctx,
                      const SearchOptions& options) override;

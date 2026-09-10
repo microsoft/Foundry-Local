@@ -123,10 +123,12 @@ using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, Pars
 /// and is sent with each generation request (for use with the OpenAI
 /// Responses API pattern).
 ///
-/// Retained inference state: after the first non-JSON request, compatible subsequent turns append only new messages
-/// and reuse the existing KV cache. Cancellation never commits the partial assistant response to history. When the
-/// selected inference path can restore its pre-turn token position, the same allocation is reused; otherwise the
-/// retained state is discarded and the next request rebuilds it from committed history.
+/// Retained inference state: after the first non-JSON request, compatible subsequent turns reuse the existing KV
+/// cache. Engine backends render and tokenize the complete committed transcript, append only the unmatched suffix
+/// when the resident tokens are an exact prefix, and rebuild otherwise. Cancellation never commits the partial
+/// assistant response to history. When the selected inference path can restore its pre-turn token position, the same
+/// allocation is reused; otherwise the retained state is discarded and the next request rebuilds it from committed
+/// history.
 /// OpenAI chat completions JSON requests (TextItem with text_type == OPENAI_JSON) always create a fresh
 /// inference stream and never use retained state.
 class ChatSession : public Session {
@@ -182,11 +184,6 @@ class ChatSession : public Session {
 
   /// Build tool calling context from request parameters and session tool definitions.
   ToolCallContext BuildToolCallContext(const Request& request) const;
-
-  /// Update per-turn fields (tool_choice, guidance) on an existing tool context.
-  /// Called on the cached-generator path so each turn gets fresh per-request settings
-  /// while keeping session-level tool definitions and marker tokens stable.
-  void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
 
   /// Build final response items from the typed segments and tool calls produced during generation.
   void ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,

@@ -225,31 +225,6 @@ void ChatSession::SetSessionOptionsImpl(const KeyValuePairs& options) {
   session_options_ = SearchOptions::FromParameters(options);
 }
 
-void ChatSession::UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const {
-  auto get_param = [&](const char* key) -> std::string {
-    auto it = request.options.find(key);
-    if (it != request.options.end()) {
-      return it->second;
-    }
-    return {};
-  };
-
-  // Re-derive tool_choice → text_output / tool_output for this turn.
-  // ParseToolChoice rejects unknown values with FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT.
-  auto tool_choice = SearchOptions::ParseToolChoice(request.options);
-  if (!tool_choice.has_value()) {
-    tool_choice = session_options_.tool_choice;
-  }
-
-  if (tool_ctx.HasTools()) {
-    ApplyToolChoiceToContext(tool_choice, tool_ctx);
-  }
-
-  // Re-derive per-request guidance
-  tool_ctx.guidance_type = get_param("guidance_type");
-  tool_ctx.guidance_data = get_param("guidance_data");
-}
-
 ToolCallContext ChatSession::BuildToolCallContext(const Request& request) const {
   ToolCallContext tool_ctx;
 
@@ -518,6 +493,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   SearchOptions effective_options = SearchOptions::FromParameters(effective_kvp);
   const ChatBackendKind backend_kind = Model().GetGenAIConfig().GetChatBackendKind();
 
+  std::vector<MessageItem> all_messages;
+  all_messages.reserve(history_.size() + new_messages.size());
+  all_messages.insert(all_messages.end(), history_.begin(), history_.end());
+  all_messages.insert(all_messages.end(), new_messages.begin(), new_messages.end());
+
   int prompt_tokens = 0;
   int pre_turn_token_count = 0;
   bool can_rewind_to_pre_turn = true;
@@ -525,8 +505,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   if (cached_generator_) {
     // Guidance (LARK grammar) is baked into a classic generator at creation time, and an Engine request built from
     // OgaGeneratorParams snapshots its search settings for every turn, so any change to either has to rebuild.
-    auto turn_tool_ctx = cached_tool_ctx_;
-    UpdateToolContextForTurn(request, turn_tool_ctx);
+    auto turn_tool_ctx = BuildToolCallContext(request);
 
     const bool prev_has_user_guidance =
         !cached_tool_ctx_.guidance_type.empty() && !cached_tool_ctx_.guidance_data.empty();
@@ -539,11 +518,20 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     const bool guidance_payload_changed =
         cached_tool_ctx_.guidance_type != turn_tool_ctx.guidance_type ||
         cached_tool_ctx_.guidance_data != turn_tool_ctx.guidance_data;
+    const bool retained_tool_context_changed =
+        cached_tool_ctx_.supports_tool_calling != turn_tool_ctx.supports_tool_calling ||
+        cached_tool_ctx_.tool_call_start != turn_tool_ctx.tool_call_start ||
+        cached_tool_ctx_.tool_call_end != turn_tool_ctx.tool_call_end ||
+        cached_tool_ctx_.supports_reasoning != turn_tool_ctx.supports_reasoning ||
+        cached_tool_ctx_.reasoning_start != turn_tool_ctx.reasoning_start ||
+        cached_tool_ctx_.reasoning_end != turn_tool_ctx.reasoning_end ||
+        cached_tool_ctx_.tools_json != turn_tool_ctx.tools_json;
 
     // Classic Generator guidance and search settings are fixed at creation. Dynamic Engine options are supplied on
     // each BeginTurn, while the static Engine always rebuilds below because it cannot safely retain shared state.
     const bool options_are_request_baked = backend_kind == ChatBackendKind::kGenerator;
-    if (chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend(
+    if (retained_tool_context_changed ||
+        chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend(
             backend_kind,
             options_are_request_baked &&
                 (prev_needs_guidance != curr_needs_guidance || prev_has_user_guidance),
@@ -553,12 +541,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       cached_generator_.reset();
       cached_tool_ctx_ = {};
     } else {
-      // Continuous decoding: append only the new messages to the existing generator.
+      // Continuous decoding: reuse retained state only when the backend can reconcile it with the full transcript.
       pre_turn_token_count = cached_generator_->TokenCount();
       try {
-        const int appended_prompt_tokens =
-            cached_generator_->AppendMessages(new_messages, Model(), turn_tool_ctx, effective_options);
-        prompt_tokens = pre_turn_token_count + appended_prompt_tokens;
+        cached_generator_->AppendMessages(new_messages, all_messages, Model(), turn_tool_ctx, effective_options);
+        prompt_tokens = cached_generator_->TokenCount();
 
         // Refresh per-turn fields (tool_choice, guidance) while keeping session-level definitions stable.
         cached_tool_ctx_ = std::move(turn_tool_ctx);
@@ -574,11 +561,6 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     // Combine existing history with new messages for the full context.
     can_rewind_to_pre_turn = history_.empty();
     auto tool_ctx = BuildToolCallContext(request);
-
-    std::vector<MessageItem> all_messages;
-    all_messages.reserve(history_.size() + new_messages.size());
-    all_messages.insert(all_messages.end(), history_.begin(), history_.end());
-    all_messages.insert(all_messages.end(), new_messages.begin(), new_messages.end());
 
     std::unique_ptr<ChatGenerator> generator;
     if (media_turn) {

@@ -59,10 +59,10 @@ class OnnxChatEngine {
     std::mutex mutex;
     std::condition_variable cv;
     std::deque<int32_t> tokens;
+    std::vector<int32_t> resident_tokens;
     std::exception_ptr error;
     TurnResult result;
     uint64_t turn_id = 0;
-    size_t sequence_length = 0;
     std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point turn_started_at;
     uint64_t admission_sequence = 0;
@@ -90,6 +90,7 @@ class OnnxChatEngine {
   bool IsTurnFinished(const std::shared_ptr<Conversation>& conversation) const;
   TurnResult GetTurnResult(const std::shared_ptr<Conversation>& conversation) const;
   size_t SequenceLength(const std::shared_ptr<Conversation>& conversation) const;
+  std::vector<int32_t> ResidentTokens(const std::shared_ptr<Conversation>& conversation) const;
   void Cancel(const std::shared_ptr<Conversation>& conversation);
   void Close(const std::shared_ptr<Conversation>& conversation);
 

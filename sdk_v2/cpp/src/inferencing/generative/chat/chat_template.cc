@@ -11,7 +11,23 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace fl {
+
+namespace chat_internal {
+
+std::optional<size_t> FindUnmatchedPromptSuffix(std::span<const int32_t> resident_tokens,
+                                                std::span<const int32_t> full_prompt) noexcept {
+  if (resident_tokens.size() > full_prompt.size() ||
+      !std::equal(resident_tokens.begin(), resident_tokens.end(), full_prompt.begin())) {
+    return std::nullopt;
+  }
+
+  return resident_tokens.size();
+}
+
+}  // namespace chat_internal
 
 std::string RenderMessageForPrompt(const MessageItem& msg) {
   if (msg.IsSimpleText()) {
@@ -61,39 +77,6 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
   // ApplyChatTemplate uses the model's built-in template (template_str=nullptr) and appends the assistant
   // turn prefix (add_generation_prompt=true).
   return model.GetPreprocessor().ApplyChatTemplate(messages_str.c_str(), tools_ptr, /*add_generation_prompt=*/true);
-}
-
-std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
-                                        GenAIModelInstance& model,
-                                        const std::string& tools_json) {
-  const auto rendered_inputs = BuildChatPrompt(messages, model, tools_json);
-  // ApplyChatTemplate can render only a complete conversation. Prepending a synthetic assistant message creates a
-  // model-template-aware cut point after any BOS/default-system framing and before the assistant terminator that must
-  // separate retained output from the new messages. The marker is removed before this text is tokenized.
-  constexpr std::string_view kMarkerPrefix = "__foundry_engine_assistant_boundary_";
-  size_t marker_suffix = 0;
-  std::string assistant_marker;
-  do {
-    assistant_marker = std::string(kMarkerPrefix) + std::to_string(marker_suffix++) + "__";
-  } while (rendered_inputs.find(assistant_marker) != std::string::npos);
-
-  std::vector<MessageItem> marked_messages;
-  marked_messages.reserve(messages.size() + 1);
-  marked_messages.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, assistant_marker);
-  marked_messages.insert(marked_messages.end(), messages.begin(), messages.end());
-
-  auto marked_prompt = BuildChatPrompt(marked_messages, model, tools_json);
-  const auto marker_position = marked_prompt.find(assistant_marker);
-  if (marker_position == std::string::npos) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "chat template did not preserve assistant content needed to build an Engine continuation");
-  }
-  if (marked_prompt.find(assistant_marker, marker_position + assistant_marker.size()) != std::string::npos) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
-             "chat template duplicated assistant content needed to build an Engine continuation");
-  }
-
-  return marked_prompt.substr(marker_position + assistant_marker.size());
 }
 
 std::unique_ptr<OgaSequences> EncodePrompt(const std::string& prompt,

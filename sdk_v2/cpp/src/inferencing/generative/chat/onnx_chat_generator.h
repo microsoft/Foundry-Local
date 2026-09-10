@@ -48,6 +48,7 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Used for continuous decoding — only the new turn's messages are encoded and appended.
   /// Returns the number of new prompt tokens appended.
   int AppendMessages(const std::vector<MessageItem>& new_messages,
+                     const std::vector<MessageItem>& full_messages,
                      GenAIModelInstance& model,
                      const ToolCallContext& tool_ctx,
                      const SearchOptions& options) override;

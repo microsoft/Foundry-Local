@@ -5,6 +5,7 @@
 // Integration tests run actual inference against the shared test model.
 
 #include "inferencing/generative/chat/chat_session.h"
+#include "inferencing/generative/chat/chat_template.h"
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/generative/chat/search_options.h"
@@ -55,6 +56,28 @@ TEST(ChatSessionDecisionTest, HostOutputLimitTruncatesOnlyAnUnfinishedBackendAtT
                                          /*backend_finished=*/false));
   EXPECT_FALSE(DidHostOutputLimitTruncate(/*output_tokens=*/32, /*max_output_tokens=*/32,
                                           /*backend_finished=*/true));
+}
+
+TEST(ChatSessionDecisionTest, ExactResidentPrefixSelectsOnlyTheUnmatchedFullPromptSuffix) {
+  const std::vector<int32_t> resident = {10, 20, 30};
+  const std::vector<int32_t> full_prompt = {10, 20, 30, 40, 50};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(resident, full_prompt), 3u);
+}
+
+TEST(ChatSessionDecisionTest, ResidentPromptMismatchRequiresRebuild) {
+  const std::vector<int32_t> changed_token = {10, 21, 30};
+  const std::vector<int32_t> longer_resident = {10, 20, 30, 40};
+  const std::vector<int32_t> full_prompt = {10, 20, 30};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(changed_token, full_prompt), std::nullopt);
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(longer_resident, full_prompt), std::nullopt);
+}
+
+TEST(ChatSessionDecisionTest, EqualResidentAndFullPromptHasAnEmptySuffix) {
+  const std::vector<int32_t> tokens = {10, 20, 30};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(tokens, tokens), tokens.size());
 }
 
 TEST(ChatSessionDecisionTest, HostOutputLimitAppliesToClassicAndMediaGeneratorsButNotEngineText) {

@@ -61,7 +61,11 @@ class ChatGenerator {
   virtual void Cancel() = 0;
 
   /// Append a new conversational turn to retained model state.
+  ///
+  /// full_messages contains the complete structured transcript through new_messages. Backends that reconcile
+  /// retained tokens against a freshly rendered prompt use it to decide whether the retained state is reusable.
   virtual int AppendMessages(const std::vector<MessageItem>& new_messages,
+                             const std::vector<MessageItem>& full_messages,
                              GenAIModelInstance& model,
                              const ToolCallContext& tool_ctx,
                              const SearchOptions& options) = 0;

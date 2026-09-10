@@ -142,6 +142,40 @@ std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& mo
   return {data, data + count};
 }
 
+std::vector<int32_t> EncodeMessages(const std::vector<MessageItem>& messages, GenAIModelInstance& model) {
+  auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
+  const auto count = sequences->SequenceCount(0);
+  const auto* data = sequences->SequenceData(0);
+  return {data, data + count};
+}
+
+struct EngineTurnOutput {
+  std::vector<int32_t> tokens;
+  std::string text;
+  OnnxChatEngine::TurnResult result;
+};
+
+EngineTurnOutput RunEngineTurn(OnnxChatEngine& engine,
+                               const std::shared_ptr<OnnxChatEngine::Conversation>& conversation,
+                               std::span<const int32_t> input,
+                               const SearchOptions& options,
+                               const ToolCallContext& tool_context,
+                               GenAIModelInstance& model) {
+  engine.BeginTurn(conversation, input, options, tool_context);
+
+  EngineTurnOutput output;
+  auto decoder = model.GetPreprocessor().CreateTokenizerStream();
+  while (const auto token = engine.WaitForToken(conversation)) {
+    output.tokens.push_back(*token);
+    if (const char* text = decoder->Decode(*token)) {
+      output.text += text;
+    }
+  }
+
+  output.result = engine.GetTurnResult(conversation);
+  return output;
+}
+
 class DynamicEngineChatTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
@@ -226,6 +260,53 @@ TEST_F(DynamicEngineChatTest, GeneratesWithinOutputLimitAndRetainsContinuation) 
   EXPECT_NE(test::ToLower(AssistantText(second_response)).find("sapphire"), std::string::npos);
   EXPECT_EQ(session.TurnCount(), 2u);
   EXPECT_LE(second_response.usage.completion_tokens, 32);
+}
+
+TEST_F(DynamicEngineChatTest, FullPromptPrefixContinuationMatchesFreshReplayAfterOutputLimit) {
+  OnnxChatEngine engine(ModelInstance());
+  SearchOptions first_options;
+  first_options.max_output_tokens = 4;
+  first_options.do_sample = false;
+  ToolCallContext tool_context;
+
+  std::vector<MessageItem> first_messages = {
+      {FOUNDRY_LOCAL_ROLE_USER, "Write a detailed explanation of why the sky is blue."}};
+  const auto first_prompt = EncodeMessages(first_messages, ModelInstance());
+  auto warm = engine.CreateConversation(first_options, tool_context, static_cast<int>(first_prompt.size()));
+  const auto first = RunEngineTurn(engine, warm, first_prompt, first_options, tool_context, ModelInstance());
+
+  ASSERT_EQ(first.result.finish_reason, OgaFinishReason_MaxGeneratedTokens);
+  ASSERT_FALSE(first.tokens.empty());
+  ASSERT_FALSE(first.text.empty());
+
+  std::vector<int32_t> expected_resident = first_prompt;
+  expected_resident.insert(expected_resident.end(), first.tokens.begin(), first.tokens.end());
+  EXPECT_EQ(engine.ResidentTokens(warm), expected_resident);
+
+  std::vector<MessageItem> full_history = first_messages;
+  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text);
+  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, "Summarize that in one sentence.");
+  const auto full_prompt = EncodeMessages(full_history, ModelInstance());
+  ASSERT_LT(expected_resident.size(), full_prompt.size());
+  ASSERT_TRUE(std::equal(expected_resident.begin(), expected_resident.end(), full_prompt.begin()));
+
+  SearchOptions second_options;
+  second_options.max_output_tokens = 16;
+  second_options.do_sample = false;
+  const std::span<const int32_t> suffix(full_prompt.data() + expected_resident.size(),
+                                        full_prompt.size() - expected_resident.size());
+  const auto warm_second =
+      RunEngineTurn(engine, warm, suffix, second_options, tool_context, ModelInstance());
+
+  auto fresh = engine.CreateConversation(second_options, tool_context, static_cast<int>(full_prompt.size()));
+  const auto fresh_second =
+      RunEngineTurn(engine, fresh, full_prompt, second_options, tool_context, ModelInstance());
+
+  EXPECT_EQ(warm_second.tokens, fresh_second.tokens);
+  EXPECT_EQ(warm_second.result.finish_reason, fresh_second.result.finish_reason);
+
+  engine.Close(warm);
+  engine.Close(fresh);
 }
 
 TEST_F(DynamicEngineChatTest, RunsTwoConcurrentSessions) {

@@ -120,27 +120,52 @@ void OnnxEngineChatStream::Cancel() {
 }
 
 int OnnxEngineChatStream::AppendMessages(const std::vector<MessageItem>& new_messages,
+                                         const std::vector<MessageItem>& full_messages,
                                          GenAIModelInstance& model,
                                          const ToolCallContext& tool_ctx,
                                          const SearchOptions& options) {
-  if (new_messages.empty()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
+  if (new_messages.empty() || full_messages.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages and full_messages must not be empty");
   }
 
-  auto prompt = BuildChatContinuationPrompt(new_messages, model, tool_ctx.tools_json);
+  auto prompt = BuildChatPrompt(full_messages, model, tool_ctx.tools_json);
   auto sequences = EncodePrompt(prompt, model);
   const int count = static_cast<int>(sequences->SequenceCount(0));
   const auto* data = sequences->SequenceData(0);
-  const std::span<const int32_t> input_ids(data, static_cast<size_t>(count));
+  const std::span<const int32_t> full_prompt(data, static_cast<size_t>(count));
+  const auto resident_tokens = engine_.ResidentTokens(conversation_);
+  const auto suffix_start = chat_internal::FindUnmatchedPromptSuffix(resident_tokens, full_prompt);
 
   // Keep the previous decoder intact if admission fails. Once admitted, start a fresh stream so partial UTF-8/BPE
-  // state from the prior turn cannot affect generated tokens; continuation-prompt tokens are never decoded.
-  engine_.BeginTurn(conversation_, input_ids, options, tool_ctx);
+  // state from the prior turn cannot affect generated tokens; prompt tokens are never decoded.
+  int submitted_tokens = count;
+  if (suffix_start.has_value()) {
+    const auto suffix = full_prompt.subspan(*suffix_start);
+    if (suffix.empty()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+               "chat template produced no new tokens for a non-empty Engine continuation");
+    }
+
+    engine_.BeginTurn(conversation_, suffix, options, tool_ctx);
+    submitted_tokens = static_cast<int>(suffix.size());
+  } else {
+    auto replacement = engine_.CreateConversation(options, tool_ctx, count);
+    try {
+      engine_.BeginTurn(replacement, full_prompt, options, tool_ctx);
+    } catch (...) {
+      engine_.Close(replacement);
+      throw;
+    }
+
+    engine_.Close(conversation_);
+    conversation_ = std::move(replacement);
+  }
+
   ResetTurnDecoder();
 
-  prompt_token_count_ = count;
+  prompt_token_count_ = submitted_tokens;
   cancelled_ = false;
-  return count;
+  return submitted_tokens;
 }
 
 void OnnxEngineChatStream::ResetTurnDecoder() {

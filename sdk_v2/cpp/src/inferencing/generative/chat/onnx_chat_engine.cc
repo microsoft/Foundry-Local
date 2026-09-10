@@ -139,13 +139,16 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
         auto& native = FindNative(conversation);
         auto turn_options = native.request->CreateTurnOptions();
         size_t existing_tokens = 0;
+        std::vector<int32_t> resident_tokens;
 
         {
           std::lock_guard<std::mutex> lock(conversation->mutex);
           if (!conversation->turn_finished) {
             throw std::runtime_error("Cannot begin an Engine turn while another turn is active.");
           }
-          existing_tokens = conversation->sequence_length;
+          existing_tokens = conversation->resident_tokens.size();
+          resident_tokens = conversation->resident_tokens;
+          resident_tokens.insert(resident_tokens.end(), tokens.begin(), tokens.end());
           conversation->tokens.clear();
           conversation->error = nullptr;
           conversation->result = {};
@@ -177,7 +180,7 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
         {
           std::lock_guard<std::mutex> lock(conversation->mutex);
           conversation->turn_id = turn_id;
-          conversation->sequence_length += tokens.size();
+          conversation->resident_tokens = std::move(resident_tokens);
           conversation->turn_started_at = std::chrono::steady_clock::now();
           conversation->last_activity = conversation->turn_started_at;
           conversation->admission_sequence = next_admission_sequence_++;
@@ -232,7 +235,13 @@ OnnxChatEngine::TurnResult OnnxChatEngine::GetTurnResult(
 
 size_t OnnxChatEngine::SequenceLength(const std::shared_ptr<Conversation>& conversation) const {
   std::lock_guard<std::mutex> lock(conversation->mutex);
-  return conversation->sequence_length;
+  return conversation->resident_tokens.size();
+}
+
+std::vector<int32_t> OnnxChatEngine::ResidentTokens(
+    const std::shared_ptr<Conversation>& conversation) const {
+  std::lock_guard<std::mutex> lock(conversation->mutex);
+  return conversation->resident_tokens;
 }
 
 void OnnxChatEngine::Cancel(const std::shared_ptr<Conversation>& conversation) {
@@ -399,8 +408,9 @@ void OnnxChatEngine::RouteEvents() {
       conversation->turn_has_progress = true;
       conversation->last_activity = std::chrono::steady_clock::now();
       if ((flags & OgaEngineEventFlag_Token) != 0) {
-        conversation->tokens.push_back(event->Token());
-        ++conversation->sequence_length;
+        const auto token = event->Token();
+        conversation->tokens.push_back(token);
+        conversation->resident_tokens.push_back(token);
       }
       if ((flags & OgaEngineEventFlag_TurnFinished) != 0) {
         const auto& usage = event->Usage();
@@ -418,6 +428,11 @@ void OnnxChatEngine::RouteEvents() {
       }
     }
     conversation->cv.notify_all();
+
+    if ((flags & OgaEngineEventFlag_Failed) != 0) {
+      it->second->request->Close();
+      conversations_.erase(it);
+    }
   }
 }
 

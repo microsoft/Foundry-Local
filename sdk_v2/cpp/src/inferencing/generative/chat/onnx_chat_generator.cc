@@ -138,6 +138,7 @@ void OnnxChatGenerator::Cancel() {
 // ---------------------------------------------------------------------------
 
 int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
+                                      const std::vector<MessageItem>& /*full_messages*/,
                                       GenAIModelInstance& model,
                                       const ToolCallContext& tool_ctx,
                                       const SearchOptions& /*options*/) {
