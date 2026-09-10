@@ -143,7 +143,8 @@ TEST_F(ChatTemplateTest, LongerMessageProducesMoreTokens) {
       {FOUNDRY_LOCAL_ROLE_USER, "Hi"}};
   std::vector<TranscriptMessage> long_msgs = {
       {FOUNDRY_LOCAL_ROLE_SYSTEM, "You are a detailed technical writer who explains everything thoroughly."},
-      {FOUNDRY_LOCAL_ROLE_USER, "Explain the theory of relativity in detail, covering both special and general relativity."}};
+      {FOUNDRY_LOCAL_ROLE_USER,
+       "Explain the theory of relativity in detail, covering both special and general relativity."}};
   std::string short_prompt = BuildChatPrompt(short_msgs, GetModel());
   std::string long_prompt = BuildChatPrompt(long_msgs, GetModel());
 

@@ -128,6 +128,12 @@ Console.WriteLine();
 
 
 // Invoke tools called and append responses to the chat
+// All calls came from one assistant turn, so replay them together before adding their individual results.
+if (toolCalls.Count > 0)
+{
+    messages.Add(new ChatMessage { Role = "assistant", ToolCalls = toolCalls });
+}
+
 foreach (var toolCall in toolCalls)
 {
     var call = toolCall.FunctionCall;
@@ -140,12 +146,6 @@ foreach (var toolCall in toolCalls)
         Console.WriteLine($"\nInvoking tool: {call.Name} with arguments {first} and {second}");
         var result = Utils.MultiplyNumbers(first, second);
         Console.WriteLine($"Tool response: {result.ToString()}");
-
-        // Replay the assistant turn that issued the call before answering it. Each request is
-        // self-contained, so a tool result is only correlated with its call when that call is part
-        // of the same message list. Content stays null so the replayed turn matches the
-        // content-free turn the model generated, instead of feeding its marker text back.
-        messages.Add(new ChatMessage { Role = "assistant", ToolCalls = [toolCall] });
 
         var response = new ChatMessage
         {
