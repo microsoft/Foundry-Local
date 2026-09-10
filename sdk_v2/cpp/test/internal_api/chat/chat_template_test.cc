@@ -127,7 +127,7 @@ TEST_F(ChatTemplateTest, EngineContinuationIncludesAssistantTurnBoundary) {
 
   std::string prompt = BuildChatContinuationPrompt(messages, GetModel());
 
-  EXPECT_EQ(prompt.find("__foundry_engine_assistant_boundary__"), std::string::npos);
+  EXPECT_EQ(prompt.find("__foundry_engine_assistant_boundary_"), std::string::npos);
   EXPECT_NE(prompt.find("<|im_end|>"), std::string::npos) << prompt;
   EXPECT_NE(prompt.find("What is the codeword?"), std::string::npos) << prompt;
   EXPECT_NE(prompt.find("assistant"), std::string::npos) << prompt;
