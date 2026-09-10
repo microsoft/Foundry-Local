@@ -29,6 +29,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <httplib.h>
@@ -922,9 +923,9 @@ TEST(WebServiceTelemetryStatusTest, HttpStatusAndCancellationMapWithoutMaskingFa
   EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_500, json::object()), true), ActionStatus::kFailure);
 }
 
-class WebServiceTelemetryInferenceTest : public ::testing::TestWithParam<bool> {};
+class WebServiceTelemetryInferenceTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {};
 
-TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOperationContext) {
+TEST_P(WebServiceTelemetryInferenceTest, RouteAndNestedInferenceShareOneOperationContext) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager load_manager(ep_detector, fl::test::NullLog());
   SessionManager sessions(fl::test::NullLog());
@@ -947,14 +948,22 @@ TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOper
   ASSERT_EQ(urls.size(), 1u);
   httplib::Client client(urls[0]);
   client.set_read_timeout(60, 0);
-  const bool streaming = GetParam();
+  const auto [streaming, responses] = GetParam();
+  const auto route_action = responses ? Action::kOpenAIResponsesCreate : Action::kOpenAIChatCompletions;
   json request = {
       {"model", "telemetry-chat"},
-      {"messages", {{{"role", "user"}, {"content", "Say hello."}}}},
-      {"max_tokens", 2},
       {"stream", streaming},
   };
-  const auto response = client.Post("/v1/chat/completions", {{"User-Agent", "telemetry-test-client"}},
+  if (responses) {
+    request["input"] = "Say hello.";
+    request["max_output_tokens"] = 2;
+  } else {
+    request["messages"] = {{{"role", "user"}, {"content", "Say hello."}}};
+    request["max_tokens"] = 2;
+  }
+
+  const auto response = client.Post(responses ? "/v1/responses" : "/v1/chat/completions",
+                                    {{"User-Agent", "telemetry-test-client"}},
                                     request.dump(), "application/json");
   ASSERT_TRUE(response) << httplib::to_string(response.error());
   EXPECT_EQ(response->status, 200) << response->body;
@@ -981,13 +990,14 @@ TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOper
     EXPECT_EQ(action.model_id, "telemetry-chat");
     EXPECT_EQ(action.context.correlation_id, usage.correlation_id);
     EXPECT_EQ(action.context.user_agent, "telemetry-test-client");
-    EXPECT_EQ(action.context.indirect, action.action != Action::kOpenAIChatCompletions);
+    EXPECT_EQ(action.context.indirect, action.action != route_action);
   }
 
   EXPECT_EQ(action_ids, (std::vector<Action>{Action::kSessionCreate, Action::kSessionProcessRequest,
-                                             Action::kOpenAIChatCompletions}));
+                                             route_action}));
 }
 
-INSTANTIATE_TEST_SUITE_P(StreamingAndNonStreaming, WebServiceTelemetryInferenceTest, ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(StreamingAndNonStreaming, WebServiceTelemetryInferenceTest,
+                         ::testing::Combine(::testing::Bool(), ::testing::Bool()));
 
 #endif  // FOUNDRY_LOCAL_HAS_WEB_SERVICE

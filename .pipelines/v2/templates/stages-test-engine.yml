@@ -119,7 +119,7 @@ stages:
           $cases = @($suite.testcase)
           $required = @(
             'RetainedContinuationReportsFreshPromptUsageParity',
-            'FullPromptPrefixContinuationMatchesFreshReplayAfterOutputLimit',
+            'MismatchedResidentPromptIsReplacedAndMatchesFreshReplay',
             'RunsTwoConcurrentSessions',
             'CapacityTimeoutFailsOnlyNewestWaitingConversation',
             'LateCancelAfterCompletedConversationRemovalIsNoOp',
