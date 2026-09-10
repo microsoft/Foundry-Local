@@ -193,7 +193,6 @@ struct ProcessInfo {
   std::string os_version;
   std::string cpu_arch;
   std::string process_name;
-  std::string locale;
   std::string device_id_status;
   int32_t cpu_count = 0;
   int64_t total_memory_mb = -1;
@@ -207,25 +206,34 @@ class ITelemetry {
  public:
   virtual ~ITelemetry() = default;
 
+  void RecordAction(Action action, ActionStatus status, const std::string& user_agent,
+                    bool indirect, int64_t duration_ms) {
+    auto context = InvocationContext::Direct(user_agent);
+    context.indirect = indirect;
+    RecordAction(action, status, context, duration_ms);
+  }
+
   /// Record a completed action with timing and status. The context carries the
   /// user agent, the correlation id grouping this operation's events, and whether
-  /// the action was indirect (triggered by another action).
+  /// the action was indirect (triggered by another action). ModelId is included
+  /// when the action resolved a model.
   virtual void RecordAction(Action action, ActionStatus status,
-                            const InvocationContext& context, int64_t duration_ms) = 0;
+                            const InvocationContext& context, int64_t duration_ms,
+                            const std::string& model_id = {}) = 0;
 
   /// Record an exception associated with an action.
   virtual void RecordException(Action action, const std::exception& exception,
                                const InvocationContext& context) = 0;
+
+  void RecordException(Action action, const std::exception& exception) {
+    RecordException(action, exception, InvocationContext::Direct());
+  }
 
   /// Record model usage metrics after inference (Model event).
   virtual void RecordModelUsage(const ModelUsageInfo& info) = 0;
 
   /// Record audio-specific inference metrics after audio inference (AudioModel event).
   virtual void RecordAudioUsage(const AudioUsageInfo& /*info*/) {}
-
-  /// Record which model was used for an action (ModelId event).
-  virtual void RecordModelId(Action action, const std::string& model_id,
-                             ActionStatus status, const InvocationContext& context) = 0;
 
   /// Record the result of a DownloadAndRegisterEps call (EPDownloadAttempt event).
   virtual void RecordEpDownloadAttempt(const EpDownloadAttemptInfo& info) = 0;

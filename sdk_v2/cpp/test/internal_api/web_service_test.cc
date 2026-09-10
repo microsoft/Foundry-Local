@@ -15,7 +15,7 @@
 #include "logger.h"
 #include "model.h"
 #include "model_info.h"
-#include "telemetry/telemetry_logger.h"
+#include "service/handler_utils.h"
 #include "service/web_service.h"
 #include "utils/temp_path.h"
 
@@ -37,6 +37,42 @@ using namespace fl;
 using json = nlohmann::json;
 
 namespace {
+
+class WebUsageTelemetry : public TelemetryLogger {
+ public:
+  WebUsageTelemetry() : TelemetryLogger("test", fl::test::NullLog()) {}
+
+  struct ActionCall {
+    Action action;
+    ActionStatus status;
+    InvocationContext context;
+    std::string model_id;
+  };
+  struct Snapshot {
+    std::vector<ActionCall> actions;
+    std::vector<ModelUsageInfo> models;
+  };
+
+  void RecordAction(Action action, ActionStatus status, const InvocationContext& context,
+                    int64_t /*duration_ms*/, const std::string& model_id) override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    events_.actions.push_back({action, status, context, model_id});
+  }
+
+  void RecordModelUsage(const ModelUsageInfo& usage) override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    events_.models.push_back(usage);
+  }
+
+  Snapshot Events() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return events_;
+  }
+
+ private:
+  mutable std::mutex mutex_;
+  Snapshot events_;
+};
 
 std::string TestHttpGet(const std::string& url, const std::string& user_agent = "") {
   http::HttpRequestOptions options;
@@ -60,47 +96,6 @@ std::string TestHttpDelete(const std::string& url, const std::string& user_agent
   return http::HttpDelete(url, options);
 }
 
-// Telemetry sink that records every event for assertions.
-class CapturingTelemetry : public ITelemetry {
- public:
-  struct ActionCall {
-    Action action;
-    ActionStatus status;
-    std::string user_agent;
-    std::string correlation_id;
-    bool indirect;
-  };
-
-  void RecordAction(Action action, ActionStatus status, const InvocationContext& context,
-                    int64_t /*duration_ms*/) override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    actions.push_back({action, status, context.user_agent, context.correlation_id, context.indirect});
-  }
-  void RecordException(Action, const std::exception&, const InvocationContext&) override {}
-  void RecordModelUsage(const ModelUsageInfo& info) override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    model_usages.push_back(info);
-  }
-  void RecordModelId(Action, const std::string&, ActionStatus, const InvocationContext&) override {}
-  void RecordEpDownloadAttempt(const EpDownloadAttemptInfo&) override {}
-  void RecordEpDownloadAndRegister(const EpDownloadAndRegisterInfo&) override {}
-  void RecordDownload(const DownloadInfo&) override {}
-  void RecordCatalogFetch(const CatalogFetchInfo&) override {}
-
-  std::optional<ActionCall> Find(Action action) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto& c : actions) {
-      if (c.action == action) {
-        return c;
-      }
-    }
-    return std::nullopt;
-  }
-  std::vector<ActionCall> actions;
-  std::vector<ModelUsageInfo> model_usages;
-  std::mutex mutex_;
-};
-
 }  // namespace
 
 // ========================================================================
@@ -114,7 +109,7 @@ class WebServiceTest : public ::testing::Test {
     ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
     model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
     session_manager_ = std::make_unique<SessionManager>(*logger_);
-    telemetry_ = std::make_unique<TelemetryLogger>("foundry-local-test", fl::test::NullLog());
+    null_telemetry_ = std::make_unique<TelemetryLogger>("test", fl::test::NullLog());
     catalog_ = std::make_unique<test::MockCatalog>();
 
     // Populate with test models
@@ -135,7 +130,7 @@ class WebServiceTest : public ::testing::Test {
         *model_load_manager_));
 
     service_ = std::make_unique<WebService>(*catalog_, *logger_, "/tmp/test-cache",
-                                            *model_load_manager_, *session_manager_, *telemetry_, []() {});
+                                            *model_load_manager_, *session_manager_, *null_telemetry_, []() {});
     auto urls = service_->Start({"http://127.0.0.1:0"});
     ASSERT_EQ(urls.size(), 1u);
     base_url_ = urls[0];
@@ -148,7 +143,7 @@ class WebServiceTest : public ::testing::Test {
     service_.reset();
     catalog_.reset();
     session_manager_.reset();
-    telemetry_.reset();
+    null_telemetry_.reset();
     model_load_manager_.reset();
     ep_detector_.reset();
     logger_.reset();
@@ -165,7 +160,7 @@ class WebServiceTest : public ::testing::Test {
   static std::unique_ptr<StderrLogger> logger_;
   static std::unique_ptr<ModelLoadManager> model_load_manager_;
   static std::unique_ptr<SessionManager> session_manager_;
-  static std::unique_ptr<TelemetryLogger> telemetry_;
+  static std::unique_ptr<TelemetryLogger> null_telemetry_;
   static std::unique_ptr<WebService> service_;
   static std::string base_url_;
   static inline fl::test::FakeServiceBindings svc_;
@@ -177,7 +172,7 @@ std::unique_ptr<test::CpuOnlyEpDetector> WebServiceTest::ep_detector_;
 std::unique_ptr<StderrLogger> WebServiceTest::logger_;
 std::unique_ptr<ModelLoadManager> WebServiceTest::model_load_manager_;
 std::unique_ptr<SessionManager> WebServiceTest::session_manager_;
-std::unique_ptr<TelemetryLogger> WebServiceTest::telemetry_;
+std::unique_ptr<TelemetryLogger> WebServiceTest::null_telemetry_;
 std::unique_ptr<WebService> WebServiceTest::service_;
 std::string WebServiceTest::base_url_;
 
@@ -417,11 +412,9 @@ TEST(WebServiceLifecycleTest, StartAndStopOnEphemeralPort) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   auto urls = service.Start({"http://127.0.0.1:0"});
 
   ASSERT_EQ(urls.size(), 1u);
@@ -441,11 +434,9 @@ TEST(WebServiceLifecycleTest, DoubleStartThrows) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   service.Start({"http://127.0.0.1:0"});
 
   EXPECT_THROW(service.Start({"http://127.0.0.1:0"}), std::runtime_error);
@@ -459,11 +450,9 @@ TEST(WebServiceLifecycleTest, StopWithoutStartIsNoop) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   // Should not crash
   service.Stop();
 }
@@ -474,11 +463,9 @@ TEST(WebServiceLifecycleTest, MultipleEndpoints) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   auto urls = service.Start({"http://127.0.0.1:0", "http://127.0.0.1:0"});
 
   EXPECT_EQ(urls.size(), 2u) << "Expected 2 bound URLs";
@@ -502,11 +489,9 @@ TEST(WebServiceEmptyCatalogTest, ListModelsReturnsEmptyData) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   auto urls = service.Start({"http://127.0.0.1:0"});
 
   auto body = TestHttpGet(urls[0] + "/v1/models");
@@ -524,11 +509,9 @@ TEST(WebServiceEmptyCatalogTest, LoadedModelsReturnsEmptyArray) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
 
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
+  WebService service(catalog, logger, "/tmp/test", model_load_manager, session_manager, null_telemetry, []() {});
   auto urls = service.Start({"http://127.0.0.1:0"});
 
   auto body = TestHttpGet(urls[0] + "/models/loaded");
@@ -538,39 +521,6 @@ TEST(WebServiceEmptyCatalogTest, LoadedModelsReturnsEmptyArray) {
   EXPECT_EQ(j.size(), 0u) << "Response: " << j.dump(2);
 
   service.Stop();
-}
-
-// ========================================================================
-// Telemetry behaviors — capture events and assert coverage / classification
-// ========================================================================
-
-TEST(WebServiceTelemetryTest, EmptyChatBodyRecordsClientErrorNotFailure) {
-  test::MockCatalog catalog;
-  StderrLogger logger;
-  test::CpuOnlyEpDetector ep_detector;
-  ModelLoadManager model_load_manager(ep_detector, logger);
-  SessionManager session_manager(logger);
-  CapturingTelemetry telemetry;
-
-  auto model_cache_dir = fl::test::TempPath::CreateTempDir("fl_web_service_telemetry_test_");
-  WebService service(catalog, logger, model_cache_dir.string(), model_load_manager, session_manager, telemetry,
-                     []() {});
-  auto urls = service.Start({"http://127.0.0.1:0"});
-
-  // Empty body is rejected (400) before any model resolution.
-  try {
-    TestHttpPost(urls[0] + "/v1/chat/completions", "");
-  } catch (...) {
-  }
-
-  service.Stop();
-
-  auto call = telemetry.Find(Action::kOpenAIChatCompletions);
-  ASSERT_TRUE(call.has_value()) << "chat completions route action was not recorded";
-  EXPECT_EQ(call->status, ActionStatus::kClientError);
-  EXPECT_FALSE(call->indirect);
-  // A 4xx reject performs no inference, so there is no Model event.
-  EXPECT_TRUE(telemetry.model_usages.empty());
 }
 
 // ========================================================================
@@ -863,10 +813,10 @@ TEST(WebServiceShutdownTest, StopReturnsQuicklyWithKeepAliveClient) {
   test::CpuOnlyEpDetector ep_detector;
   ModelLoadManager model_load_manager(ep_detector, logger);
   SessionManager session_manager(logger);
-  TelemetryLogger telemetry{"foundry-local-test", fl::test::NullLog()};
+  TelemetryLogger null_telemetry{"test", fl::test::NullLog()};
   test::MockCatalog catalog;
 
-  WebService service(catalog, logger, "/tmp/test-cache", model_load_manager, session_manager, telemetry,
+  WebService service(catalog, logger, "/tmp/test-cache", model_load_manager, session_manager, null_telemetry,
                      []() {});
 
   auto urls = service.Start({"http://127.0.0.1:0"});
@@ -898,5 +848,142 @@ TEST(WebServiceShutdownTest, StopReturnsQuicklyWithKeepAliveClient) {
       << "WebService::Stop() took " << stop_seconds
       << "s with a keep-alive client connected. Expected <30s; pre-fix this was ~120s on Windows.";
 }
+
+namespace {
+
+struct RouteTelemetryCase {
+  const char* method;
+  const char* path;
+  const char* body;
+  Action action;
+  int status;
+};
+
+class WebServiceTelemetryTest : public ::testing::TestWithParam<RouteTelemetryCase> {};
+
+}  // namespace
+
+TEST_P(WebServiceTelemetryTest, ClientErrorRetainsHttpResponseAndRecordsDirectAttribution) {
+  test::MockCatalog catalog;
+  test::CpuOnlyEpDetector ep_detector;
+  ModelLoadManager load_manager(ep_detector, fl::test::NullLog());
+  SessionManager sessions(fl::test::NullLog());
+  WebUsageTelemetry telemetry;
+  auto cache = test::TempPath::CreateTempDir("fl_route_telemetry_");
+  WebService service(catalog, fl::test::NullLog(), cache.string(), load_manager, sessions, telemetry, []() {});
+  const auto urls = service.Start({"http://127.0.0.1:0"});
+  ASSERT_EQ(urls.size(), 1u);
+  httplib::Client client(urls[0]);
+  client.set_read_timeout(10, 0);
+  const auto& scenario = GetParam();
+  const httplib::Headers headers{{"User-Agent", "telemetry-test-client"}};
+  const auto response = std::string(scenario.method) == "POST"
+                            ? client.Post(scenario.path, headers, scenario.body, "application/json")
+                            : std::string(scenario.method) == "DELETE" ? client.Delete(scenario.path, headers)
+                                                                      : client.Get(scenario.path, headers);
+  ASSERT_TRUE(response) << httplib::to_string(response.error());
+  EXPECT_EQ(response->status, scenario.status);
+  const auto body = json::parse(response->body);
+  EXPECT_EQ(body.at("error").at("type"), "invalid_request_error");
+  service.Stop();
+
+  const auto events = telemetry.Events();
+  ASSERT_EQ(events.actions.size(), 1u);
+  const auto& action = events.actions[0];
+  EXPECT_EQ(action.action, scenario.action);
+  EXPECT_EQ(action.status, ActionStatus::kClientError);
+  EXPECT_EQ(action.context.user_agent, "telemetry-test-client");
+  EXPECT_EQ(action.context.correlation_id.size(), 36u);
+  EXPECT_FALSE(action.context.indirect);
+  EXPECT_TRUE(events.models.empty());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    RejectedRequests, WebServiceTelemetryTest,
+    ::testing::Values(
+        RouteTelemetryCase{"POST", "/v1/chat/completions", "", Action::kOpenAIChatCompletions, 400},
+        RouteTelemetryCase{"POST", "/v1/chat/completions", "{", Action::kOpenAIChatCompletions, 400},
+        RouteTelemetryCase{"POST", "/v1/audio/transcriptions", "", Action::kOpenAIAudioTranscribe, 400},
+        RouteTelemetryCase{"POST", "/v1/embeddings", "", Action::kOpenAIEmbeddings, 400},
+        RouteTelemetryCase{"POST", "/v1/responses", "", Action::kOpenAIResponsesCreate, 400},
+        RouteTelemetryCase{"GET", "/v1/responses/missing", "", Action::kOpenAIResponsesGet, 404},
+        RouteTelemetryCase{"GET", "/v1/responses/missing/input_items", "", Action::kOpenAIResponsesGetInputItems, 404},
+        RouteTelemetryCase{"DELETE", "/v1/responses/missing", "", Action::kOpenAIResponsesDelete, 404},
+        RouteTelemetryCase{"GET", "/v1/models/missing", "", Action::kOpenAIModelRetrieve, 404}));
+
+TEST(WebServiceTelemetryStatusTest, HttpStatusAndCancellationMapWithoutMaskingFailures) {
+  EXPECT_EQ(ResponseToActionStatus(nullptr), ActionStatus::kFailure);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_200, json::object())), ActionStatus::kSuccess);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_200, json::object()), true), ActionStatus::kCanceled);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_400, json::object())), ActionStatus::kClientError);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_404, json::object())), ActionStatus::kClientError);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_408, json::object())), ActionStatus::kTimeout);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_504, json::object())), ActionStatus::kTimeout);
+  EXPECT_EQ(ResponseToActionStatus(JsonResponse(Status::CODE_500, json::object()), true), ActionStatus::kFailure);
+}
+
+class WebServiceTelemetryInferenceTest : public ::testing::TestWithParam<bool> {};
+
+TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOperationContext) {
+  test::CpuOnlyEpDetector ep_detector;
+  ModelLoadManager load_manager(ep_detector, fl::test::NullLog());
+  SessionManager sessions(fl::test::NullLog());
+  WebUsageTelemetry telemetry;
+  test::FakeServiceBindings bindings;
+  test::MockCatalog catalog;
+  const auto model_path = test::GetTestModelPath(test::kTestChatModelAlias);
+  auto loaded = load_manager.LoadModel(model_path.string(), "telemetry-chat");
+  ASSERT_EQ(loaded.status, ModelLoadManager::LoadStatus::kSuccess);
+  catalog.AddModel(Model::FromModelInfo(
+      ModelInfo{.model_id = "telemetry-chat", .name = "telemetry-chat", .task = "chat-completion"},
+      model_path.string(), bindings.download_manager, load_manager));
+  auto cache = test::TempPath::CreateTempDir("fl_inference_telemetry_");
+  WebService service(catalog, fl::test::NullLog(), cache.string(), load_manager, sessions, telemetry, []() {});
+  const auto urls = service.Start({"http://127.0.0.1:0"});
+  ASSERT_EQ(urls.size(), 1u);
+  httplib::Client client(urls[0]);
+  client.set_read_timeout(60, 0);
+  const bool streaming = GetParam();
+  json request = {
+      {"model", "telemetry-chat"},
+      {"messages", {{{"role", "user"}, {"content", "Say hello."}}}},
+      {"max_tokens", 2},
+      {"stream", streaming},
+  };
+  const auto response = client.Post("/v1/chat/completions", {{"User-Agent", "telemetry-test-client"}},
+                                    request.dump(), "application/json");
+  ASSERT_TRUE(response) << httplib::to_string(response.error());
+  EXPECT_EQ(response->status, 200) << response->body;
+  if (streaming) {
+    EXPECT_NE(response->body.find("data: [DONE]"), std::string::npos);
+  }
+
+  service.Stop();  // Joins the stream before inspecting its terminal route action.
+  const auto events = telemetry.Events();
+  ASSERT_EQ(events.actions.size(), 3u);
+  ASSERT_EQ(events.models.size(), 1u);
+  const auto& usage = events.models[0];
+  EXPECT_EQ(usage.model_id, "telemetry-chat");
+  EXPECT_EQ(usage.execution_provider, "CPUExecutionProvider");
+  EXPECT_EQ(usage.user_agent, "telemetry-test-client");
+  EXPECT_EQ(usage.num_messages, 1u);
+  EXPECT_EQ(usage.stream, streaming);
+  EXPECT_TRUE(usage.indirect);
+  EXPECT_EQ(usage.correlation_id.size(), 36u);
+  std::vector<Action> action_ids;
+  for (const auto& action : events.actions) {
+    action_ids.push_back(action.action);
+    EXPECT_EQ(action.status, ActionStatus::kSuccess);
+    EXPECT_EQ(action.model_id, "telemetry-chat");
+    EXPECT_EQ(action.context.correlation_id, usage.correlation_id);
+    EXPECT_EQ(action.context.user_agent, "telemetry-test-client");
+    EXPECT_EQ(action.context.indirect, action.action != Action::kOpenAIChatCompletions);
+  }
+
+  EXPECT_EQ(action_ids, (std::vector<Action>{Action::kSessionCreate, Action::kSessionProcessRequest,
+                                            Action::kOpenAIChatCompletions}));
+}
+
+INSTANTIATE_TEST_SUITE_P(StreamingAndNonStreaming, WebServiceTelemetryInferenceTest, ::testing::Bool());
 
 #endif  // FOUNDRY_LOCAL_HAS_WEB_SERVICE

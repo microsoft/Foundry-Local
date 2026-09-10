@@ -94,7 +94,7 @@ include(cmake/Sanitizers.cmake)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(LibArchive REQUIRED)
 
 if(FOUNDRY_LOCAL_BUILD_SERVICE)
     find_package(oatpp CONFIG REQUIRED)
@@ -102,12 +102,53 @@ endif()
 
 if(FOUNDRY_LOCAL_BUILD_TESTS)
     find_package(GTest CONFIG REQUIRED)
+    find_package(ZLIB REQUIRED)
     enable_testing()
 endif()
 
 # ORT and ORT GenAI — acquired via FetchContent from nuget.org.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(OnnxRuntimeGenAI REQUIRED)
+
+include(CheckCXXSourceCompiles)
+
+set(CMAKE_REQUIRED_LIBRARIES OnnxRuntimeGenAI::OnnxRuntimeGenAI)
+unset(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE CACHE)
+check_cxx_source_compiles("
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+
+#include <ort_genai.h>
+
+int main() {
+    auto* model = reinterpret_cast<OgaModel*>(1);
+    auto engine = OgaEngine::Create(*model);
+    auto events = engine->CreateEventBuffer(1);
+    auto request_options = OgaRequestOptions::Create();
+    auto request = engine->CreateRequest(request_options.get());
+    auto turn_options = request->CreateTurnOptions();
+    turn_options->SetMaxGeneratedTokens(static_cast<uint64_t>(1));
+    turn_options->SetDoSample(true);
+    turn_options->SetTemperature(1.0f);
+    turn_options->SetTopP(1.0f);
+    turn_options->SetTopK(1);
+    turn_options->SetSeed(static_cast<uint64_t>(1));
+    const char* values[] = {\"stop\"};
+    auto stop_strings = OgaStringArray::Create(values, 1);
+    turn_options->SetStopStrings(*stop_strings);
+    turn_options->SetGuidance(\"\", \"\");
+    const auto finish_reason = OgaFinishReason_StopString;
+    return events && request && turn_options && finish_reason == OgaFinishReason_Eos ? 0 : 1;
+}
+" FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
+unset(CMAKE_REQUIRED_LIBRARIES)
+
+if(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
+    message(STATUS "ORT GenAI dynamic Engine API: enabled")
+else()
+    message(STATUS "ORT GenAI dynamic Engine API: unavailable; using Generator backend")
+endif()
 find_package(OnnxRuntime REQUIRED)
 
 # WinML EP Catalog — Windows-only, for hardware EP discovery and download. The
@@ -141,6 +182,7 @@ if(WIN32)
         src/platform/windows/path.cc
         src/platform/windows/file_io.cc
         src/platform/windows/cross_process_file_lock.cc
+        src/platform/windows/dynlib_loader.cc
     )
 else()
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
@@ -149,6 +191,13 @@ else()
         src/platform/posix/file_io.cc
         src/platform/posix/cross_process_file_lock.cc
     )
+    # Android does not support the dlopen-based loader; dynlib_loader.cc is
+    # only compiled for Linux and macOS.
+    if(NOT ANDROID)
+        list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
+            src/platform/posix/dynlib_loader.cc
+        )
+    endif()
 endif()
 
 # WinML EP bootstrapper is only built when the WinML EP catalog package is
@@ -159,6 +208,24 @@ endif()
 if(WinMLEpCatalog_FOUND)
     list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
         src/ep_detection/winml_ep_bootstrapper.cc
+    )
+endif()
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" FOUNDRY_LOCAL_SYSTEM_PROCESSOR)
+set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS ON)
+if(ANDROID OR
+   (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+    NOT FOUNDRY_LOCAL_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$"))
+    set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS OFF)
+endif()
+
+if(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS)
+    list(APPEND FOUNDRY_LOCAL_PLATFORM_SOURCES
+        src/ep_detection/cuda_ep_bootstrapper.cc
+        src/ep_detection/cuda_ep_manifest.cc
+        src/ep_detection/ep_bundle_installer.cc
+        src/ep_detection/nvml_gpu_detector.cc
+        src/ep_detection/webgpu_ep_bootstrapper.cc
     )
 endif()
 
@@ -178,6 +245,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/catalog/azure_catalog_models.cc
     src/catalog/catalog_cache.cc
     src/catalog/catalog_client.cc
+    src/catalog/local_model_catalog.cc
     src/catalog/local_model_scanner.cc
     src/inferencing/generative/audio/audio_generator.cc
     src/inferencing/generative/audio/audio_session.cc
@@ -197,15 +265,14 @@ set(FOUNDRY_LOCAL_SOURCES
     src/download/file_writer.cc
     src/download/inference_model_writer.cc
     src/download/model_registry_client.cc
-    src/ep_detection/cuda_ep_bootstrapper.cc
     src/ep_detection/ep_detector.cc
-    src/ep_detection/ep_utils.cc
     src/ep_detection/runtime_version_info.cc
-    src/ep_detection/webgpu_ep_bootstrapper.cc
     src/exception.cc
     src/inferencing/generative/genai_config.cc
     src/http/http_client.cc
+    src/http/curl_transport.cc
     src/inferencing/generative/genai_model_instance.cc
+    src/inferencing/generative/preprocessor.cc
     src/logger.cc
     src/spdlog_logger.cc
     src/model_info.cc
@@ -218,6 +285,7 @@ set(FOUNDRY_LOCAL_SOURCES
     src/inferencing/generative/toolcalling/tool_call_utils.cc
     src/inferencing/generative/toolcalling/grammar.cc
     src/inferencing/generative/chat/search_options.cc
+    src/inferencing/generative/chat/stop_strings.cc
     src/inferencing/predictive/inference_session.cc
     src/inferencing/predictive/tensor.cc
     src/manager.cc
@@ -234,28 +302,34 @@ set(FOUNDRY_LOCAL_SOURCES
     src/telemetry/telemetry.cc
     src/telemetry/telemetry_action_tracker.cc
     src/telemetry/device_id.cc
+    src/telemetry/download_tracker.cc
+    src/telemetry/ep_download_tracker.cc
     src/telemetry/invocation_context.cc
+    src/telemetry/telemetry_event_properties_sanitizer.cc
     src/telemetry/telemetry_environment.cc
     src/telemetry/telemetry_logger.cc
     src/telemetry/telemetry_metadata.cc
-    src/telemetry/ep_download_tracker.cc
-    src/telemetry/download_tracker.cc
     src/utils.cc
     src/util/file_lock.cc
     src/http/http_download.cc
     src/util/path_safety.cc
     src/util/region_fallback.cc
     src/util/sha256.cc
+    src/util/time_utils.cc
     src/util/zip_extract.cc
     ${FOUNDRY_LOCAL_PLATFORM_SOURCES}
     ${FOUNDRY_LOCAL_INTERNAL_HEADERS}
 )
 
+if(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
+    list(APPEND FOUNDRY_LOCAL_SOURCES
+        src/inferencing/generative/chat/onnx_chat_engine.cc
+        src/inferencing/generative/chat/onnx_engine_chat_stream.cc
+    )
+endif()
+
 # 1DS bridge — always compiled for Foundry Local Core.
 list(APPEND FOUNDRY_LOCAL_SOURCES src/telemetry/one_ds_telemetry.cc)
-if(ANDROID)
-    list(APPEND FOUNDRY_LOCAL_SOURCES src/telemetry/android_telemetry_bridge.cc)
-endif()
 
 # Organize headers into filters matching the directory structure in Visual Studio
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source" FILES ${FOUNDRY_LOCAL_SOURCES})
@@ -287,7 +361,13 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
             Azure::azure-core
             Azure::azure-storage-blobs
             spdlog::spdlog
+            LibArchive::LibArchive
+            ${CMAKE_DL_LIBS}
     )
+
+    if(WIN32)
+        target_link_libraries(${TARGET} ${LINK_SCOPE} shell32 ole32)
+    endif()
 
     if(TARGET OnnxRuntimeGenAI::OnnxRuntimeGenAI)
         target_link_libraries(${TARGET} ${LINK_SCOPE}
@@ -301,9 +381,11 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
     if(WIN32)
         target_link_libraries(${TARGET} ${LINK_SCOPE} dbghelp bcrypt version)
         # UWP builds have CMAKE_SYSTEM_NAME = "WindowsStore"; desktop = "Windows".
-        # WinHTTP is not available in UWP, so only define this on desktop Windows.
         if(NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-            target_compile_definitions(${TARGET} PRIVATE FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT=1)
+            target_compile_definitions(${TARGET} PRIVATE
+                FOUNDRY_LOCAL_DESKTOP_WINDOWS=1
+                FOUNDRY_LOCAL_USE_WINHTTP_TRANSPORT=1
+            )
         endif()
     else()
         target_link_libraries(${TARGET} ${LINK_SCOPE} OpenSSL::Crypto)
@@ -316,6 +398,12 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
     if(ANDROID)
         target_link_libraries(${TARGET} ${LINK_SCOPE} log)
     endif()
+    target_compile_definitions(
+        ${TARGET}
+        PRIVATE
+            FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS=$<BOOL:${FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS}>
+            FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE=$<BOOL:${FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE}>
+    )
 
     if(FOUNDRY_LOCAL_BUILD_SERVICE)
         target_link_libraries(${TARGET} ${LINK_SCOPE} oatpp::oatpp)
@@ -342,6 +430,11 @@ endfunction()
 # local developer builds.
 set(FOUNDRY_LOCAL_VERSION_STRING "${PROJECT_VERSION}"
     CACHE STRING "Version string returned by FoundryLocalGetVersionString()")
+
+set(FOUNDRY_LOCAL_ORT_GENAI_VERSION "${ORT_GENAI_VERSION}")
+if(NOT FOUNDRY_LOCAL_ORT_GENAI_VERSION)
+    set(FOUNDRY_LOCAL_ORT_GENAI_VERSION "unknown")
+endif()
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
@@ -519,7 +612,7 @@ target_include_directories(foundry_local_cpp
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(foundry_local_cpp INTERFACE foundry_local Microsoft.GSL::GSL)
+target_link_libraries(foundry_local_cpp INTERFACE foundry_local)
 
 # --------------------------------------------------------------------------
 # Split debug symbols (Linux / macOS, RelWithDebInfo only)

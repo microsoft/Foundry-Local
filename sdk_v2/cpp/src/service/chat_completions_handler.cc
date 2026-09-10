@@ -56,17 +56,23 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Pa
     return ErrorResponse(Status::CODE_400, "Missing required field: messages");
   }
 
+  if (req.frequency_penalty.value_or(0.0f) != 0.0f ||
+      req.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
+  }
+
   return nullptr;
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ResolveModel(
-    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
   }
 
-  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id());
+  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id(), model->GetPath());
   if (!loaded) {
     return ErrorResponse(Status::CODE_400, "Model not loaded",
                          "Model '" + model_name + "' must be loaded before inference");
@@ -155,15 +161,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ha
 
   // 6. Run inference via ChatSession
   try {
-    std::unique_ptr<ChatSession> session;
-    {
-      ActionTracker create_tracker(Action::kSessionCreate, ctx_.telemetry, session_ctx);
-      create_tracker.SetModelId(model_name);
-      session = std::make_unique<ChatSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
-      create_tracker.SetStatus(ActionStatus::kSuccess);
-    }
+    auto session = CreateSessionWithTelemetry<ChatSession>(*model, *loaded, ctx_, session_ctx);
     ChatSession& session_ref = *session;
-    session_ref.SetRequestContext(session_ctx);
+    session_ref.SetInvocationContext(session_ctx);
 
     if (stream) {
       // The route action is recorded by the streaming thread when the stream
@@ -173,13 +173,14 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ha
     } else {
       SessionRegistration reg(ctx_.session_manager, session_ref);
       auto response = HandleNonStreaming(session_ref, session_request);
-      tracker->SetStatus(ResponseToActionStatus(response));
+      tracker->SetStatus(ResponseToActionStatus(response, session_request.canceled.load(std::memory_order_relaxed)));
       return response;
     }
   } catch (const std::exception& ex) {
     if (tracker) {
       tracker->RecordException(ex);
     }
+
     ctx_.logger.Log(LogLevel::Error, fmt::format("Chat completion inference failed: {}", ex.what()));
     return ErrorResponse(Status::CODE_500, "Inference failed", ex.what());
   }
@@ -222,7 +223,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Ha
                                 route_tracker = std::move(route_tracker),
                                 &session_manager = ctx_.session_manager]() mutable {
     try {
+      // Register inside the try so a shutdown rejection (Register throws) is reported as a stream error
+      // instead of escaping this raw std::thread and calling std::terminate.
       SessionRegistration reg(session_manager, bg_session);
+
       fl::Response bg_response;
 
       // Callback receives OPENAI_JSON-tagged TextItem chunks from ChatSession — just wrap in SSE framing.
@@ -235,10 +239,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Ha
 
         if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
           auto& text_item = static_cast<fl::TextItem&>(*item);
-          if (!body_ptr->Push("data: " + text_item.text + "\n\n")) {
-            req.canceled.store(true, std::memory_order_relaxed);
-            return 1;
-          }
+          body_ptr->Push("data: " + text_item.text + "\n\n");
         } else {
           logger.Log(LogLevel::Error,
                      fmt::format("Unexpected item type {} in chat streaming callback", static_cast<int>(item->type)));
@@ -266,11 +267,11 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Ha
         usage.prompt_tokens = static_cast<int>(bg_response.usage.prompt_tokens);
         usage.completion_tokens = static_cast<int>(bg_response.usage.completion_tokens);
         usage.total_tokens = static_cast<int>(bg_response.usage.total_tokens);
+        usage.completion_tokens_details.reasoning_tokens =
+            static_cast<int>(bg_response.usage.reasoning_tokens);
         usage_chunk.usage = std::move(usage);
 
-        if (!body_ptr->Push("data: " + nlohmann::json(usage_chunk).dump() + "\n\n")) {
-          req.canceled.store(true, std::memory_order_relaxed);
-        }
+        body_ptr->Push("data: " + nlohmann::json(usage_chunk).dump() + "\n\n");
       }
 
       body_ptr->Push("data: [DONE]\n\n");
@@ -286,15 +287,14 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::Ha
       };
       body_ptr->Push("data: " + err.dump() + "\n\n");
 
-      // Mid-stream failure: record the exception; the route action keeps kFailure.
+      // Preserve exception-based classification for cancellation, client errors and dependency failures.
       if (route_tracker) {
         route_tracker->RecordException(ex);
       }
     }
 
     body_ptr->Finish();
-    // route_tracker is destroyed with this closure once the thread completes,
-    // recording the route action with the full streaming duration and final status.
+    // Emit before untracking the worker, while its telemetry dependency is still alive.
     route_tracker.reset();
     thread_tracker.Remove(std::this_thread::get_id());
   });

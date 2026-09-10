@@ -9,6 +9,7 @@
 #include <mutex>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <foundry_local/foundry_local_c.h>
@@ -34,16 +35,17 @@ class IEpDetector {
   /// Example: { "CPU" → ["CPUExecutionProvider"], "GPU" → ["CudaExecutionProvider"] }
   virtual std::map<std::string, std::vector<std::string>> GetAvailableDevicesToEPs() const = 0;
 
-  /// Returns a recent snapshot of all discoverable EPs (those with bootstrappers).
-  /// The returned reference is valid until this method is next called on the same thread.
+  /// Returns metadata for all discoverable EPs (those with bootstrappers).
   /// Default: empty — no discoverable EPs beyond what's already registered.
   virtual const std::vector<EpInfo>& GetDiscoverableEps() const {
     static const std::vector<EpInfo> empty;
     return empty;
   }
 
-  /// C ABI view of a recent discoverable EPs snapshot. Pointers are valid until
-  /// this method is next called on the same thread.
+  /// C ABI view of the discoverable EPs. Pointers, struct addresses, and name
+  /// strings are stable for the detector's lifetime. is_registered values
+  /// reflect a recent snapshot — concurrent DownloadAndRegisterEps may have
+  /// updated them since the call returned.
   /// Default: empty span.
   virtual std::span<const flEpInfo> GetDiscoverableEpsCApi() const {
     return {};
@@ -61,6 +63,9 @@ class IEpDetector {
   /// Whether an EP download/registration operation is currently in progress.
   /// Default: false.
   virtual bool IsDownloadInProgress() const { return false; }
+
+  /// Prepare the registered EP for model loading.
+  virtual bool PrepareForModelLoad(std::string_view /*ep_name*/) { return true; }
 };
 
 /// Real EP detector that orchestrates bootstrappers for EP discovery and registration.
@@ -71,12 +76,9 @@ class EpDetector : public IEpDetector {
   /// @param ort_env  The ORT environment singleton.
   /// @param bootstrappers  EP bootstrappers for download/registration.
   /// @param logger  Logger instance.
-  /// @param telemetry  Telemetry sink. DownloadAndRegisterEps emits one EPDownloadAndRegister event per provider via
-  ///                   EpDownloadTracker, plus one aggregate EPDownloadAttempt event for the whole call.
   EpDetector(const OrtApi& ort_api, OrtEnv& ort_env,
              std::vector<std::unique_ptr<IEpBootstrapper>> bootstrappers,
-             ILogger& logger,
-             ITelemetry& telemetry);
+             ILogger& logger, ITelemetry& telemetry);
   ~EpDetector() override = default;
 
   // Non-copyable, non-movable (owns bootstrappers and mutex state)
@@ -89,6 +91,7 @@ class EpDetector : public IEpDetector {
   EpDownloadResult DownloadAndRegisterEps(const std::vector<std::string>* names,
                                           const IEpBootstrapper::ProgressCallback& progress_cb) override;
   bool IsDownloadInProgress() const override;
+  bool PrepareForModelLoad(std::string_view ep_name) override;
 
  private:
   const OrtApi& ort_api_;
@@ -99,9 +102,11 @@ class EpDetector : public IEpDetector {
   std::mutex download_mutex_;
   std::atomic<bool> download_in_progress_{false};
   mutable std::mutex cache_mutex_;
-  // Populated once in the constructor; mutated only under cache_mutex_ and copied
-  // into per-thread snapshots for callers.
+  // Populated once in the constructor; size and element addresses (including name strings)
+  // are stable for the detector's lifetime. Only is_registered fields are mutated, under
+  // cache_mutex_. cached_eps_c_ mirrors cached_eps_ for the C ABI.
   std::vector<EpInfo> cached_eps_;
+  std::vector<flEpInfo> cached_eps_c_;
 };
 
 }  // namespace fl

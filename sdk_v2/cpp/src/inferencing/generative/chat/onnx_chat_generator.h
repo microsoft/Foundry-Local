@@ -7,11 +7,13 @@
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/generative/genai_model_instance.h"
+#include "items/audio_item.h"
 #include "items/image_item.h"
 
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,7 @@ class OnnxChatGenerator : public ChatGenerator {
   bool IsDone() const override;
   void GenerateNextToken() override;
   std::string Decode() override;
+  std::optional<int32_t> CurrentTokenId() const override;
   int TokenCount() const override;
   int PromptTokenCount() const override;
   void Cancel() override;
@@ -45,12 +48,15 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Used for continuous decoding — only the new turn's messages are encoded and appended.
   /// Returns the number of new prompt tokens appended.
   int AppendMessages(const std::vector<MessageItem>& new_messages,
+                     const std::vector<MessageItem>& full_messages,
                      GenAIModelInstance& model,
-                     const std::string& tools_json);
+                     const ToolCallContext& tool_ctx,
+                     const SearchOptions& options) override;
 
   /// Rewind the generator to a previous token position.
   /// Used for error recovery — restores the KV cache to the state before the last turn.
-  void RewindTo(int token_count);
+  bool CanRewind() const override { return true; }
+  void RewindTo(int token_count) override;
 
   /// Factory: create a text-only chat generator.
   ///
@@ -68,26 +74,13 @@ class OnnxChatGenerator : public ChatGenerator {
                                                    const ToolCallContext& tool_ctx = {},
                                                    bool use_full_context = false);
 
-  /// Factory: create a vision-enabled chat generator.
-  ///
-  /// Processes `images` via the model's OgaMultiModalProcessor and feeds the
-  /// resulting named tensors into OgaGenerator::SetInputs (in place of the
-  /// usual encoded-prompt path). The last user message in `messages` is
-  /// rewritten to `[{"type":"image"},{"type":"text","text":...}]` so the chat
-  /// template inserts the model's image sentinel tokens.
-  ///
-  /// Requires `model.IsMultiModal()`. `images` must be non-empty.
-  /// Continuous decoding (AppendMessages) has no image-aware path; callers
-  /// must always create a fresh generator for a vision turn.
-  ///
-  /// @throws fl::Exception (FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT) on a
-  ///         non-multimodal model, empty/oversize image list, or unreadable
-  ///         image bytes.
-  static std::unique_ptr<OnnxChatGenerator> CreateWithImages(
+  /// Factory: create a multimodal chat generator with image and/or audio inputs.
+  static std::unique_ptr<OnnxChatGenerator> CreateWithMedia(
       const std::vector<MessageItem>& messages,
       const SearchOptions& options,
       GenAIModelInstance& model,
       const std::vector<const ImageItem*>& images,
+      const std::vector<const AudioItem*>& audios,
       const ToolCallContext& tool_ctx = {},
       bool use_full_context = false);
 
@@ -100,40 +93,39 @@ class OnnxChatGenerator : public ChatGenerator {
   /// chat template inserts the appropriate vision sentinel tokens. Other
   /// messages are emitted in their plain `{"role","content"}` form.
   ///
-  /// Mirrors upstream C# OnnxChatGenerator.TransformMessagesForVision.
-  static std::string TransformMessagesForVision(const std::vector<MessageItem>& messages);
+  static std::string TransformMessagesForMedia(const std::vector<MessageItem>& messages);
 
  private:
   OnnxChatGenerator(std::unique_ptr<OgaGeneratorParams> gen_params,
                     std::unique_ptr<OgaGenerator> generator,
                     std::unique_ptr<OgaTokenizerStream> stream,
-                    std::unique_ptr<OgaTokenizerStream> stream_with_special,
                     GenAIModelInstance& model,
                     int prompt_token_count,
                     std::unique_ptr<OgaNamedTensors> named_tensors = nullptr);
 
-  // Shared implementation for both Create (text) and CreateWithImages (vision).
-  // `images` empty → text path; non-empty → vision path. Centralised here so
-  // both public entry points share search-options validation, guidance setup,
+  // Shared implementation for text and media creation paths. Empty image and
+  // audio lists select text; either media list selects multimodal processing.
+  // Both public entry points share search-options validation, guidance setup,
   // and generator construction.
   static std::unique_ptr<OnnxChatGenerator> CreateImpl(const std::vector<MessageItem>& messages,
                                                        const SearchOptions& options,
                                                        GenAIModelInstance& model,
                                                        const ToolCallContext& tool_ctx,
                                                        bool use_full_context,
-                                                       const std::vector<const ImageItem*>& images);
+                                                       const std::vector<const ImageItem*>& images,
+                                                       const std::vector<const AudioItem*>& audios);
 
   std::unique_ptr<OgaGeneratorParams> gen_params_;
   std::unique_ptr<OgaGenerator> generator_;
   std::unique_ptr<OgaTokenizerStream> stream_;
-  std::unique_ptr<OgaTokenizerStream> stream_with_special_;  // for tool call token detection
-  // Holds the named tensors produced by OgaMultiModalProcessor::ProcessImages
+  // Holds the named tensors produced by OgaMultiModalProcessor media processing
   // for the lifetime of the generator. Generator retains shared_ptr<Tensor>
   // copies internally, but we keep the wrapper alive for symmetry with
   // upstream C# and to guarantee defensive lifetime safety.
   std::unique_ptr<OgaNamedTensors> named_tensors_;
   GenAIModelInstance& model_;  // non-owning reference — model outlives generator
   int prompt_token_count_ = 0;
+  std::optional<int32_t> current_token_;
   std::atomic<bool> cancelled_{false};
 };
 

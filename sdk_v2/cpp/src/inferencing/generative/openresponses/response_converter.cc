@@ -3,6 +3,8 @@
 
 #include "inferencing/generative/openresponses/response_converter.h"
 
+#include "items/tool_call_item.h"
+
 #include <azure/core/base64.hpp>
 
 #include <chrono>
@@ -59,6 +61,7 @@ static_assert(sizeof(ResponseObject) == 832,
 }  // namespace fl
 
 #include "exception.h"
+#include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
@@ -188,7 +191,7 @@ std::string MimeFromExtension(const std::string& path) {
   return {};
 }
 
-std::unique_ptr<ImageItem> MakeImageItemFromDataUrl(const std::string& url) {
+std::unique_ptr<ImageItem> MakeImageItemFromDataUrl(const std::string& url, std::string_view error_source) {
   // Format: "data:<media-type>;base64,<payload>"
   // Strict: we require base64 encoding (not raw text) and a `;base64,`
   // marker. Anything else throws — vision models can't consume non-base64
@@ -196,7 +199,7 @@ std::unique_ptr<ImageItem> MakeImageItemFromDataUrl(const std::string& url) {
   auto comma = url.find(',');
   if (comma == std::string::npos) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             "image_url data URL is missing payload separator ','");
+             std::string(error_source) + " is missing payload separator ','");
   }
 
   std::string header = url.substr(kDataUrlPrefix.size(), comma - kDataUrlPrefix.size());
@@ -204,8 +207,7 @@ std::unique_ptr<ImageItem> MakeImageItemFromDataUrl(const std::string& url) {
   constexpr std::string_view kBase64Marker = ";base64";
   auto base64_pos = header.find(kBase64Marker);
   if (base64_pos == std::string::npos) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             "image_url data URL must use ';base64,' encoding");
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, std::string(error_source) + " must use ';base64,' encoding");
   }
 
   std::string media_type = header.substr(0, base64_pos);
@@ -216,11 +218,11 @@ std::unique_ptr<ImageItem> MakeImageItemFromDataUrl(const std::string& url) {
     bytes = Azure::Core::Convert::Base64Decode(payload);
   } catch (const std::exception& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             std::string("image_url data URL has invalid base64 payload: ") + e.what());
+             std::string(error_source) + " has invalid base64 payload: " + e.what());
   }
 
   if (bytes.empty()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "image_url data URL decoded to zero bytes");
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, std::string(error_source) + " decoded to zero bytes");
   }
 
   return std::make_unique<ImageItem>(std::move(bytes), std::move(media_type));
@@ -259,31 +261,59 @@ std::unique_ptr<ImageItem> MakeImageItemFromLocalFile(const std::string& url,
 }
 
 std::unique_ptr<ImageItem> MakeImageItemFromInputImage(const InputImageContent& c) {
-  if (c.file_id.has_value() && !c.file_id->empty()) {
+  if (c.image_url.has_value() && !c.image_url->empty()) {
+    const std::string& url = *c.image_url;
+
+    if (url.compare(0, kDataUrlPrefix.size(), kDataUrlPrefix) == 0) {
+      return MakeImageItemFromDataUrl(url, "image_url data URL");
+    }
+
+    // file:// URI or absolute local path.
+    if (url.compare(0, kFileScheme.size(), kFileScheme) == 0 ||
+        (url.size() >= 2 && (url[0] == '/' || url[0] == '\\' ||
+                             (url.size() >= 3 && url[1] == ':' && (url[2] == '/' || url[2] == '\\'))))) {
+      return MakeImageItemFromLocalFile(url, c.media_type);
+    }
+
     FL_THROW(FOUNDRY_LOCAL_ERROR_NOT_IMPLEMENTED,
-             "image input via file_id is not supported on Foundry Local");
+             "image_url must be a data: URL or a local file path; remote http(s) URLs are not supported");
   }
 
-  if (!c.image_url.has_value() || c.image_url->empty()) {
+  if (c.image_data.has_value() && !c.image_data->empty()) {
+    const std::string media_type =
+        c.media_type.has_value() && !c.media_type->empty() ? *c.media_type : "image/png";
+    return MakeImageItemFromDataUrl("data:" + media_type + ";base64," + *c.image_data, "image_data");
+  }
+
+  if (c.file_id.has_value() && !c.file_id->empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NOT_IMPLEMENTED, "image input via file_id is not supported on Foundry Local");
+  }
+
+  FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+           "input_image content requires a non-empty image_url, image_data, or file_id");
+}
+
+std::unique_ptr<AudioItem> MakeAudioItemFromInputAudio(const InputAudioContent& c) {
+  if (c.data.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "input_audio data must not be empty");
+  }
+  if (c.format.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "input_audio format must not be empty");
+  }
+
+  std::vector<std::uint8_t> bytes;
+  try {
+    bytes = Azure::Core::Convert::Base64Decode(c.data);
+  } catch (const std::exception& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             "input_image content requires a non-empty image_url or file_id");
+             std::string("input_audio has invalid base64 payload: ") + e.what());
   }
 
-  const std::string& url = *c.image_url;
-
-  if (url.compare(0, kDataUrlPrefix.size(), kDataUrlPrefix) == 0) {
-    return MakeImageItemFromDataUrl(url);
+  if (bytes.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "input_audio decoded to zero bytes");
   }
 
-  // file:// URI or absolute local path.
-  if (url.compare(0, kFileScheme.size(), kFileScheme) == 0 ||
-      (url.size() >= 2 && (url[0] == '/' || url[0] == '\\' ||
-                           (url.size() >= 3 && url[1] == ':' && (url[2] == '/' || url[2] == '\\'))))) {
-    return MakeImageItemFromLocalFile(url, c.media_type);
-  }
-
-  FL_THROW(FOUNDRY_LOCAL_ERROR_NOT_IMPLEMENTED,
-           "image_url must be a data: URL or a local file path; remote http(s) URLs are not supported");
+  return std::make_unique<AudioItem>(std::move(bytes), c.format);
 }
 
 }  // namespace
@@ -299,10 +329,7 @@ static void AddTypedInputItems(Request& request,
       auto i = std::make_unique<ToolResultItem>(fc_result->call_id, fc_result->output);
       request.AddOwnedItem(std::move(i));
     } else if (auto* msg = std::get_if<InputMessage>(&input_item)) {
-      // Build typed parts from the message's content array. Text and image
-      // parts are forwarded; other content variants (file, audio) are
-      // rejected at the converter so we fail fast rather than silently
-      // dropping content.
+      // Build typed parts from the message's content array.
       std::vector<std::unique_ptr<Item>> parts;
       bool has_text = false;
       for (const auto& c : msg->content) {
@@ -313,9 +340,11 @@ static void AddTypedInputItems(Request& request,
           }
         } else if (auto* ic = std::get_if<InputImageContent>(&c)) {
           parts.push_back(MakeImageItemFromInputImage(*ic));
+        } else if (auto* ac = std::get_if<InputAudioContent>(&c)) {
+          parts.push_back(MakeAudioItemFromInputAudio(*ac));
         } else {
           FL_THROW(FOUNDRY_LOCAL_ERROR_NOT_IMPLEMENTED,
-                   "input message content type not supported (only input_text and input_image)");
+                   "input message content type not supported (only input_text, input_image, and input_audio)");
         }
       }
 
@@ -389,14 +418,14 @@ Request ToSessionRequest(const ResponseCreateParams& params,
         std::to_string(*params.max_output_tokens);
   }
 
-  if (params.presence_penalty.has_value()) {
-    request.options["presence_penalty"] =
-        std::to_string(*params.presence_penalty);
+  if (params.presence_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero presence_penalty is not supported; ORT diversity_penalty has different semantics");
   }
 
-  if (params.frequency_penalty.has_value()) {
-    request.options["frequency_penalty"] =
-        std::to_string(*params.frequency_penalty);
+  if (params.frequency_penalty.value_or(0.0f) != 0.0f) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+             "nonzero frequency_penalty is not supported; ORT repetition_penalty has different semantics");
   }
 
   if (params.seed.has_value()) {
@@ -543,30 +572,11 @@ std::pair<std::vector<ResponseOutputItem>, std::string> FromSessionResponse(cons
     } else if (item->type == FOUNDRY_LOCAL_ITEM_MESSAGE) {
       MessageItem& msg_item = static_cast<MessageItem&>(*item);
       if (msg_item.role == FOUNDRY_LOCAL_ROLE_ASSISTANT) {
-        if (msg_item.IsSimpleText()) {
-          // Single-text fast path: no reasoning possible, emit one message item.
-          std::string text = msg_item.GetSimpleText();
-
-          if (text.empty()) {
-            continue;
-          }
-
-          output_text += text;
-
-          ResponseOutputMessage msg;
-          msg.id = GenerateId(msg_id_prefix);
-          msg.role = "assistant";
-          msg.status = ResponseStatus::kCompleted;
-          msg.content.push_back(OutputTextContent{std::move(text)});
-          output.push_back(std::move(msg));
-          continue;
-        }
-
-        // Multi-part message (reasoning model, possibly interleaved). Walk the parts in stream order and start
-        // a fresh output item on every type transition. This preserves the produced sequence — e.g. the model
-        // can emit `reasoning -> answer -> reasoning -> answer` and each run becomes its own output item, which
-        // matches how the OpenAI Responses API surfaces interleaved reasoning (one `reasoning` item per
-        // contiguous reasoning run, one `message` item per contiguous visible run).
+        // Walk the parts in stream order and start a fresh output item on every type transition. This preserves the
+        // produced sequence — e.g. the model can emit `reasoning -> answer -> reasoning -> answer` and each run
+        // becomes its own output item, which matches how the OpenAI Responses API surfaces interleaved reasoning.
+        // Inspect the TextItem type even for a one-part message because a generation truncated inside a reasoning
+        // block is reasoning-only.
         std::optional<flTextItemType> current_type;
         std::string current_text;
 
@@ -676,6 +686,7 @@ ResponseObject BuildResponseObject(const std::string& response_id,
   r.usage.input_tokens = static_cast<int>(usage.prompt_tokens);
   r.usage.output_tokens = static_cast<int>(usage.completion_tokens);
   r.usage.total_tokens = static_cast<int>(usage.total_tokens);
+  r.usage.output_tokens_details.reasoning_tokens = static_cast<int>(usage.reasoning_tokens);
 
   EchoRequestParams(r, params);
 
@@ -725,6 +736,57 @@ ResponseObject BuildInitialResponseObject(const std::string& response_id,
   EchoRequestParams(r, params);
 
   return r;
+}
+
+FunctionCallStreamOutput BuildFunctionCallStreamOutput(const ToolCallItem& call,
+                                                       int output_index,
+                                                       int& next_sequence_number) {
+  FunctionCallStreamOutput output;
+  output.events.reserve(4);
+
+  FunctionCallOutputItem in_progress_item;
+  in_progress_item.id = GenerateId("fc");
+  in_progress_item.call_id = call.call_id.empty() ? GenerateId("call") : call.call_id;
+  in_progress_item.name = call.name;
+
+  StreamEvent added;
+  added.type = StreamEventType::kOutputItemAdded;
+  added.sequence_number = next_sequence_number++;
+  added.output_index = output_index;
+  added.item = in_progress_item;
+  output.events.push_back(std::move(added));
+
+  StreamEvent arguments_delta;
+  arguments_delta.type = StreamEventType::kFunctionCallArgumentsDelta;
+  arguments_delta.sequence_number = next_sequence_number++;
+  arguments_delta.output_index = output_index;
+  arguments_delta.item_id = in_progress_item.id;
+  arguments_delta.delta = call.arguments;
+  arguments_delta.function_call_id = in_progress_item.call_id;
+  output.events.push_back(std::move(arguments_delta));
+
+  StreamEvent arguments_done;
+  arguments_done.type = StreamEventType::kFunctionCallArgumentsDone;
+  arguments_done.sequence_number = next_sequence_number++;
+  arguments_done.output_index = output_index;
+  arguments_done.item_id = in_progress_item.id;
+  arguments_done.function_name = in_progress_item.name;
+  arguments_done.function_call_id = in_progress_item.call_id;
+  arguments_done.function_arguments = call.arguments;
+  output.events.push_back(std::move(arguments_done));
+
+  output.completed_item = std::move(in_progress_item);
+  output.completed_item.arguments = call.arguments;
+  output.completed_item.status = ResponseStatus::kCompleted;
+
+  StreamEvent item_done;
+  item_done.type = StreamEventType::kOutputItemDone;
+  item_done.sequence_number = next_sequence_number++;
+  item_done.output_index = output_index;
+  item_done.item = output.completed_item;
+  output.events.push_back(std::move(item_done));
+
+  return output;
 }
 
 // ---------------------------------------------------------------------------

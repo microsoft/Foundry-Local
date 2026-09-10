@@ -19,7 +19,9 @@ struct OgaTokenizerStream;
 
 namespace fl {
 
+class AudioSessionTestAccessor;
 class GenAIModelInstance;
+struct AudioTranscriptionRequest;
 struct AudioItem;
 struct ItemQueue;
 struct SpeechSegmentItem;
@@ -46,13 +48,36 @@ class AudioSession : public Session {
   SessionType Type() const override;
 
  private:
-  void SetSessionOptionsImpl(const KeyValuePairs& options) override;
+   friend class AudioSessionTestAccessor;
+
+   void SetSessionOptionsImpl(const KeyValuePairs& options) override;
   void ProcessRequestImpl(const Request& request, Response& response) override;
 
   /// Process a request whose first item is a TEXT item tagged OPENAI_JSON containing an
   /// OpenAI AudioTranscriptionRequest payload.
   void ProcessAudioTranscriptionJson(const std::string& request_json, const Request& original_request,
                                      Response& response);
+
+  bool IsNemotronSpeechModel() const;
+
+  void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req, 
+                                        const Request& original_request,
+                                        Response& response);
+
+  void RunNemotronDecodePass(std::unique_ptr<OgaNamedTensors> tensors, OgaGenerator& generator,
+                             OgaTokenizerStream& tokenizer_stream, std::string& text,
+                             const std::unique_ptr<CallbackHandler>& streaming_callback,
+                             const std::string& response_id, const Request& original_request,
+                             int& completion_tokens) const;
+
+  void DecodeNemotronTokens(OgaGenerator& generator, OgaTokenizerStream& tokenizer_stream, std::string& text,
+                            const std::unique_ptr<CallbackHandler>& streaming_callback,
+                            const std::string& response_id, const Request& original_request,
+                            int& completion_tokens) const;
+
+  void TryNemotronLanguageId(OgaGenerator& generator, const std::string& language) const;
+
+  static std::vector<float> LoadPcmWavAsFloatSamples(const std::string& audio_file_path);
 
   /// Process a streaming audio request: an AudioItem (format descriptor) + an ItemQueue (PCM chunks).
   void ProcessStreamingAudio(const AudioItem& format_item, ItemQueue& queue,
@@ -80,9 +105,8 @@ class AudioSession : public Session {
                     const Request& request,
                     int& completion_tokens);
 
-  void RecordAdditionalModelUsage(const Request& request, const Response& response,
-                                 const InvocationContext& context, int64_t total_time_ms,
-                                 bool streaming) override;
+  void RecordAdditionalModelUsage(const Response& response, const ModelUsageInfo& usage) override;
+  static int64_t AudioDurationMsFromSamples(int64_t samples);
 
   GenAIModelInstance& Model() { return model_; }
   const GenAIModelInstance& Model() const { return model_; }

@@ -1,18 +1,12 @@
 {
   "name": "cpp-client-telemetry",
   "version": "3.10.173.1",
-  "port-version": 3,
+  "port-version": 1,
   "description": "Microsoft 1DS C/C++ Client Telemetry Library",
   "homepage": "https://github.com/microsoft/cpp_client_telemetry",
   "license": "Apache-2.0",
   "supports": "((windows & !mingw) | linux | osx | ios | android) & !uwp",
   "dependencies": [
-    {
-      "name": "curl",
-      "default-features": false,
-      "features": ["openssl"],
-      "platform": "linux"
-    },
     "nlohmann-json",
     {
       "name": "vcpkg-cmake",
@@ -28,7 +22,8 @@
     }
   ],
   "default-features": [
-    "system-sqlite"
+    "system-sqlite",
+    "curl-openssl"
   ],
   "features": {
     "system-sqlite": {
@@ -43,6 +38,17 @@
     },
     "minimal-sqlite": {
       "description": "Build the SDK's private feature-stripped SQLite."
+    },
+    "curl-openssl": {
+      "description": "Use the built-in libcurl client with OpenSSL on Linux and Android.",
+      "dependencies": [
+        {
+          "name": "curl",
+          "default-features": false,
+          "features": ["openssl"],
+          "platform": "linux | android"
+        }
+      ]
     }
   }
 }

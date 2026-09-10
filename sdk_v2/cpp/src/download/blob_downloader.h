@@ -103,10 +103,10 @@ class AzureBlobDownloader : public IBlobDownloader {
   /// Must throw on failure. Implementations should observe the cancellation
   /// flag accessible via `ctx` and exit promptly when cancellation is requested.
   virtual void DownloadChunkStreaming(ChunkContext& ctx,
-                                       int64_t offset,
-                                       int64_t size,
-                                       std::vector<uint8_t>& scratch,
-                                       const std::function<void(const uint8_t*, size_t)>& sink);
+                                      int64_t offset,
+                                      int64_t size,
+                                      std::vector<uint8_t>& scratch,
+                                      const std::function<void(const uint8_t*, size_t)>& sink);
 
   /// Reports whether cooperative cancellation has been requested for this
   /// download. The orchestrator calls `Azure::Core::Context::Cancel()` after a
@@ -125,8 +125,8 @@ struct BlobDownloadStats {
   int64_t already_cached_bytes = 0;
   int32_t file_count = 0;
   int32_t skipped_file_count = 0;
-  int64_t enumeration_ms = 0;   // Time spent listing blobs from the SAS URI.
-  int64_t download_ms = 0;      // Time spent transferring blob bytes (excludes enumeration).
+  int64_t enumeration_ms = 0;  // Time spent listing blobs from the SAS URI.
+  int64_t download_ms = 0;     // Time spent transferring blob bytes (excludes enumeration).
 };
 
 /// High-level download function: enumerate, filter, and download all blobs from a SAS URI.

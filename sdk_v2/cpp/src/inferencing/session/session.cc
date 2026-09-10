@@ -10,58 +10,67 @@
 #include "inferencing/session/session_manager.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
-#include "items/tool_result_item.h"
 #include "manager.h"
 #include "model.h"
 #include "telemetry/telemetry.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "utils.h"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <chrono>
-#include <cstdint>
+#include <limits>
 #include <memory>
-#include <string_view>
 
 namespace fl {
 
 namespace {
 
-uint64_t CountOpenAIJsonMessages(std::string_view text) {
-  auto json = nlohmann::json::parse(text.begin(), text.end(), nullptr, false);
-  if (json.is_discarded() || !json.is_object()) {
-    return 0;
+void LogUsageTelemetryFailure(ILogger& logger) noexcept {
+  try {
+    logger.Log(LogLevel::Warning, "Unable to record inference usage telemetry");
+  } catch (...) {
+    // Even a caller-provided diagnostic logger must not change a completed inference result.
   }
+}
 
+// Only retain the count, not another copy of prompt content for telemetry.
+struct RequestMessageCount {
   uint64_t count = 0;
+};
+
+void from_json(const nlohmann::json& json, RequestMessageCount& result) {
   const auto messages = json.find("messages");
-  if (messages != json.end() && messages->is_array()) {
-    count += messages->size();
+  if (messages == json.end()) {
+    return;
   }
 
-  return count;
+  if (!messages->is_array()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "messages must be an array");
+  }
+
+  result.count = messages->size();
 }
 
 uint64_t CountRequestMessages(const Request& request) {
   uint64_t count = 0;
   for (const auto* item : request.items) {
-    if (item == nullptr) {
+    if (!item) {
       continue;
     }
 
     if (item->type == FOUNDRY_LOCAL_ITEM_MESSAGE || item->type == FOUNDRY_LOCAL_ITEM_TOOL_RESULT) {
       ++count;
-      continue;
-    }
-
-    if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
-      const auto& text_item = static_cast<const TextItem&>(*item);
-      if (text_item.text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON) {
-        count += CountOpenAIJsonMessages(text_item.text);
+    } else if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
+      const auto& text = static_cast<const TextItem&>(*item);
+      if (text.text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON) {
+        count += nlohmann::json::parse(text.text).get<RequestMessageCount>().count;
       }
     }
   }
+
   return count;
 }
 
@@ -76,20 +85,6 @@ Session::Session(const fl::Model& catalog_model, ILogger& logger, ITelemetry& te
 }
 
 Session::~Session() = default;
-
-Session::Session(Session&& other) noexcept
-    : catalog_model_(other.catalog_model_),
-      logger_(other.logger_),
-      telemetry_(other.telemetry_),
-      tool_definitions_(std::move(other.tool_definitions_)),
-      session_options_(std::move(other.session_options_)),
-      callback_fn_(std::move(other.callback_fn_)),
-      callback_user_data_(other.callback_user_data_),
-      allow_concurrent_requests_(other.allow_concurrent_requests_) {
-  std::lock_guard<std::mutex> lock(other.request_context_mutex_);
-  request_context_ = std::move(other.request_context_);
-  other.request_context_.reset();
-}
 
 std::unique_ptr<Session> Session::Create(const fl::Model& model) {
   auto& mgr = Manager::Instance();
@@ -108,8 +103,7 @@ std::unique_ptr<Session> Session::Create(const fl::Model& model) {
       FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model must be loaded before creating a session");
     }
 
-    auto& lm = mgr.GetModelLoadManager();
-    auto* loaded = lm.GetLoadedModel(model.Id());
+    auto* loaded = mgr.GetModelLoadManager().GetLoadedModel(model.Id(), model.GetPath());
     if (!loaded) {
       FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INTERNAL, "loaded model not found in load manager");
     }
@@ -155,6 +149,54 @@ void Session::AddToolDefinition(ToolDefinition tool_def) {
   tool_definitions_.push_back(std::move(tool_def));
 }
 
+void Session::ValidateRequestItems(const Request& request) const {
+  // Only chat tasks are validated: other tasks either have no IO descriptor (embeddings) or accept
+  // transport items that the descriptor does not advertise (the ASR streaming QUEUE item).
+  const auto& task = catalog_model_.Info().task;
+  if (task != "chat-completion" && task != "vision-language-chat") {
+    return;
+  }
+
+  // The model's task metadata is the source of truth for which input modalities are accepted.
+  const auto io_info = catalog_model_.GetInputOutputInfo();
+
+  // An item type is accepted only if it matches one of the advertised inputs.
+  auto check = [&](flItemType type) {
+    const bool supported = std::any_of(io_info.inputs, io_info.inputs + io_info.num_inputs,
+                                       [type](const Item* input) { return input->type == type; });
+    if (!supported) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+               fmt::format("{} input is not supported by model task '{}'",
+                           Item::TypeName(type), catalog_model_.Info().task));
+    }
+  };
+
+  // Walk every request item, unwrapping containers so the check always lands on a modality item.
+  for (const auto* item : request.items) {
+    if (!item) {
+      continue;
+    }
+
+    switch (item->type) {
+      case FOUNDRY_LOCAL_ITEM_MESSAGE:
+        // The message wrapper itself is not a modality; validate the parts it carries.
+        for (const auto& part : static_cast<const MessageItem&>(*item).content) {
+          if (part.view) {
+            check(part.view->type);
+          }
+        }
+        break;
+      case FOUNDRY_LOCAL_ITEM_TOOL_CALL:
+      case FOUNDRY_LOCAL_ITEM_TOOL_RESULT:
+        // Tool plumbing, not model input.
+        break;
+      default:
+        check(item->type);
+        break;
+    }
+  }
+}
+
 void Session::ProcessRequest(const Request& request, Response& response) {
   // Serialize requests unless the derived class opted into concurrency.
   std::unique_lock<std::mutex> lock(*request_mutex_, std::defer_lock);
@@ -162,80 +204,100 @@ void Session::ProcessRequest(const Request& request, Response& response) {
     lock.lock();
   }
 
+  {
+    std::lock_guard<std::mutex> active_lock(*active_requests_mutex_);
+    active_requests_.insert(&request);
+
+    // If Cancel() already ran (shutdown began before this request was admitted), stamp it now so the
+    // generation loop exits at its first poll instead of running an uncanceled turn.
+    if (session_canceled_) {
+      request.canceled.store(true, std::memory_order_relaxed);
+    }
+  }
+
+  // RAII: deregister the request even if ProcessRequestImpl throws, so Cancel() never
+  // dereferences a dangling Request after this call unwinds.
   struct ActiveRequestGuard {
     Session& session;
     const Request& request;
-    ActiveRequestGuard(Session& session, const Request& request) : session(session), request(request) {
-      std::lock_guard<std::mutex> lock(session.active_requests_mutex_);
-      session.active_requests_.insert(&request);
-      if (session.session_canceled_) {
-        request.canceled.store(true, std::memory_order_relaxed);
-      }
-    }
     ~ActiveRequestGuard() {
-      std::lock_guard<std::mutex> lock(session.active_requests_mutex_);
+      std::lock_guard<std::mutex> active_lock(*session.active_requests_mutex_);
       session.active_requests_.erase(&request);
     }
-  } active_request_guard(*this, request);
+  } active_guard{*this, request};
 
-  // Use the context the caller staged (an HTTP route stages an indirect child
-  // with the route's correlation id); otherwise mint a direct context per call
-  // for direct SDK use.
-  InvocationContext context;
-  {
-    std::lock_guard<std::mutex> context_lock(request_context_mutex_);
-    context = request_context_ ? *request_context_ : InvocationContext::Direct();
-    request_context_.reset();
-  }
-  context.EnsureCorrelationId();
-  const bool streaming = static_cast<bool>(callback_fn_);
-
-  ActionTracker tracker(Action::kSessionProcessRequest, telemetry_, context);
+  ActionTracker tracker(Action::kSessionProcessRequest, telemetry_, TakeInvocationContext());
   tracker.SetModelId(CatalogModel().Id());
 
   const auto start = std::chrono::steady_clock::now();
   try {
+    ValidateRequestItems(request);
+
     ProcessRequestImpl(request, response);
 
     tracker.SetStatus(request.canceled.load(std::memory_order_relaxed) ? ActionStatus::kCanceled
-                                                                       : ActionStatus::kSuccess);
+                                                                    : ActionStatus::kSuccess);
   } catch (const std::exception& ex) {
     tracker.RecordException(ex);
     throw;
   }
 
-  const auto inference_end = std::chrono::steady_clock::now();
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  RecordUsage(request, response, tracker.Context(),
+              std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+}
 
-  // Per-inference Model event — emitted on success with whatever metrics this run
-  // produced, sharing the action's correlation id and indirect flag. TTFT and
-  // memory are not surfaced by the generators yet and stay at their unset values.
-  ModelUsageInfo usage;
-  usage.model_id = CatalogModel().Id();
-  usage.execution_provider = ExecutionProvider();
-  if (usage.execution_provider.empty()) {
-    usage.execution_provider = CatalogModel().Info().execution_provider;
-  }
-  usage.user_agent = context.user_agent;
-  usage.correlation_id = context.correlation_id;
-  usage.indirect = context.indirect;
-  usage.stream = streaming;
-  usage.num_messages = CountRequestMessages(request);
-  usage.total_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(inference_end - start).count();
-  usage.total_tokens = static_cast<int32_t>(response.usage.total_tokens);
-  usage.input_token_count = static_cast<int32_t>(response.usage.prompt_tokens);
+InvocationContext Session::TakeInvocationContext() {
+  std::lock_guard<std::mutex> lock(*invocation_context_mutex_);
+  auto context = invocation_context_ ? std::move(*invocation_context_) : InvocationContext::Direct();
+  invocation_context_.reset();
+  return context;
+}
+
+int32_t Session::TelemetryTokenCount(int64_t count) {
+  return static_cast<int32_t>(std::clamp<int64_t>(count, 0, std::numeric_limits<int32_t>::max()));
+}
+
+void Session::RecordUsage(const Request& request, const Response& response,
+                          const InvocationContext& context, int64_t total_time_ms) {
+  // This boundary covers metric preparation as well as emission; neither may change inference results.
   try {
-    telemetry_.RecordModelUsage(usage);
-    RecordAdditionalModelUsage(request, response, context, usage.total_time_ms, streaming);
+    ModelUsageInfo usage;
+    usage.model_id = CatalogModel().Id();
+    usage.execution_provider = ExecutionProvider();
+    if (usage.execution_provider.empty()) {
+      usage.execution_provider = CatalogModel().Info().execution_provider;
+    }
+
+    usage.user_agent = context.user_agent;
+    usage.correlation_id = context.correlation_id;
+    usage.indirect = context.indirect;
+    usage.stream = static_cast<bool>(callback_fn_);
+    usage.num_messages = CountRequestMessages(request);
+    usage.total_time_ms = total_time_ms;
+    usage.total_tokens = TelemetryTokenCount(response.usage.total_tokens);
+    usage.input_token_count = TelemetryTokenCount(response.usage.prompt_tokens);
+    // TTFT and memory remain unknown; token counts come from the current backend's per-turn accounting.
+    try {
+      telemetry_.RecordModelUsage(usage);
+    } catch (...) {
+      // Keep the modality-specific event independent of failure in the generic telemetry sink.
+      LogUsageTelemetryFailure(logger_);
+    }
+
+    RecordAdditionalModelUsage(response, usage);
   } catch (...) {
-    // Telemetry is best-effort and must not turn successful inference into an API failure.
+    LogUsageTelemetryFailure(logger_);
   }
 }
 
 void Session::Cancel() {
-  std::lock_guard<std::mutex> lock(active_requests_mutex_);
+  // Only flip cancel flags — never block or join — so this is safe to call while the
+  // SessionManager holds its own lock during shutdown. Generation loops poll the flag.
+  std::lock_guard<std::mutex> lock(*active_requests_mutex_);
   session_canceled_ = true;
-  for (const Request* request : active_requests_) {
-    request->canceled.store(true, std::memory_order_relaxed);
+  for (const Request* r : active_requests_) {
+    r->canceled.store(true, std::memory_order_relaxed);
   }
 }
 

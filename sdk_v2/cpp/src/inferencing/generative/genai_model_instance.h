@@ -4,23 +4,25 @@
 
 #include "inferencing/execution_provider.h"
 #include "inferencing/generative/genai_config.h"
+#include "inferencing/generative/preprocessor.h"
 #include "logger.h"
 
 #include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 // Forward declarations for ORT GenAI types (defined in ort_genai.h)
 struct OgaModel;
-struct OgaTokenizer;
-struct OgaMultiModalProcessor;
 
 namespace fl {
 
+class OnnxChatEngine;
+
 /// A model that has been loaded into the ORT GenAI runtime.
-/// Owns the OgaModel, OgaTokenizer, and optional OgaMultiModalProcessor.
+/// Owns the OgaModel and its preprocessing resources.
 /// Non-copyable, non-movable. Owned by ModelLoadManager via std::unique_ptr.
 class GenAIModelInstance {
  public:
@@ -36,16 +38,28 @@ class GenAIModelInstance {
   ExecutionProvider EP() const { return ep_; }
   bool IsMultiModal() const;
 
-  /// Access the underlying OGA objects (for future chat generation work).
+  /// Cached tag token IDs and decoded strings for tool/reasoning detection.
+  /// Populated once on first access using OGA tokenizer APIs.
+  struct TagInfo {
+    std::optional<int32_t> bot_id;
+    std::optional<int32_t> eot_id;
+    std::optional<int32_t> bor_id;
+    std::optional<int32_t> eor_id;
+    std::string bot_str;
+    std::string eot_str;
+    std::string bor_str;
+    std::string eor_str;
+  };
+  const TagInfo& GetTagInfo();
+
+  /// Access the underlying OGA objects.
   OgaModel& GetOgaModel();
-  OgaTokenizer& GetOgaTokenizer();
-  OgaTokenizer& GetOgaTokenizerWithSpecial();  // For tool calling, we need a tokenizer that does not skip special tokens.
-
-  /// Cached EOS token IDs for the tokenizer. Avoids re-fetching from OGA on every Decode() call.
-  const std::vector<int32_t>& GetEosTokenIds();
-
-  /// Returns nullptr if the model is not multimodal.
-  OgaMultiModalProcessor* GetProcessor();
+  Preprocessor& GetPreprocessor();
+#if FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE
+  OnnxChatEngine* GetChatEngine() { return chat_engine_.get(); }
+#else
+  OnnxChatEngine* GetChatEngine() { return nullptr; }
+#endif
 
   /// Get the last-activity timestamp.
   std::chrono::steady_clock::time_point LastActivity() const { return last_activity_; }
@@ -71,11 +85,12 @@ class GenAIModelInstance {
   GenAIConfig genai_config_;
   ExecutionProvider ep_;
   std::unique_ptr<OgaModel> oga_model_;
-  std::unique_ptr<OgaTokenizer> tokenizer_;
-  std::unique_ptr<OgaTokenizer> tokenizer_with_special_;
-  std::unique_ptr<OgaMultiModalProcessor> processor_;  // nullptr if not multimodal
-  std::vector<int32_t> eos_token_ids_;                 // cached; populated on first GetEosTokenIds() call
-  std::once_flag eos_token_ids_init_flag_;
+  std::unique_ptr<Preprocessor> preprocessor_;
+#if FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE
+  std::unique_ptr<OnnxChatEngine> chat_engine_;
+#endif
+  TagInfo tag_info_;
+  std::once_flag tag_info_init_flag_;
   std::chrono::steady_clock::time_point last_activity_;
   mutable std::atomic<int> session_ref_count_{0};
 };

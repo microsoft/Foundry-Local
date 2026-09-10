@@ -7,12 +7,7 @@ import { readFileSync } from "node:fs";
 
 import { type Catalog, wrapNativeCatalog } from "./catalog.js";
 import { FOUNDRY_LOCAL_CONFIG_KEYS, type FoundryLocalConfig } from "./configuration.js";
-import {
-  type NativeManager,
-  configureNativeLoader,
-  getAddon,
-  getPreloadedLibraryPath,
-} from "./detail/native.js";
+import { type NativeManager, configureNativeLoader, getAddon, getPreloadedLibraryPath } from "./detail/native.js";
 import type { EpDownloadResult, EpInfo } from "./types.js";
 
 function readSdkVersion(): string {

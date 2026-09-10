@@ -34,8 +34,6 @@ constexpr std::array<const char*, 13> kCiEnvironmentVariableNames = {
     "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI",  // Azure DevOps
 };
 
-constexpr const char* kRunningUnitTestsEnvironmentVariableName = "ORT_RUNNING_UNIT_TESTS";
-
 bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
   if (a.size() != b.size()) {
     return false;
@@ -102,12 +100,8 @@ bool TelemetryEnvironment::IsCiEnvironment() {
   return false;
 }
 
-bool TelemetryEnvironment::IsRunningUnitTests() {
-  return IsTruthyValue(GetEnv(kRunningUnitTestsEnvironmentVariableName));
-}
-
-bool TelemetryEnvironment::ShouldSuppressTelemetry() {
-  return IsCiEnvironment() || IsRunningUnitTests();
+bool TelemetryEnvironment::IsTelemetryDisabledByEnvVar() {
+  return IsTruthyValue(GetEnv("ORT_TELEMETRY_DISABLED"));
 }
 
 }  // namespace fl

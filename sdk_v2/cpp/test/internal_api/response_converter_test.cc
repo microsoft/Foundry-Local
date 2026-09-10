@@ -11,9 +11,11 @@
 
 #include <string>
 
+#include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
+#include "items/tool_call_item.h"
 
 using namespace fl;
 using namespace fl::responses;
@@ -37,6 +39,90 @@ static ResponseCreateParams MakeTestParams() {
   params.metadata["key1"] = "value1";
   params.user = "test-user";
   return params;
+}
+
+TEST(ResponseConverterTest, FromSessionResponse_ReasoningOnlyMessageIsNotOutputText) {
+  Response response;
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>("private scratchpad", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING));
+  response.items.push_back(
+      std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts)));
+
+  auto [output, output_text] = FromSessionResponse(response, "msg");
+
+  ASSERT_EQ(output.size(), 1u);
+  ASSERT_TRUE(std::holds_alternative<ReasoningOutputItem>(output.front()));
+  EXPECT_EQ(std::get<ReasoningOutputItem>(output.front()).summary.front().text, "private scratchpad");
+  EXPECT_TRUE(output_text.empty());
+}
+
+TEST(ResponseConverterTest, FromSessionResponse_InterleavedReasoningPreservesOutputOrder) {
+  Response response;
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>("think one", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING));
+  parts.push_back(std::make_unique<TextItem>("answer one", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+  parts.push_back(std::make_unique<TextItem>("think two", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING));
+  parts.push_back(std::make_unique<TextItem>("answer two", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+  response.items.push_back(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts)));
+
+  auto [output, output_text] = FromSessionResponse(response, "msg");
+
+  ASSERT_EQ(output.size(), 4u);
+  EXPECT_TRUE(std::holds_alternative<ReasoningOutputItem>(output[0]));
+  EXPECT_TRUE(std::holds_alternative<ResponseOutputMessage>(output[1]));
+  EXPECT_TRUE(std::holds_alternative<ReasoningOutputItem>(output[2]));
+  EXPECT_TRUE(std::holds_alternative<ResponseOutputMessage>(output[3]));
+  EXPECT_EQ(output_text, "answer oneanswer two");
+}
+
+TEST(ResponseConverterTest, BuildFunctionCallStreamOutputEmitsCompleteLifecycle) {
+  ToolCallItem call("call_test", "get_weather", R"({"city":"Seattle"})");
+  int sequence_number = 7;
+
+  auto output = BuildFunctionCallStreamOutput(call, 3, sequence_number);
+
+  ASSERT_EQ(output.events.size(), 4u);
+  EXPECT_EQ(sequence_number, 11);
+
+  const auto& added = output.events[0];
+  EXPECT_EQ(added.type, StreamEventType::kOutputItemAdded);
+  EXPECT_EQ(added.sequence_number, 7);
+  EXPECT_EQ(added.output_index, 3);
+  ASSERT_TRUE(added.item.has_value());
+  const auto& added_item = std::get<FunctionCallOutputItem>(*added.item);
+  EXPECT_EQ(added_item.id, output.completed_item.id);
+  EXPECT_EQ(added_item.call_id, "call_test");
+  EXPECT_EQ(added_item.name, "get_weather");
+  EXPECT_TRUE(added_item.arguments.empty());
+  EXPECT_EQ(added_item.status, ResponseStatus::kInProgress);
+
+  const auto& delta = output.events[1];
+  EXPECT_EQ(delta.type, StreamEventType::kFunctionCallArgumentsDelta);
+  EXPECT_EQ(delta.sequence_number, 8);
+  EXPECT_EQ(delta.output_index, 3);
+  EXPECT_EQ(delta.item_id, output.completed_item.id);
+  EXPECT_EQ(delta.delta, R"({"city":"Seattle"})");
+  EXPECT_EQ(delta.function_call_id, "call_test");
+
+  const auto& arguments_done = output.events[2];
+  EXPECT_EQ(arguments_done.type, StreamEventType::kFunctionCallArgumentsDone);
+  EXPECT_EQ(arguments_done.sequence_number, 9);
+  EXPECT_EQ(arguments_done.output_index, 3);
+  EXPECT_EQ(arguments_done.item_id, output.completed_item.id);
+  EXPECT_EQ(arguments_done.function_name, "get_weather");
+  EXPECT_EQ(arguments_done.function_call_id, "call_test");
+  EXPECT_EQ(arguments_done.function_arguments, R"({"city":"Seattle"})");
+
+  const auto& item_done = output.events[3];
+  EXPECT_EQ(item_done.type, StreamEventType::kOutputItemDone);
+  EXPECT_EQ(item_done.sequence_number, 10);
+  EXPECT_EQ(item_done.output_index, 3);
+  ASSERT_TRUE(item_done.item.has_value());
+  const auto& completed_item = std::get<FunctionCallOutputItem>(*item_done.item);
+  EXPECT_EQ(completed_item.arguments, R"({"city":"Seattle"})");
+  EXPECT_EQ(completed_item.status, ResponseStatus::kCompleted);
+  EXPECT_EQ(output.completed_item.arguments, R"({"city":"Seattle"})");
+  EXPECT_EQ(output.completed_item.status, ResponseStatus::kCompleted);
 }
 
 // ========================================================================
@@ -320,6 +406,23 @@ ResponseCreateParams MakeImageRequest(const std::string& image_url, const std::s
   return params;
 }
 
+ResponseCreateParams MakeImageDataRequest(const std::string& image_data,
+                                          const std::optional<std::string>& media_type = std::nullopt) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  InputMessage msg;
+  msg.role = "user";
+  InputImageContent image_part;
+  image_part.detail = "auto";
+  image_part.image_data = image_data;
+  image_part.media_type = media_type;
+  msg.content.push_back(image_part);
+
+  params.input = std::vector<InputItem>{msg};
+  return params;
+}
+
 }  // namespace
 
 TEST(ResponseConverterTest, ToSessionRequest_InputImage_DataUrl_DecodesToImageItem) {
@@ -345,6 +448,148 @@ TEST(ResponseConverterTest, ToSessionRequest_InputImage_DataUrl_DecodesToImageIt
   EXPECT_EQ(img->format, "image/png");
   EXPECT_EQ(img->data_size, kSamplePngDecodedSize);
   EXPECT_NE(img->data, nullptr);
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputAudio_DecodesToAudioItem) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  InputMessage msg;
+  msg.role = "user";
+  InputTextContent text_part;
+  text_part.text = "Transcribe this audio.";
+  msg.content.push_back(text_part);
+  InputAudioContent audio_part;
+  audio_part.data = "AQIDBA==";
+  audio_part.format = "wav";
+  msg.content.push_back(audio_part);
+  params.input = std::vector<InputItem>{msg};
+
+  auto request = ToSessionRequest(params);
+
+  ASSERT_EQ(request.items.size(), 1u);
+  auto* message = dynamic_cast<MessageItem*>(request.items[0]);
+  ASSERT_NE(message, nullptr);
+  ASSERT_EQ(message->content.size(), 2u);
+  ASSERT_EQ(message->content[1].view->type, FOUNDRY_LOCAL_ITEM_AUDIO);
+  const auto* audio = static_cast<const AudioItem*>(message->content[1].view);
+  EXPECT_EQ(audio->format, "wav");
+  ASSERT_EQ(audio->data_size, 4u);
+  const auto* bytes = static_cast<const std::uint8_t*>(audio->data);
+  EXPECT_EQ(bytes[0], 1u);
+  EXPECT_EQ(bytes[3], 4u);
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputAudio_RejectsInvalidBase64) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  InputMessage msg;
+  msg.role = "user";
+  InputAudioContent audio_part;
+  audio_part.data = "not-base64!";
+  audio_part.format = "wav";
+  msg.content.push_back(audio_part);
+  params.input = std::vector<InputItem>{msg};
+
+  try {
+    ToSessionRequest(params);
+    FAIL() << "Expected invalid base64 audio data to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputAudio_RejectsEmptyData) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  InputMessage msg;
+  msg.role = "user";
+  InputAudioContent audio_part;
+  audio_part.format = "wav";
+  msg.content.push_back(audio_part);
+  params.input = std::vector<InputItem>{msg};
+
+  try {
+    ToSessionRequest(params);
+    FAIL() << "Expected empty audio data to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputAudio_RejectsEmptyFormat) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+
+  InputMessage msg;
+  msg.role = "user";
+  InputAudioContent audio_part;
+  audio_part.data = "AQIDBA==";
+  msg.content.push_back(audio_part);
+  params.input = std::vector<InputItem>{msg};
+
+  try {
+    ToSessionRequest(params);
+    FAIL() << "Expected empty audio format to be rejected";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputImage_ImageData_DecodesWithMediaType) {
+  auto params = MakeImageDataRequest(kSamplePngBase64, "image/jpeg");
+
+  auto request = ToSessionRequest(params);
+
+  auto* msg = dynamic_cast<MessageItem*>(request.items[0]);
+  ASSERT_NE(msg, nullptr);
+  ASSERT_EQ(msg->content.size(), 2u);
+  const auto* img = static_cast<const ImageItem*>(msg->content[0].view);
+  EXPECT_EQ(img->format, "image/jpeg");
+  EXPECT_EQ(img->data_size, kSamplePngDecodedSize);
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputImage_ImageData_DefaultsToPng) {
+  auto params = MakeImageDataRequest(kSamplePngBase64);
+
+  auto request = ToSessionRequest(params);
+
+  auto* msg = dynamic_cast<MessageItem*>(request.items[0]);
+  ASSERT_NE(msg, nullptr);
+  const auto* img = static_cast<const ImageItem*>(msg->content[0].view);
+  EXPECT_EQ(img->format, "image/png");
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputImage_InvalidImageData_NamesSourceField) {
+  auto params = MakeImageDataRequest("not-valid-base64");
+
+  try {
+    ToSessionRequest(params);
+    FAIL() << "Expected invalid image_data to throw";
+  } catch (const std::exception& e) {
+    const std::string message = e.what();
+    EXPECT_NE(message.find("image_data"), std::string::npos);
+    EXPECT_EQ(message.find("image_url"), std::string::npos);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_InputImage_ImageUrlTakesPrecedenceOverImageData) {
+  std::string data_url = std::string("data:image/png;base64,") + kSamplePngBase64;
+  auto params = MakeImageRequest(data_url);
+  auto& items = std::get<std::vector<InputItem>>(params.input);
+  auto& msg = std::get<InputMessage>(items[0]);
+  auto& image = std::get<InputImageContent>(msg.content[1]);
+  image.image_data = "not-valid-base64";
+  image.media_type = "image/jpeg";
+
+  auto request = ToSessionRequest(params);
+
+  auto* converted_msg = dynamic_cast<MessageItem*>(request.items[0]);
+  ASSERT_NE(converted_msg, nullptr);
+  const auto* img = static_cast<const ImageItem*>(converted_msg->content[1].view);
+  EXPECT_EQ(img->format, "image/png");
 }
 
 TEST(ResponseConverterTest, ToSessionRequest_InputImage_DataUrl_MissingBase64Marker_Throws) {
@@ -588,8 +833,6 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   params.temperature = 0.5f;
   params.top_p = 0.95f;
   params.max_output_tokens = 256;
-  params.presence_penalty = 0.25f;
-  params.frequency_penalty = 0.75f;
   params.seed = 42;
 
   ResponseTextConfig text_cfg;
@@ -612,12 +855,36 @@ TEST(ResponseConverterTest, ToSessionRequest_AllRequestOptions_PropagatedToSessi
   expect_opt("temperature", std::to_string(0.5f));
   expect_opt("top_p", std::to_string(0.95f));
   expect_opt("max_output_tokens", "256");
-  expect_opt("presence_penalty", std::to_string(0.25f));
-  expect_opt("frequency_penalty", std::to_string(0.75f));
   expect_opt("seed", "42");
   expect_opt("guidance_type", "json_schema");
   expect_opt("guidance_data", R"({"type":"object"})");
   expect_opt("tool_choice", "required");
 
   EXPECT_FALSE(tools_json.empty());
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_RejectsNonzeroPenalties) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.75f, 0.0f}, std::pair{0.0f, 0.25f}, std::pair{-0.75f, 0.0f}, std::pair{0.0f, -0.25f}}) {
+    ResponseCreateParams params;
+    params.model = "test-model";
+    params.input = std::string("hello");
+    params.frequency_penalty = frequency;
+    params.presence_penalty = presence;
+
+    EXPECT_THROW(ToSessionRequest(params), fl::Exception);
+  }
+}
+
+TEST(ResponseConverterTest, ToSessionRequest_ZeroPenaltiesAreNoOps) {
+  ResponseCreateParams params;
+  params.model = "test-model";
+  params.input = std::string("hello");
+  params.presence_penalty = 0.0f;
+  params.frequency_penalty = 0.0f;
+
+  Request req = ToSessionRequest(params);
+
+  EXPECT_EQ(req.options.Find("presence_penalty"), nullptr);
+  EXPECT_EQ(req.options.Find("frequency_penalty"), nullptr);
 }

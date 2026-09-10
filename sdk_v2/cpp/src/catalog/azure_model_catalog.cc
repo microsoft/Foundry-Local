@@ -6,90 +6,78 @@
 #include "catalog/local_model_scanner.h"
 #include "model.h"
 #include "model_info.h"
-#include "telemetry/invocation_context.h"
 #include "telemetry/telemetry.h"
-#include "telemetry/telemetry_redaction.h"
-#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <iterator>
+#include <unordered_set>
 #include <utility>
 
 namespace fl {
 
 namespace {
 
-/// Split a catalog URL into structured telemetry dimensions. The Azure Foundry
-/// catalog URL looks like "https://ai.azure.com/api/<region>/<format...>", e.g.
-/// "https://ai.azure.com/api/eastus/ux/v1.0" -> {ai.azure.com, eastus, ux/v1.0}.
-/// Custom URLs that don't follow the "/api/<region>/" convention keep an empty
-/// region and put the whole path in `format`. The embedded snapshot is "static".
-struct ParsedCatalogUrl {
-  std::string endpoint;
-  std::string region;
-  std::string format;
-};
-
-ParsedCatalogUrl ParseCatalogUrl(const std::string& url) {
-  if (url == "static") {
-    return {"static", "", ""};
-  }
-
+CatalogFetchInfo BuildCatalogFetchInfo(const std::string& url, const std::string& correlation_id) {
+  CatalogFetchInfo info;
+  info.user_agent = DefaultUserAgent();
+  info.correlation_id = correlation_id;
   std::string rest = url;
   if (auto scheme = rest.find("://"); scheme != std::string::npos) {
     rest = rest.substr(scheme + 3);
   }
-  if (auto q = rest.find_first_of("?#"); q != std::string::npos) {
-    rest = rest.substr(0, q);
+  if (auto query = rest.find_first_of("?#"); query != std::string::npos) {
+    rest.resize(query);
   }
 
-  ParsedCatalogUrl out;
   std::string path;
   if (auto slash = rest.find('/'); slash == std::string::npos) {
-    out.endpoint = rest;
+    info.endpoint = rest;
   } else {
-    out.endpoint = rest.substr(0, slash);
+    info.endpoint = rest.substr(0, slash);
     path = rest.substr(slash + 1);
   }
-  if (auto at = out.endpoint.rfind('@'); at != std::string::npos) {
-    out.endpoint = out.endpoint.substr(at + 1);
+  if (auto at = info.endpoint.rfind('@'); at != std::string::npos) {
+    info.endpoint = info.endpoint.substr(at + 1);
   }
-  if (out.endpoint != "ai.azure.com") {
-    return {"custom", "", ""};
-  }
-
-  if (auto q = path.find_first_of("?#"); q != std::string::npos) {
-    path = path.substr(0, q);
+  if (info.endpoint != "ai.azure.com") {
+    info.endpoint = "custom";
+    return info;
   }
 
-  std::vector<std::string> segments;
-  size_t pos = 0;
-  while (pos < path.size()) {
-    auto next = path.find('/', pos);
-    if (next == std::string::npos) {
-      next = path.size();
+  // Only the public Azure catalog contributes endpoint dimensions; custom hosts and paths stay private.
+  if (path.starts_with("api/")) {
+    path.erase(0, 4);
+    const auto slash = path.find('/');
+    info.region = path.substr(0, slash);
+    info.format = slash == std::string::npos ? std::string{} : path.substr(slash + 1);
+  } else {
+    info.format = path;
+  }
+  return info;
+}
+
+std::vector<ModelInfo> DeduplicateByModelId(std::vector<ModelInfo> model_infos) {
+  std::vector<ModelInfo> deduplicated;
+  deduplicated.reserve(model_infos.size());
+
+  std::unordered_set<std::string> model_ids;
+  for (auto& info : model_infos) {
+    if (model_ids.insert(info.model_id).second) {
+      deduplicated.push_back(std::move(info));
     }
-    if (next > pos) {
-      segments.push_back(path.substr(pos, next - pos));
-    }
-    pos = next + 1;
   }
 
-  size_t format_start = 0;
-  if (segments.size() >= 2 && segments[0] == "api") {
-    out.region = segments[1];
-    format_start = 2;
-  }
-  for (size_t i = format_start; i < segments.size(); ++i) {
-    if (!out.format.empty()) {
-      out.format += '/';
-    }
-    out.format += segments[i];
-  }
+  return deduplicated;
+}
 
-  return out;
+void RemoveLegacyLocalEntries(std::vector<ModelInfo>& model_infos) {
+  std::erase_if(model_infos, [](const auto& info) {
+    const auto* provider = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR);
+    return provider && *provider == "Local";
+  });
 }
 
 }  // namespace
@@ -124,104 +112,89 @@ AzureModelCatalog::AzureModelCatalog(std::vector<std::pair<std::string, std::opt
 
 AzureModelCatalog::~AzureModelCatalog() = default;
 
-std::vector<Model> AzureModelCatalog::FetchModels() const {
-  // In cache-only mode, read only from the disk cache file — no network calls, no local model scanning.
-  // The cache file already includes local models from the last full catalog refresh by the long-running service
-  // process.
-  // TODO: For our CLI usage the catalog file would be current as we use an ephemeral port for the web service and
-  // therefore have to run FL first to acquire the external URL value, and that run would have updated the cached
-  // catalog info.
-  // If someone had a hardcoded web service URL they were using that sequence of events isn't guaranteed. If we care,
-  // we could update 'cache_only_' mode to enable refreshing the cache info if it is old. The cache file has a
-  // savedAtUnix timestamp property that can be used.
-  if (cache_only_) {
-    CatalogCache cache(cache_dir_, logger_);
-    cache.Load();
-    auto cached = cache.GetCachedModels();
+std::unique_ptr<ICatalogClient> AzureModelCatalog::CreateCatalogClient(const std::string& url,
+                                                                       const std::string& filter) const {
+  return MakeCatalogClient(url, filter, ep_detector_, logger_, cache_dir_, catalog_region_, disable_region_fallback_);
+}
 
-    std::vector<Model> models;
+AzureModelCatalog::CatalogResult AzureModelCatalog::GetLiveCatalogOrLocalSnapshot(
+    const std::vector<std::string>& cached_model_ids) const {
+  if (!cache_only_) {
+    std::vector<ModelInfo> live_model_infos;
+    bool any_url_succeeded = false;
+    const auto correlation_id = GenerateGuidV4();
 
-    if (cached) {
-      for (const auto& info : *cached) {
-        models.push_back(model_factory_(ModelInfo(info), /*local_path=*/""));
+    for (const auto& [url, filter] : catalog_urls_) {
+      try {
+        auto client = CreateCatalogClient(url, filter.value_or(""));
+        const auto telemetry_info = BuildCatalogFetchInfo(url, correlation_id);
+        auto model_infos =
+            FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_, telemetry_, telemetry_info);
+        any_url_succeeded = true;
+
+        live_model_infos.insert(live_model_infos.end(), std::make_move_iterator(model_infos.begin()),
+                                std::make_move_iterator(model_infos.end()));
+      } catch (const std::exception& ex) {
+        logger_.Log(LogLevel::Error, fmt::format("failed to fetch catalog from {}: {}", url, ex.what()));
+      } catch (...) {
+        logger_.Log(LogLevel::Error, fmt::format("failed to fetch catalog from {}: unknown error", url));
       }
     }
 
-    logger_.Log(LogLevel::Information,
-                fmt::format("Cache-only mode: populated {} models from cache file.", models.size()));
-
-    return models;
+    if (any_url_succeeded) {
+      return {
+          .model_infos = DeduplicateByModelId(std::move(live_model_infos)),
+          .source = CatalogSource::kLive,
+      };
+    }
   }
 
+  CatalogCache cache(cache_dir_, logger_);
+  cache.Load();
+  auto cached = cache.GetCachedModels();
+  auto snapshot_model_infos = cached ? std::move(*cached) : std::vector<ModelInfo>{};
+  RemoveLegacyLocalEntries(snapshot_model_infos);
+
+  return {
+      .model_infos = DeduplicateByModelId(std::move(snapshot_model_infos)),
+      .source = CatalogSource::kSnapshot,
+  };
+}
+
+std::vector<Model> AzureModelCatalog::CreateModelsWithLocalPaths(const std::vector<ModelInfo>& model_infos,
+                                                                 const LocalModels& local_models) const {
   std::vector<Model> models;
-  std::vector<ModelInfo> fetched_infos;
-  const std::string& cache_dir = cache_dir_;
+  models.reserve(model_infos.size());
 
-  // One correlation id groups every catalog access made by this refresh.
-  const std::string correlation_id = GenerateGuidV4();
+  for (const auto& info : model_infos) {
+    auto local_model = local_models.find(info.model_id);
+    auto local_path = local_model != local_models.end() ? local_model->second : std::string{};
+    models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));
+  }
 
-  logger_.Log(LogLevel::Information,
-              "Getting latest info from the Azure catalog and for locally cached models.");
+  return models;
+}
 
-  // Discover locally cached models.
-  auto local_models = ScanLocalModels(cache_dir, logger_);
+std::vector<Model> AzureModelCatalog::FetchModels() const {
+  logger_.Log(LogLevel::Information, "Getting catalog metadata and locally cached models.");
+
+  auto local_models = ScanLocalModels(cache_dir_, logger_);
   std::vector<std::string> cached_model_ids;
   cached_model_ids.reserve(local_models.size());
-  for (const auto& [id, path] : local_models) {
-    cached_model_ids.push_back(id);
+  for (const auto& local_model : local_models) {
+    cached_model_ids.push_back(local_model.first);
   }
 
-  logger_.Log(LogLevel::Information,
-              fmt::format("Found {} locally cached models.", cached_model_ids.size()));
+  logger_.Log(LogLevel::Information, fmt::format("Found {} locally cached models.", cached_model_ids.size()));
 
-  auto fetch_from = [&](const std::string& url, const std::optional<std::string>& filter) {
-    // Preserve byte-identical behavior for the "no override" case (previously stored as ""),
-    // while letting callers explicitly request "" as a real filter override.
-    auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir,
-                                    catalog_region_, disable_region_fallback_);
+  auto catalog_result = GetLiveCatalogOrLocalSnapshot(cached_model_ids);
+  auto models = CreateModelsWithLocalPaths(catalog_result.model_infos, local_models);
 
-    auto parsed = ParseCatalogUrl(url);
-    CatalogFetchInfo base_info;
-    base_info.endpoint = parsed.endpoint;
-    base_info.region = parsed.region;
-    base_info.format = parsed.format;
-    base_info.correlation_id = correlation_id;
-    base_info.user_agent = DefaultUserAgent();
+  logger_.Log(LogLevel::Information, fmt::format("Populated model info for {} models.", models.size()));
 
-    auto model_infos = FetchAllModelInfosWithCachedModels(*client, cached_model_ids, logger_, telemetry_, base_info);
-
-    for (const auto& info : model_infos) {
-      // Check if the model is locally cached and pass the path if so.
-      std::string local_path;
-      auto it = local_models.find(info.model_id);
-      if (it != local_models.end()) {
-        local_path = it->second;
-      }
-
-      fetched_infos.push_back(info);
-      models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));
-    }
-  };
-
-  for (const auto& [url, filter] : catalog_urls_) {
-    try {
-      fetch_from(url, filter);
-    } catch (const std::exception& ex) {
-      // One failing URL shouldn't block others — skip and continue.
-      logger_.Log(LogLevel::Error,
-                  fmt::format("failed to fetch catalog from {}: {}", url, ex.what()));
-    }
-  }
-
-  logger_.Log(LogLevel::Information,
-              fmt::format("Populated model info for {} models.", models.size()));
-
-  // Save the fetched catalog for cache-only mode. This is best-effort: Save handles
-  // its own errors and freshness checks. If nothing was fetched, leave the existing
-  // cache untouched.
-  if (!fetched_infos.empty()) {
+  if (catalog_result.source == CatalogSource::kLive && !catalog_result.model_infos.empty()) {
     CatalogCache cache(cache_dir_, logger_);
-    cache.Save(fetched_infos);
+    cache.Save(catalog_result.model_infos);
   }
 
   return models;
@@ -240,8 +213,7 @@ std::vector<Model> AzureModelCatalog::FetchModelVersions(
 
   for (const auto& [url, filter] : catalog_urls_) {
     try {
-      auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir_,
-                                      catalog_region_, disable_region_fallback_);
+      auto client = CreateCatalogClient(url, filter.value_or(""));
       auto model_infos = client->FetchAllVersionsByAlias(model_alias, model_name);
 
       out.reserve(out.size() + model_infos.size());
@@ -285,8 +257,7 @@ std::vector<Model> AzureModelCatalog::FetchModelsByIds(const std::vector<std::st
     }
 
     try {
-      auto client = MakeCatalogClient(url, filter.value_or(""), ep_detector_, logger_, cache_dir_,
-                                      catalog_region_, disable_region_fallback_);
+      auto client = CreateCatalogClient(url, filter.value_or(""));
       auto model_infos = client->FetchModelsByIds(remaining);
 
       for (auto& info : model_infos) {

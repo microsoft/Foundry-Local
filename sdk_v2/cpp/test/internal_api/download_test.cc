@@ -65,6 +65,15 @@ void DownloadBlobsToDirectoryForTest(IBlobDownloader& downloader,
   DownloadBlobsToDirectory(downloader, sas_uri, output_directory, options, stats);
 }
 
+class RecordingDownloadTelemetry final : public TelemetryLogger {
+ public:
+  RecordingDownloadTelemetry() : TelemetryLogger("download-test", fl::test::NullLog()) {}
+
+  void RecordDownload(const DownloadInfo& info) override { calls.push_back(info); }
+
+  std::vector<DownloadInfo> calls;
+};
+
 http::HttpResponse MakeRegistryResponse(std::string body, int status = 200) {
   http::HttpResponse response;
   response.status = status;
@@ -854,6 +863,7 @@ TEST(VariantFixupTest, PreservesRootFileWhenNoSubdirs) {
 
 TEST(DownloadManagerTest, FullDownloadFlow) {
   auto tmpdir = TempPath::CreateTempDir();
+  RecordingDownloadTelemetry telemetry;
 
   auto registry = std::make_unique<ModelRegistryClient>(
       "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
@@ -871,7 +881,7 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
   };
 
   auto manager = std::make_unique<DownloadManager>(
-      tmpdir.string(), "eastus", 64, fl::test::NullLog(), fl::test::TestTelemetrySink(),
+      tmpdir.string(), "eastus", 64, fl::test::NullLog(), telemetry,
       /*disable_region_fallback=*/false, std::move(registry), std::move(mock_downloader));
 
   ModelInfo info;
@@ -896,6 +906,38 @@ TEST(DownloadManagerTest, FullDownloadFlow) {
 
   // Verify progress was reported
   EXPECT_FALSE(progress_values.empty());
+  ASSERT_EQ(telemetry.calls.size(), 1u);
+  const auto& event = telemetry.calls[0];
+  EXPECT_EQ(event.model_id, info.model_id);
+  EXPECT_EQ(event.status, ActionStatus::kSuccess);
+  EXPECT_EQ(event.file_count, 2);
+  EXPECT_EQ(event.total_size_bytes, 1124);
+  EXPECT_EQ(event.already_cached_bytes, 0);
+  EXPECT_EQ(event.skipped_file_count, 0);
+  EXPECT_EQ(event.max_concurrency, 64);
+  EXPECT_EQ(event.download_wait_result, "Completed");
+  EXPECT_FALSE(event.user_agent.empty());
+  EXPECT_FALSE(event.correlation_id.empty());
+  EXPECT_GE(event.lock_wait_ms, 0);
+  EXPECT_GE(event.enumeration_ms, 0);
+  EXPECT_GE(event.download_ms, 0);
+}
+
+TEST(DownloadManagerTest, CanceledDownloadRecordsCanceledEvent) {
+  auto tmpdir = TempPath::CreateTempDir();
+  RecordingDownloadTelemetry telemetry;
+  DownloadManager manager(tmpdir.string(), "eastus", 4, fl::test::NullLog(), telemetry);
+  ModelInfo info;
+  info.model_id = "canceled-model:1";
+  info.uri = "azureml://registries/test/models/canceled-model/versions/1";
+
+  EXPECT_THROW(manager.DownloadModel(info, [](float) { return 1; }, "test-client/1"), fl::Exception);
+
+  ASSERT_EQ(telemetry.calls.size(), 1u);
+  EXPECT_EQ(telemetry.calls[0].status, ActionStatus::kCanceled);
+  EXPECT_EQ(telemetry.calls[0].model_id, info.model_id);
+  EXPECT_EQ(telemetry.calls[0].user_agent, "test-client/1");
+  EXPECT_EQ(telemetry.calls[0].download_wait_result, "Failed");
 }
 
 // --- Region resolution: detected region drives the download endpoint ---
@@ -958,8 +1000,9 @@ TEST(DownloadManagerTest, Region_FallsBackToDefaultRegistryRegionWhenNoConfigAnd
 
 TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
   auto tmpdir = TempPath::CreateTempDir();
+  RecordingDownloadTelemetry telemetry;
   auto manager = std::make_unique<DownloadManager>(tmpdir.string(), "eastus", 64, fl::test::NullLog(),
-                                                   fl::test::TestTelemetrySink());
+                                                   telemetry);
 
   ModelInfo info;
   info.model_id = "cached-model:1";
@@ -981,6 +1024,9 @@ TEST(DownloadManagerTest, SkipsAlreadyCachedModel) {
 
   EXPECT_EQ(path, model_dir.string());
   EXPECT_FLOAT_EQ(final_progress, 100.0f);
+  ASSERT_EQ(telemetry.calls.size(), 1u);
+  EXPECT_EQ(telemetry.calls[0].status, ActionStatus::kSkipped);
+  EXPECT_EQ(telemetry.calls[0].model_id, info.model_id);
 }
 
 TEST(DownloadManagerTest, IsModelCachedReturnsFalseForMissing) {

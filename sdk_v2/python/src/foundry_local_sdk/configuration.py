@@ -244,26 +244,27 @@ class Configuration:
                 )
 
         # Additional key/value settings
-        additional_settings = {"UserAgent": f"foundry-local-python/{__version__}"}
-        if self.disable_nonessential_telemetry:
-            additional_settings["DisableNonessentialTelemetry"] = "true"
+        additional_settings: dict[str, str] = {"UserAgent": f"foundry-local-python/{__version__}"}
         if self.additional_settings:
             additional_settings.update(self.additional_settings)
+        if self.disable_nonessential_telemetry:
+            additional_settings["DisableNonessentialTelemetry"] = "true"
 
-        kvp_out = ffi.new("flKeyValuePairs**")
-        api.root.CreateKeyValuePairs(kvp_out)
-        kvp = kvp_out[0]
-        try:
-            for key, value in additional_settings.items():
-                if not key:
-                    continue
-                api.root.AddKeyValuePair(
-                    kvp,
-                    key.encode("utf-8"),
-                    (value if value is not None else "").encode("utf-8"),
-                )
-            api.check_status(api.config.SetAdditionalOptions(native_config, kvp))
-        finally:
-            api.root.KeyValuePairs_Release(kvp)
+        if additional_settings:
+            kvp_out = ffi.new("flKeyValuePairs**")
+            api.root.CreateKeyValuePairs(kvp_out)
+            kvp = kvp_out[0]
+            try:
+                for key, value in additional_settings.items():
+                    if not key:
+                        continue
+                    api.root.AddKeyValuePair(
+                        kvp,
+                        key.encode("utf-8"),
+                        (value if value is not None else "").encode("utf-8"),
+                    )
+                api.check_status(api.config.SetAdditionalOptions(native_config, kvp))
+            finally:
+                api.root.KeyValuePairs_Release(kvp)
 
         return native_config

@@ -12,8 +12,8 @@
 
 namespace fl {
 
-class ITelemetry;          // forward declaration
-struct CatalogFetchInfo;   // forward declaration
+class ITelemetry;         // forward declaration
+struct CatalogFetchInfo;  // forward declaration
 
 /// Abstract catalog client. Implemented by the live Azure catalog client,
 /// which queries the Azure Foundry catalog REST API.
@@ -52,10 +52,8 @@ class ICatalogClient {
   }
 };
 
-/// Production helper that combines a catalog fetch with locally cached model
-/// resolution and BYO synthesis. Emits a CatalogFetch event for the primary fetch
-/// and (if it runs) the cached-id lookup, copying the endpoint/region/format/correlation
-/// fields from `base_info` and filling in operation/status/duration/model_count/error.
+/// Production helper that combines a catalog fetch with resolution of cached versions known to the public source.
+/// Unknown cache entries are omitted; BYOM models require explicit local-catalog registration.
 std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     ICatalogClient& client,
     const std::vector<std::string>& cached_model_ids,

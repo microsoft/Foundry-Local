@@ -4,6 +4,7 @@
 
 #include "exception.h"
 #include "inferencing/generative/chat/chat_session.h"
+#include "inferencing/session/session.h"
 
 #include <cassert>
 #include <fmt/format.h>
@@ -22,28 +23,28 @@ SessionManager::~SessionManager() {
 }
 
 void SessionManager::Register(Session& session) {
+  // Check shutting_down_ and insert under the same lock CancelAll() uses to flip the flag and iterate.
+  // Reading the flag outside the lock would let a session observe false, lose the race to the cancel
+  // sweep, then insert itself afterward — running uncanceled while shutdown waits to drain.
   std::lock_guard<std::mutex> lock(mutex_);
-  if (shutting_down_) {
+
+  if (shutting_down_.load()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "cannot create session during shutdown");
   }
 
-  ++sessions_[&session];
+  sessions_.insert(&session);
 }
 
 void SessionManager::Deregister(Session& session) {
   std::lock_guard<std::mutex> lock(mutex_);
-  auto it = sessions_.find(&session);
+  auto erased = sessions_.erase(&session);
 
-  if (it == sessions_.end()) {
+  if (erased == 0) {
     // Bug: session was not registered. Log loudly but don't throw — this may be
     // called from a destructor where throwing would call std::terminate().
     logger_.Log(LogLevel::Error, "SessionManager::Deregister called for unregistered session");
     assert(false && "SessionManager::Deregister called for unregistered session");
     return;
-  }
-
-  if (--it->second == 0) {
-    sessions_.erase(it);
   }
 
   if (sessions_.empty()) {
@@ -52,18 +53,23 @@ void SessionManager::Deregister(Session& session) {
 }
 
 void SessionManager::CancelAll() {
-  std::vector<std::unique_ptr<ChatSession>> cached_sessions;
+  // Clear cache first — frees idle cached sessions so they don't block drain. ClearCache() takes mutex_
+  // internally, so run it before acquiring the lock below.
+  ClearCache();
 
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    shutting_down_ = true;
-    cached_sessions = MoveCacheToDestroyLocked();
-    logger_.Log(LogLevel::Information,
-                fmt::format("SessionManager: cancelling all sessions ({} active)", sessions_.size()));
+  std::lock_guard<std::mutex> lock(mutex_);
 
-    for (const auto& session_entry : sessions_) {
-      session_entry.first->Cancel();
-    }
+  // Flip the flag under mutex_ before iterating so Register() (which now checks it under the same lock)
+  // cannot admit a new session between this transition and the cancel sweep.
+  shutting_down_.store(true);
+
+  logger_.Log(LogLevel::Information,
+              fmt::format("SessionManager: cancelling all sessions ({} active)", sessions_.size()));
+
+  // Signal every in-flight request to stop. Cancel() only sets atomic flags — no joins, no
+  // re-entrancy into SessionManager — so calling it while holding mutex_ cannot deadlock.
+  for (Session* s : sessions_) {
+    s->Cancel();
   }
 }
 
@@ -100,7 +106,9 @@ std::unique_ptr<ChatSession> SessionManager::CheckOut(const std::string& key) {
     return nullptr;
   }
 
-  auto session = RemoveCachedLocked(it);
+  auto session = std::move(it->second.session);
+  lru_order_.erase(it->second.lru_iter);
+  cache_.erase(it);
 
   logger_.Log(LogLevel::Debug, fmt::format("SessionManager: checked out cached session for '{}'", key));
   return session;
@@ -112,22 +120,25 @@ void SessionManager::CheckIn(const std::string& key, std::unique_ptr<ChatSession
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (shutting_down_ || cache_capacity_ == 0) {
-      evicted.push_back(std::move(session));
-      return;
-    }
 
+    // Replace existing entry for this key (if any)
     auto existing = cache_.find(key);
     if (existing != cache_.end()) {
-      evicted.push_back(RemoveCachedLocked(existing));
+      evicted.push_back(std::move(existing->second.session));
+      lru_order_.erase(existing->second.lru_iter);
+      cache_.erase(existing);
     }
 
+    // Evict LRU if at capacity
     while (cache_.size() >= cache_capacity_) {
       const auto& lru_key = lru_order_.back();
       auto lru_it = cache_.find(lru_key);
-      evicted.push_back(RemoveCachedLocked(lru_it));
+      evicted.push_back(std::move(lru_it->second.session));
+      cache_.erase(lru_it);
+      lru_order_.pop_back();
     }
 
+    // Insert new entry
     lru_order_.push_front(key);
     cache_[key] = CacheEntry{std::move(session), lru_order_.begin()};
 
@@ -159,30 +170,13 @@ bool SessionManager::EvictCached(const std::string& key) {
       return false;
     }
 
-    evicted = RemoveCachedLocked(it);
+    evicted = std::move(it->second.session);
+    lru_order_.erase(it->second.lru_iter);
+    cache_.erase(it);
   }
 
   logger_.Log(LogLevel::Debug, fmt::format("SessionManager: evicted cached session for '{}'", key));
   return true;
-}
-
-std::unique_ptr<ChatSession> SessionManager::RemoveCachedLocked(CacheMap::iterator it) {
-  auto session = std::move(it->second.session);
-  lru_order_.erase(it->second.lru_iter);
-  cache_.erase(it);
-  return session;
-}
-
-std::vector<std::unique_ptr<ChatSession>> SessionManager::MoveCacheToDestroyLocked() {
-  std::vector<std::unique_ptr<ChatSession>> to_destroy;
-
-  for (auto& cache_entry : cache_) {
-    to_destroy.push_back(std::move(cache_entry.second.session));
-  }
-
-  cache_.clear();
-  lru_order_.clear();
-  return to_destroy;
 }
 
 void SessionManager::ClearCache() {
@@ -190,8 +184,16 @@ void SessionManager::ClearCache() {
 
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    to_destroy = MoveCacheToDestroyLocked();
+
+    for (auto& [key, entry] : cache_) {
+      to_destroy.push_back(std::move(entry.session));
+    }
+
+    cache_.clear();
+    lru_order_.clear();
   }
+
+  // Destroy outside lock
 }
 
 }  // namespace fl

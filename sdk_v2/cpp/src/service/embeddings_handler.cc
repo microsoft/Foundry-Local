@@ -68,7 +68,7 @@ class EmbeddingsHandler : public HttpRequestHandler {
       return ErrorResponse(Status::CODE_404, "Model not found", model_name);
     }
 
-    auto* loaded = ctx_.model_load_manager.GetLoadedModel(model->Id());
+    auto* loaded = ctx_.model_load_manager.GetLoadedModel(model->Id(), model->GetPath());
     if (!loaded) {
       tracker.SetStatus(ActionStatus::kClientError);
       return ErrorResponse(Status::CODE_400, "Model not loaded", model_name);
@@ -81,14 +81,8 @@ class EmbeddingsHandler : public HttpRequestHandler {
 
     // 4. Create session and process each input
     try {
-      std::unique_ptr<EmbeddingsSession> session;
-      {
-        ActionTracker create_tracker(Action::kSessionCreate, ctx_.telemetry, session_ctx);
-        create_tracker.SetModelId(model_name);
-        session = std::make_unique<EmbeddingsSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
-        create_tracker.SetStatus(ActionStatus::kSuccess);
-      }
-      session->SetRequestContext(session_ctx);
+      auto session = CreateSessionWithTelemetry<EmbeddingsSession>(*model, *loaded, ctx_, session_ctx);
+      session->SetInvocationContext(session_ctx);
       SessionRegistration reg(ctx_.session_manager, *session);
 
       Request session_request;

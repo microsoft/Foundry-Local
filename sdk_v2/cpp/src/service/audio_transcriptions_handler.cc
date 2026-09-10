@@ -57,13 +57,13 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler::ResolveModel(
-    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
   }
 
-  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id());
+  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id(), model->GetPath());
   if (!loaded) {
     return ErrorResponse(Status::CODE_400, "Model not loaded",
                          "Model '" + model_name + "' must be loaded before inference");
@@ -139,15 +139,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
 
   // 5. Dispatch to streaming or non-streaming
   try {
-    std::unique_ptr<AudioSession> session;
-    {
-      ActionTracker create_tracker(Action::kSessionCreate, ctx_.telemetry, session_ctx);
-      create_tracker.SetModelId(model_name);
-      session = std::make_unique<AudioSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
-      create_tracker.SetStatus(ActionStatus::kSuccess);
-    }
+    auto session = CreateSessionWithTelemetry<AudioSession>(*model, *loaded, ctx_, session_ctx);
     AudioSession& session_ref = *session;
-    session_ref.SetRequestContext(session_ctx);
+    session_ref.SetInvocationContext(session_ctx);
 
     if (stream) {
       // The route action is recorded by the streaming thread on completion.
@@ -155,13 +149,14 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
     } else {
       SessionRegistration reg(ctx_.session_manager, session_ref);
       auto response = HandleNonStreaming(session_ref, session_request);
-      tracker->SetStatus(ResponseToActionStatus(response));
+      tracker->SetStatus(ResponseToActionStatus(response, session_request.canceled.load(std::memory_order_relaxed)));
       return response;
     }
   } catch (const std::exception& ex) {
     if (tracker) {
       tracker->RecordException(ex);
     }
+
     ctx_.logger.Log(LogLevel::Error, fmt::format("Audio transcription inference failed: {}", ex.what()));
     return ErrorResponse(Status::CODE_500, "Inference failed", ex.what());
   } catch (...) {
@@ -207,7 +202,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
                                 route_tracker = std::move(route_tracker),
                                 &session_manager = ctx_.session_manager]() mutable {
     try {
+      // Register inside the try so a shutdown rejection (Register throws) is reported as a stream error
+      // instead of escaping this raw std::thread and calling std::terminate.
       SessionRegistration reg(session_manager, bg_session);
+
       fl::Response bg_response;
 
       // Callback receives OPENAI_JSON-tagged TextItem chunks from AudioSession — just wrap in SSE framing.
@@ -220,10 +218,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
 
         if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
           auto& text_item = static_cast<fl::TextItem&>(*item);
-          if (!body_ptr->Push("data: " + text_item.text + "\n\n")) {
-            req.canceled.store(true, std::memory_order_relaxed);
-            return 1;
-          }
+          body_ptr->Push("data: " + text_item.text + "\n\n");
         } else {
           logger.Log(LogLevel::Error,
                      fmt::format("Unexpected item type {} in audio streaming callback",

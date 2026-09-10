@@ -24,12 +24,17 @@ EpDetector::EpDetector(const OrtApi& ort_api, OrtEnv& ort_env,
       bootstrappers_(std::move(bootstrappers)),
       logger_(logger),
       telemetry_(telemetry) {
-  // Populate the cache from bootstrappers_. Reads return snapshots so callers do
-  // not observe concurrent writes to is_registered.
+  // Name storage and element addresses remain stable for the detector's lifetime.
   cached_eps_.reserve(bootstrappers_.size());
+  cached_eps_c_.reserve(bootstrappers_.size());
 
   for (const auto& bs : bootstrappers_) {
     cached_eps_.push_back(EpInfo{bs->Name(), bs->IsRegistered()});
+    cached_eps_c_.push_back(flEpInfo{
+        FOUNDRY_LOCAL_API_VERSION,
+        cached_eps_.back().name.c_str(),
+        bs->IsRegistered(),
+    });
   }
 }
 
@@ -102,27 +107,13 @@ std::map<std::string, std::vector<std::string>> EpDetector::GetAvailableDevicesT
 }
 
 const std::vector<EpInfo>& EpDetector::GetDiscoverableEps() const {
-  thread_local std::vector<EpInfo> snapshot;
   std::lock_guard<std::mutex> lock(cache_mutex_);
-  snapshot = cached_eps_;
-  return snapshot;
+  return cached_eps_;
 }
 
 std::span<const flEpInfo> EpDetector::GetDiscoverableEpsCApi() const {
-  thread_local std::vector<EpInfo> snapshot_eps;
-  thread_local std::vector<flEpInfo> snapshot_c;
   std::lock_guard<std::mutex> lock(cache_mutex_);
-  snapshot_eps = cached_eps_;
-  snapshot_c.clear();
-  snapshot_c.reserve(snapshot_eps.size());
-  for (const auto& ep : snapshot_eps) {
-    snapshot_c.push_back(flEpInfo{
-        FOUNDRY_LOCAL_API_VERSION,
-        ep.name.c_str(),
-        ep.is_registered,
-    });
-  }
-  return snapshot_c;
+  return cached_eps_c_;
 }
 
 EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::string>* names,
@@ -139,20 +130,48 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
   EpDownloadResult result;
   result.success = true;
 
-  // Telemetry: time the whole call and count provider outcomes for the
-  // aggregate EPDownloadAttempt event (emitted at the end below). The whole call
-  // shares one correlation id; each per-provider EPDownloadAndRegister event is
-  // an indirect child that reuses it.
+  // Expand the requested set for EPs that depend on another EP's runtime. NvTensorRTRTX (a WinML EP)
+  // reuses the GenAI CUDA library that ships in the CUDA EP bundle, so requesting it by name must also
+  // register the CUDA EP. Only applies when both bootstrappers exist: the NvTensorRTRTX bootstrapper
+  // (so we don't act on an unknown name on hosts without it, e.g. Linux) and the CUDA bootstrapper
+  // (i.e. an NVIDIA GPU is present).
+  std::vector<std::string> expanded_names;
+  if (names != nullptr) {
+    constexpr const char* kTrtRtxEp = "NvTensorRTRTXExecutionProvider";
+    constexpr const char* kCudaEp = "CUDAExecutionProvider";
+    const bool trtrtx_requested = std::find(names->begin(), names->end(), kTrtRtxEp) != names->end();
+    const bool cuda_requested = std::find(names->begin(), names->end(), kCudaEp) != names->end();
+    const bool has_trtrtx_bootstrapper =
+        std::any_of(bootstrappers_.begin(), bootstrappers_.end(),
+                    [&](const auto& bs) { return bs->Name() == kTrtRtxEp; });
+    const bool has_cuda_bootstrapper =
+        std::any_of(bootstrappers_.begin(), bootstrappers_.end(),
+                    [&](const auto& bs) { return bs->Name() == kCudaEp; });
+    if (trtrtx_requested && has_trtrtx_bootstrapper && !has_cuda_bootstrapper) {
+      expanded_names = *names;
+      std::erase(expanded_names, kTrtRtxEp);
+      names = &expanded_names;
+      result.failed_eps.emplace_back(kTrtRtxEp);
+      result.success = false;
+      logger_.Log(LogLevel::Warning, "NvTensorRTRTX EP requires the CUDA EP, but CUDA is not available");
+    } else if (trtrtx_requested && has_trtrtx_bootstrapper && !cuda_requested) {
+      expanded_names = *names;
+      expanded_names.emplace_back(kCudaEp);
+      names = &expanded_names;
+      logger_.Log(LogLevel::Information,
+                  "Auto-registering CUDA EP alongside NvTensorRTRTX (shared GenAI CUDA library)");
+    }
+  }
+
   const auto attempt_start = std::chrono::steady_clock::now();
   const std::string telemetry_correlation_id = GenerateGuidV4();
-  int telemetry_num_providers = names != nullptr ? static_cast<int>(names->size())
-                                                 : static_cast<int>(bootstrappers_.size());
+  const int telemetry_num_providers =
+      names != nullptr ? static_cast<int>(names->size() + result.failed_eps.size())
+                       : static_cast<int>(bootstrappers_.size());
   int telemetry_attempts = 0;
   int telemetry_succeeded = 0;
-  int telemetry_failed = 0;
-  ActionStatus telemetry_status = ActionStatus::kSuccess;
-  // Some bootstrappers may already be Registered before this call; if so, the
-  // EPDownloadAttempt is considered "resolved" even when no work was done.
+  int telemetry_failed = static_cast<int>(result.failed_eps.size());
+  ActionStatus telemetry_status = result.success ? ActionStatus::kSuccess : ActionStatus::kDependencyFailure;
   bool telemetry_resolved = false;
   bool telemetry_attempt_recorded = false;
   auto record_attempt = [&]() {
@@ -161,22 +180,23 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
     }
 
     telemetry_attempt_recorded = true;
-    EpDownloadAttemptInfo attempt_info;
-    attempt_info.user_agent = DefaultUserAgent();
-    attempt_info.correlation_id = telemetry_correlation_id;
-    attempt_info.attempts = telemetry_attempts;
-    attempt_info.num_providers = telemetry_num_providers;
-    attempt_info.succeeded = telemetry_succeeded;
-    attempt_info.failed = telemetry_failed;
-    attempt_info.resolved = telemetry_resolved;
-    attempt_info.status = telemetry_status;
-    attempt_info.duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::steady_clock::now() - attempt_start)
-                                   .count();
+    EpDownloadAttemptInfo info;
+    info.user_agent = DefaultUserAgent();
+    info.correlation_id = telemetry_correlation_id;
+    info.attempts = telemetry_attempts;
+    info.num_providers = telemetry_num_providers;
+    info.succeeded = telemetry_succeeded;
+    info.failed = telemetry_failed;
+    info.resolved = telemetry_resolved;
+    info.status = telemetry_status;
+    info.duration_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - attempt_start).count();
     try {
-      telemetry_.RecordEpDownloadAttempt(attempt_info);
+      telemetry_.RecordEpDownloadAttempt(info);
+    } catch (const std::exception& ex) {
+      logger_.Log(LogLevel::Warning, std::string("telemetry EPDownloadAttempt failed: ") + ex.what());
     } catch (...) {
-      // Telemetry is best-effort and must not change EP registration results.
+      logger_.Log(LogLevel::Warning, "telemetry EPDownloadAttempt failed.");
     }
   };
 
@@ -250,6 +270,7 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
     if (cancelled) {
       result.success = false;
       telemetry_status = ActionStatus::kCanceled;
+      tracker.RecordDownloadComplete(ActionStatus::kSkipped, unresolved_ready_state);
       tracker.RecordRegisterComplete(ActionStatus::kCanceled, unresolved_ready_state);
     } else if (ok) {
       ++telemetry_succeeded;
@@ -260,6 +281,7 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
       // GetDiscoverableEps[C] readers see the new value.
       std::lock_guard<std::mutex> cache_lock(cache_mutex_);
       cached_eps_[i].is_registered = true;
+      cached_eps_c_[i].is_registered = true;
 
       tracker.RecordDownloadComplete(was_registered_before ? ActionStatus::kSkipped : ActionStatus::kSuccess,
                                      unresolved_ready_state);
@@ -298,6 +320,12 @@ EpDownloadResult EpDetector::DownloadAndRegisterEps(const std::vector<std::strin
 
 bool EpDetector::IsDownloadInProgress() const {
   return download_in_progress_;
+}
+
+bool EpDetector::PrepareForModelLoad(std::string_view ep_name) {
+  auto it = std::find_if(bootstrappers_.begin(), bootstrappers_.end(),
+                         [&](const auto& bootstrapper) { return bootstrapper->Name() == ep_name; });
+  return it == bootstrappers_.end() || (*it)->PrepareForModelLoad(logger_);
 }
 
 }  // namespace fl

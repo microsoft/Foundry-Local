@@ -12,7 +12,7 @@ The Foundry Local C# SDK provides a .NET interface for running AI models locally
 - **Model variants** — select specific hardware/quantization variants per model alias
 - **Optional web service** — start an OpenAI-compatible REST endpoint (`/v1/chat_completions`, `/v1/models`)
 - **WinML acceleration** — built-in Windows hardware acceleration with automatic EP download
-- **Full async/await** — every operation supports `CancellationToken` and async patterns
+- **Async APIs** — idiomatic async/await support across the SDK
 - **IDisposable** — deterministic cleanup of native resources
 
 ## Installation
@@ -233,7 +233,7 @@ Tune generation parameters per client:
 chatClient.Settings.Temperature = 0.7f;
 chatClient.Settings.MaxTokens = 256;
 chatClient.Settings.TopP = 0.9f;
-chatClient.Settings.FrequencyPenalty = 0.5f;
+chatClient.Settings.FrequencyPenalty = 0.0f; // Nonzero OpenAI penalties are not currently supported.
 ```
 
 ### Audio Transcription

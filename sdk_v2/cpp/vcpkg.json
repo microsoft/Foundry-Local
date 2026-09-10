@@ -6,6 +6,10 @@
   "dependencies": [
     "azure-storage-blobs-cpp",
     {
+      "name": "libarchive",
+      "default-features": false
+    },
+    {
       "name": "azure-core-cpp",
       "default-features": false,
       "features": ["winhttp"],
@@ -17,7 +21,7 @@
       "features": ["curl"],
       "platform": "!windows | uwp"
     },
-    "ms-gsl",
+    "zlib",
     "nlohmann-json",
     "spdlog"
   ],
@@ -38,7 +42,7 @@
         {
           "name": "cpp-client-telemetry",
           "default-features": false,
-          "features": ["minimal-sqlite"],
+          "features": ["minimal-sqlite", "curl-openssl"],
           "platform": "!uwp"
         }
       ]

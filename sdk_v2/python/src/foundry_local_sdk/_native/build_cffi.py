@@ -79,6 +79,11 @@ typedef enum flDeviceType {
     FOUNDRY_LOCAL_DEVICE_NPU = 3,
 } flDeviceType;
 
+typedef enum flCatalogType {
+    FOUNDRY_LOCAL_CATALOG_PUBLIC = 0,
+    FOUNDRY_LOCAL_CATALOG_LOCAL = 1,
+} flCatalogType;
+
 typedef enum flTensorDataType {
     FOUNDRY_LOCAL_TENSOR_UNDEFINED = 0,
     FOUNDRY_LOCAL_TENSOR_FLOAT = 1,
@@ -389,6 +394,7 @@ typedef struct flApi {
     _Bool (*Manager_IsEpDownloadInProgress)(const flManager* manager);
     flStatusPtr (*Manager_Shutdown)(flManager* manager);
     _Bool (*Manager_IsShutdownRequested)(const flManager* manager);
+    flStatusPtr (*Manager_GetCatalogByType)(const flManager* manager, flCatalogType catalog_type, flCatalog** out_catalog);
 } flApi;
 
 /* -----------------------------------------------------------------------
@@ -453,7 +459,7 @@ typedef struct flInferenceApi {
     flStatusPtr (*Session_SetOptions)(flSession* session, const flKeyValuePairs* options);
     flStatusPtr (*Session_ProcessRequest)(flSession* session, const flRequest* request, flResponse** response);
     flStatusPtr (*Session_AddToolDefinition)(flSession* session, const flToolDefinition* tool_def);
-    flStatusPtr (*Session_RemoveToolDefinition)(flSession* session, const char* tool_name, _Bool* out_removed);
+    flStatusPtr (*Session_RemoveToolDefinition)(flSession* session, const char* tool_name, bool* out_removed);
     size_t (*Session_GetTurnCount)(const flSession* session);
     flStatusPtr (*Session_UndoTurns)(flSession* session, size_t count);
 } flInferenceApi;
@@ -489,6 +495,8 @@ typedef struct flCatalogApi {
     flStatusPtr (*GetCachedModels)(const flCatalog* catalog, flModelList** out_models);
     flStatusPtr (*GetLoadedModels)(const flCatalog* catalog, flModelList** out_models);
     flStatusPtr (*GetModelVersions)(const flCatalog* catalog, const char* model_alias, const char* model_name, int32_t max_versions, flModelList** out_models);
+    flStatusPtr (*RegisterModel)(flCatalog* catalog, const char* model_path, const char* model_id, const flModelInfo* metadata, flModel** out_model);
+    flStatusPtr (*UnregisterModel)(flCatalog* catalog, const char* alias_or_model_id);
 } flCatalogApi;
 
 /* -----------------------------------------------------------------------
@@ -519,6 +527,10 @@ typedef struct flModelApi {
     const flKeyValuePairs* (*Info_GetModelSettings)(const flModelInfo* info);
     const char* (*Info_GetStringProperty)(const flModelInfo* info, const char* key);
     int64_t (*Info_GetIntProperty)(const flModelInfo* info, const char* key, int64_t default_value);
+    flStatusPtr (*CreateModelInfo)(flModelInfo** out_info);
+    void (*ReleaseModelInfo)(flModelInfo* info);
+    flStatusPtr (*Info_SetStringProperty)(flModelInfo* info, const char* key, const char* value);
+    flStatusPtr (*Info_SetIntProperty)(flModelInfo* info, const char* key, int64_t value);
 } flModelApi;
 
 /* -----------------------------------------------------------------------

@@ -14,6 +14,7 @@
 #include "inferencing/session/session_manager.h"
 #include "inferencing/session/session_registration.h"
 #include "items/text_item.h"
+#include "items/tool_call_item.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
 
@@ -75,17 +76,23 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
     return ErrorResponse(Status::CODE_400, "Invalid request parameters", ex.what());
   }
 
+  if (params.frequency_penalty.value_or(0.0f) != 0.0f ||
+      params.presence_penalty.value_or(0.0f) != 0.0f) {
+    return ErrorResponse(Status::CODE_400, "Unsupported parameter",
+                         "nonzero frequency_penalty and presence_penalty are not supported");
+  }
+
   return nullptr;
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveModel(
-    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
   }
 
-  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id());
+  loaded = ctx_.model_load_manager.GetLoadedModel(model->Id(), model->GetPath());
   if (!loaded) {
     return ErrorResponse(Status::CODE_400, "Model not loaded",
                          "Model '" + model_name + "' must be loaded before inference");
@@ -130,8 +137,8 @@ void ResponsesHandler::LoadPreviousContext(const ResponseCreateParams& params,
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
     const std::shared_ptr<IncomingRequest>& request) {
-  auto route_ctx = InvocationContext::Direct(GetUserAgent(request));
-  auto tracker = std::make_unique<ActionTracker>(Action::kOpenAIResponsesCreate, ctx_.telemetry, route_ctx);
+  const auto route_context = InvocationContext::Direct(GetUserAgent(request));
+  auto tracker = std::make_unique<ActionTracker>(Action::kOpenAIResponsesCreate, ctx_.telemetry, route_context);
 
   auto body_str = request->readBodyToString();
   if (!body_str || body_str->empty()) {
@@ -197,18 +204,14 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
   // happens here in the handler that owns the session lifetime.
   std::string tools_json = ResponseConverter::ExtractResponsesToolDefinitions(params, session_request);
 
-  // The session and the inference it drives happen as a consequence of this
-  // route, so they are indirect and reuse the route's correlation id.
-  auto session_ctx = route_ctx.AsIndirect();
-
+  const auto session_context = route_context.AsIndirect();
   try {
     if (!session) {
-      ActionTracker create_tracker(Action::kSessionCreate, ctx_.telemetry, session_ctx);
-      create_tracker.SetModelId(model_name);
-      session = std::make_unique<ChatSession>(*model, *loaded, ctx_.logger, ctx_.telemetry);
-      create_tracker.SetStatus(ActionStatus::kSuccess);
+      session = CreateSessionWithTelemetry<ChatSession>(*model, *loaded, ctx_, session_context);
     }
-    session->SetRequestContext(session_ctx);
+
+    // A cached session must take this route's context, not the previous turn's.
+    session->SetInvocationContext(session_context);
 
     // Sessions can be reused via previous_response_id; clear any stale tool defs from the prior
     // turn before applying this request's tools so the request stays self-contained.
@@ -220,9 +223,6 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
     if (params.stream) {
       ctx_.logger.Log(LogLevel::Debug,
                       fmt::format("Creating streaming response {} for model {}", response_id, model_name));
-
-      // The route action is recorded by the streaming thread when the stream
-      // finishes — move the tracker in rather than marking success now.
       return HandleStreaming(std::move(session), std::move(session_request), model_name,
                              response_id, created_at, params, req_json, std::move(tracker));
     } else {
@@ -231,7 +231,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::handle(
 
       auto response = HandleNonStreaming(std::move(session), session_request, model_name,
                                          response_id, created_at, params, req_json);
-      tracker->SetStatus(ActionStatus::kSuccess);
+      tracker->SetStatus(ResponseToActionStatus(response, session_request.canceled.load(std::memory_order_relaxed)));
 
       return response;
     }
@@ -344,47 +344,42 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
                                 route_tracker = std::move(route_tracker),
                                 &tracker]() mutable {
     int seq = 2;
-    try {
-      SessionRegistration reg(session_manager, *session);
+    std::string full_text;  // concatenation of all visible runs, used for output_text in completed_response
 
-      std::string full_text;  // concatenation of all visible runs, used for output_text in completed_response
+    // Per-item state for the currently-open item. `current_kind == nullopt` means no item is open. On every type
+    // transition we close the open item (emitting its done events) and open a new one with a fresh id at the next
+    // output_index. Adjacent same-typed segments accumulate into the same item naturally because we don't close
+    // until the type changes.
+    enum class ItemKind { Reasoning,
+                          Message };
+    std::optional<ItemKind> current_kind;
+    std::string current_id;
+    std::string current_text;
+    int current_output_index = -1;
+    int next_output_index = 0;
 
-      // Per-item state for the currently-open item. `current_kind == nullopt` means no item is open. On every type
-      // transition we close the open item (emitting its done events) and open a new one with a fresh id at the next
-      // output_index. Adjacent same-typed segments accumulate into the same item naturally because we don't close
-      // until the type changes.
-      enum class ItemKind { Reasoning,
-                            Message };
-      std::optional<ItemKind> current_kind;
-      std::string current_id;
-      std::string current_text;
-      int current_output_index = -1;
-      int next_output_index = 0;
+    // Items that have been *closed* (or, for the currently-open item at end-of-stream, finalized in place).
+    // Used to construct the final `output[]` array for the response.completed event.
+    std::vector<ResponseOutputItem> closed_items;
 
-      // Items that have been *closed* (or, for the currently-open item at end-of-stream, finalized in place).
-      // Used to construct the final `output[]` array for the response.completed event.
-      std::vector<ResponseOutputItem> closed_items;
+    auto push_event = [&](const std::string& event_name, const StreamEvent& ev) {
+      body_ptr->Push("event: " + event_name + "\ndata: " + nlohmann::json(ev).dump() + "\n\n");
+    };
 
-      auto push_event = [&](const std::string& event_name, const StreamEvent& ev) {
-        if (!body_ptr->Push("event: " + event_name + "\ndata: " + nlohmann::json(ev).dump() + "\n\n")) {
-          req.canceled.store(true, std::memory_order_relaxed);
-        }
-      };
+    auto close_current = [&]() {
+      if (!current_kind.has_value()) {
+        return;
+      }
 
-      auto close_current = [&]() {
-        if (!current_kind.has_value()) {
-          return;
-        }
-
-        if (*current_kind == ItemKind::Reasoning) {
-          // Emit: response.reasoning.done
-          StreamEvent done_ev;
-          done_ev.type = StreamEventType::kReasoningDone;
-          done_ev.sequence_number = seq++;
-          done_ev.output_index = current_output_index;
-          done_ev.item_id = current_id;
-          done_ev.text = current_text;
-          push_event("response.reasoning.done", done_ev);
+      if (*current_kind == ItemKind::Reasoning) {
+        // Emit: response.reasoning.done
+        StreamEvent done_ev;
+        done_ev.type = StreamEventType::kReasoningDone;
+        done_ev.sequence_number = seq++;
+        done_ev.output_index = current_output_index;
+        done_ev.item_id = current_id;
+        done_ev.text = current_text;
+        push_event("response.reasoning.done", done_ev);
 
         // Emit: response.output_item.done
         ReasoningOutputItem rs;
@@ -492,6 +487,22 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       push_event("response.content_part.added", part_added);
     };
 
+    auto emit_tool_call = [&](const fl::ToolCallItem& call) {
+      close_current();
+
+      const int output_index = next_output_index++;
+      auto output = ResponseConverter::BuildFunctionCallStreamOutput(call, output_index, seq);
+      for (const auto& event : output.events) {
+        push_event(StreamEventTypeToString(event.type), event);
+      }
+      closed_items.push_back(std::move(output.completed_item));
+    };
+
+    try {
+      // Register inside the try so a shutdown rejection (Register throws) is reported as a stream failure
+      // instead of escaping this raw std::thread and calling std::terminate.
+      SessionRegistration reg(session_manager, *session);
+
       fl::Response bg_response;
       fl::Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void* /*user_data*/) -> int {
         fl::ItemQueue* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
@@ -502,7 +513,18 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
           return 0;
         }
 
-        assert(item->type == FOUNDRY_LOCAL_ITEM_TEXT);
+        if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+          emit_tool_call(static_cast<const fl::ToolCallItem&>(*item));
+          return 0;
+        }
+
+        if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
+          logger.Log(LogLevel::Debug,
+                     fmt::format("Responses streaming: skipping non-text item type {}",
+                                 static_cast<int>(item->type)));
+          return 0;
+        }
+
         auto* text_item = static_cast<fl::TextItem*>(item.get());
 
         ItemKind incoming = (text_item->text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING)
@@ -553,25 +575,6 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       // Close whatever item is still open at end-of-generation so the SSE stream is well-formed.
       close_current();
 
-      if (req.canceled.load(std::memory_order_relaxed)) {
-        auto canceled_response = ResponseConverter::BuildFailedResponseObject(
-            response_id, created_at, model_name, params_copy, "canceled", "Response generation was canceled");
-
-        StreamEvent failed;
-        failed.type = StreamEventType::kResponseFailed;
-        failed.sequence_number = seq++;
-        failed.response = canceled_response;
-        push_event("response.failed", failed);
-
-        if (route_tracker) {
-          route_tracker->SetStatus(ActionStatus::kCanceled);
-        }
-        body_ptr->Finish();
-        route_tracker.reset();
-        tracker.Remove(std::this_thread::get_id());
-        return;
-      }
-
       auto completed_response = ResponseConverter::BuildResponseObject(
           response_id, created_at, model_name, params_copy, std::move(closed_items), full_text, bg_response.usage);
 
@@ -597,13 +600,10 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
         session_manager.CheckIn(response_id, std::move(session));
       }
 
-      // Record final route status after streaming completes.
-      if (route_tracker) {
-        route_tracker->SetStatus(req.canceled.load(std::memory_order_relaxed) ? ActionStatus::kCanceled
-                                                                              : ActionStatus::kSuccess);
-      }
-
+      route_tracker->SetStatus(req.canceled.load(std::memory_order_relaxed) ? ActionStatus::kCanceled
+                                                                         : ActionStatus::kSuccess);
     } catch (const std::exception& ex) {
+      route_tracker->RecordException(ex);
       logger.Log(LogLevel::Error, fmt::format("Response {} failed during streaming: {}", response_id, ex.what()));
 
       auto error_response = ResponseConverter::BuildFailedResponseObject(
@@ -615,17 +615,13 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       failed.sequence_number = seq++;
       failed.response = error_response;
       body_ptr->Push("event: response.failed\ndata: " + nlohmann::json(failed).dump() + "\n\n");
-
-      // Mid-stream failure: record the exception; the route action keeps kFailure.
-      if (route_tracker) {
-        route_tracker->RecordException(ex);
-      }
     }
 
     // Terminal event per spec
     body_ptr->Push("data: [DONE]\n\n");
     body_ptr->Finish();
 
+    // Emit while the worker is still tracked and the service's telemetry dependency is alive.
     route_tracker.reset();
     tracker.Remove(std::this_thread::get_id());
   });

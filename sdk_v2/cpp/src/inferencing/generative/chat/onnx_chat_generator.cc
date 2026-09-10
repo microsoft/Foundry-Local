@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "inferencing/generative/chat/onnx_chat_generator.h"
 #include "exception.h"
+#include "items/audio_item.h"
 #include "items/image_item.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
@@ -10,8 +11,6 @@
 
 #include <nlohmann/json.hpp>
 #include <ort_genai.h>
-
-#include <algorithm>
 
 namespace fl {
 
@@ -24,14 +23,12 @@ OnnxChatGenerator::~OnnxChatGenerator() = default;
 OnnxChatGenerator::OnnxChatGenerator(std::unique_ptr<OgaGeneratorParams> gen_params,
                                      std::unique_ptr<OgaGenerator> generator,
                                      std::unique_ptr<OgaTokenizerStream> stream,
-                                     std::unique_ptr<OgaTokenizerStream> stream_with_special,
                                      GenAIModelInstance& model,
                                      int prompt_token_count,
                                      std::unique_ptr<OgaNamedTensors> named_tensors)
     : gen_params_(std::move(gen_params)),
       generator_(std::move(generator)),
       stream_(std::move(stream)),
-      stream_with_special_(std::move(stream_with_special)),
       named_tensors_(std::move(named_tensors)),
       model_(model),
       prompt_token_count_(prompt_token_count) {}
@@ -53,11 +50,20 @@ bool OnnxChatGenerator::IsDone() const {
 
 void OnnxChatGenerator::GenerateNextToken() {
   if (cancelled_) {
+    current_token_.reset();
     return;
   }
 
+  current_token_.reset();
+
   try {
     generator_->GenerateNextToken();
+
+    // GetNextTokens returns the batch of next tokens; chat generation always uses batch size 1.
+    const auto next_tokens = generator_->GetNextTokens();
+    if (!next_tokens.empty()) {
+      current_token_ = next_tokens[0];
+    }
   } catch (const std::runtime_error& e) {
     // If cancelled while generating, the OGA engine throws when the session is terminated.
     // This is expected — not an error.
@@ -70,45 +76,41 @@ void OnnxChatGenerator::GenerateNextToken() {
 }
 
 std::string OnnxChatGenerator::Decode() {
-  if (cancelled_) {
+  if (cancelled_ || !current_token_.has_value()) {
     return "";
   }
 
-  // Get the most recently generated token ID.
-  // GetNextTokens returns the batch of next tokens; we use index 0 (batch size = 1).
-  auto next_tokens = generator_->GetNextTokens();
+  const auto token_id = *current_token_;
+  current_token_.reset();
 
-  if (next_tokens.empty()) {
-    return "";
+  // Fast path: if this token matches a known tag ID, return the pre-decoded string.
+  // Decode is always single-stream for normal tokens.
+  const auto& tag_info = model_.GetTagInfo();
+
+  if (tag_info.bot_id.has_value() && token_id == *tag_info.bot_id) {
+    stream_->Decode(token_id);
+    return tag_info.bot_str;
+  }
+  if (tag_info.eot_id.has_value() && token_id == *tag_info.eot_id) {
+    stream_->Decode(token_id);
+    return tag_info.eot_str;
+  }
+  if (tag_info.bor_id.has_value() && token_id == *tag_info.bor_id) {
+    stream_->Decode(token_id);
+    return tag_info.bor_str;
+  }
+  if (tag_info.eor_id.has_value() && token_id == *tag_info.eor_id) {
+    stream_->Decode(token_id);
+    return tag_info.eor_str;
   }
 
-  int32_t token_id = next_tokens[0];
-
-  // Decode through the normal tokenizer stream
+  // Single decode for all non-tag tokens.
   const char* token_text = stream_->Decode(token_id);
+  return token_text ? std::string(token_text) : "";
+}
 
-  // Also decode through the special-token stream to detect tool call and think tokens.
-  // If the special stream gives a different result and it's a known special token type
-  // that isn't an EOS token, surface the special representation instead.
-  // Matches C# OnnxChatGenerator.Decode behavior.
-  const char* special_text = stream_with_special_->Decode(token_id);
-
-  std::string token_str = token_text ? std::string(token_text) : "";
-
-  if (special_text != nullptr && token_text != nullptr && std::string(special_text) != token_str) {
-    std::string special_str(special_text);
-    bool is_tool_call_token = special_str.find("tool_call") != std::string::npos;
-    bool is_think_token = special_str.find("think") != std::string::npos;
-
-    const auto& eos_ids = model_.GetEosTokenIds();
-    bool is_eos = std::find(eos_ids.begin(), eos_ids.end(), token_id) != eos_ids.end();
-
-    if (!is_eos && (is_tool_call_token || is_think_token)) {
-      return special_str;
-    }
-  }
-
-  return token_str;
+std::optional<int32_t> OnnxChatGenerator::CurrentTokenId() const {
+  return current_token_;
 }
 
 int OnnxChatGenerator::TokenCount() const {
@@ -136,16 +138,18 @@ void OnnxChatGenerator::Cancel() {
 // ---------------------------------------------------------------------------
 
 int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
+                                      const std::vector<MessageItem>& /*full_messages*/,
                                       GenAIModelInstance& model,
-                                      const std::string& tools_json) {
+                                      const ToolCallContext& tool_ctx,
+                                      const SearchOptions& /*options*/) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
   }
 
   // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
-  // produces the correct continuation tokens (e.g. <|im_end|>\n<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n)
-  std::string prompt = BuildChatPrompt(new_messages, model.GetOgaTokenizer(), tools_json);
-  auto sequences = EncodePrompt(prompt, model.GetOgaTokenizer());
+  // produces the correct continuation tokens, including the next assistant generation prefix.
+  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx.tools_json);
+  auto sequences = EncodePrompt(prompt, model);
   int new_token_count = static_cast<int>(sequences->SequenceCount(0));
 
   try {
@@ -159,19 +163,25 @@ int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messag
 
 void OnnxChatGenerator::RewindTo(int token_count) {
   try {
+    if (cancelled_) {
+      generator_->SetRuntimeOption("terminate_session", "0");
+    }
+
     generator_->RewindTo(token_count);
+    current_token_.reset();
+    cancelled_ = false;
   } catch (const std::runtime_error& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to rewind generator: ") + e.what());
   }
 }
 
 // ---------------------------------------------------------------------------
-// Vision helpers (mirror upstream C# OnnxChatGenerator)
+// Media helpers
 // ---------------------------------------------------------------------------
 
-std::string OnnxChatGenerator::TransformMessagesForVision(const std::vector<MessageItem>& messages) {
+std::string OnnxChatGenerator::TransformMessagesForMedia(const std::vector<MessageItem>& messages) {
   // Find the index of the last user message so we can rewrite only that one
-  // into the structured `[{"type":"image"},{"type":"text","text":...}]` form.
+  // into structured media markers followed by its text content.
   // Other messages are emitted in plain `{"role","content"}` form so the chat
   // template renders them the same way it does for text-only requests.
   size_t last_user_idx = messages.size();
@@ -189,13 +199,27 @@ std::string OnnxChatGenerator::TransformMessagesForVision(const std::vector<Mess
     entry["role"] = Utils::RoleToString(msg.role);
 
     if (i == last_user_idx) {
-      // Concatenate the message's text parts (REASONING parts and non-text parts skipped by the helper); image
-      // bytes are processed separately by OgaMultiModalProcessor::ProcessImages.
-      entry["content"] = nlohmann::json::array({
-          nlohmann::json{{"type", "image"}},
-          nlohmann::json{{"type", "text"}, {"text", RenderMessageForPrompt(msg)}},
-      });
+      auto content = nlohmann::json::array();
+      for (const auto& part : msg.content) {
+        if (!part.view) {
+          continue;
+        }
+        if (part.view->type == FOUNDRY_LOCAL_ITEM_IMAGE) {
+          content.push_back(nlohmann::json{{"type", "image"}});
+        } else if (part.view->type == FOUNDRY_LOCAL_ITEM_AUDIO) {
+          content.push_back(nlohmann::json{{"type", "audio"}});
+        }
+      }
+      content.push_back(nlohmann::json{{"type", "text"}, {"text", RenderMessageForPrompt(msg)}});
+      entry["content"] = std::move(content);
     } else {
+      for (const auto& part : msg.content) {
+        if (part.view &&
+            (part.view->type == FOUNDRY_LOCAL_ITEM_IMAGE || part.view->type == FOUNDRY_LOCAL_ITEM_AUDIO)) {
+          FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                   "media input must belong to the final user message");
+        }
+      }
       // Non-final message: render visible text parts only via the canonical helper.
       entry["content"] = RenderMessageForPrompt(msg);
     }
@@ -215,22 +239,22 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::Create(const std::vector<M
                                                              GenAIModelInstance& model,
                                                              const ToolCallContext& tool_ctx,
                                                              bool use_full_context) {
-  return CreateImpl(messages, options, model, tool_ctx, use_full_context, /*images=*/{});
+  return CreateImpl(messages, options, model, tool_ctx, use_full_context, /*images=*/{}, /*audios=*/{});
 }
 
-std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateWithImages(
+std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateWithMedia(
     const std::vector<MessageItem>& messages,
     const SearchOptions& options,
     GenAIModelInstance& model,
     const std::vector<const ImageItem*>& images,
+    const std::vector<const AudioItem*>& audios,
     const ToolCallContext& tool_ctx,
     bool use_full_context) {
-  if (images.empty()) {
+  if (images.empty() && audios.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-             "CreateWithImages requires at least one image; use Create for text-only requests");
+             "CreateWithMedia requires at least one image or audio input");
   }
-
-  return CreateImpl(messages, options, model, tool_ctx, use_full_context, images);
+  return CreateImpl(messages, options, model, tool_ctx, use_full_context, images, audios);
 }
 
 std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vector<MessageItem>& messages,
@@ -238,130 +262,55 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
                                                                  GenAIModelInstance& model,
                                                                  const ToolCallContext& tool_ctx,
                                                                  bool use_full_context,
-                                                                 const std::vector<const ImageItem*>& images) {
+                                                                 const std::vector<const ImageItem*>& images,
+                                                                 const std::vector<const AudioItem*>& audios) {
   if (messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "messages must not be empty");
   }
 
-  const bool vision_branch = !images.empty();
+  const bool media_branch = !images.empty() || !audios.empty();
 
-  if (vision_branch) {
+  if (media_branch) {
     if (!model.IsMultiModal()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "image input requires a multimodal model");
+               "image or audio input requires a multimodal model");
     }
 
-    if (model.GetProcessor() == nullptr) {
+    if (!model.GetPreprocessor().HasMultiModalProcessor()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "model has no multimodal processor available for image input");
-    }
-
-    // Match upstream's single-image limit. Easy to relax once the wider
-    // pipeline (and ORT GenAI templates) reliably handle multi-image inputs.
-    if (images.size() > 1) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "only one image per request is supported");
+               "model has no multimodal processor available for media input");
     }
   }
 
   // 1. Build the chat prompt using the model's template.
-  //    Vision: rewrite the last user message to insert the model's image
-  //    sentinel before the user text.
+  //    Media: rewrite the last user message to insert media sentinels.
   std::string prompt;
-  if (vision_branch) {
-    std::string messages_json = TransformMessagesForVision(messages);
+  if (media_branch) {
+    std::string messages_json = TransformMessagesForMedia(messages);
     const char* tools_ptr = tool_ctx.tools_json.empty() ? nullptr : tool_ctx.tools_json.c_str();
-    OgaString rendered = model.GetOgaTokenizer().ApplyChatTemplate(/*template_str=*/nullptr,
-                                                                   messages_json.c_str(),
-                                                                   tools_ptr,
-                                                                   /*add_generation_prompt=*/true);
-    prompt = std::string(static_cast<const char*>(rendered));
+    prompt =
+        model.GetPreprocessor().ApplyChatTemplate(messages_json.c_str(), tools_ptr, /*add_generation_prompt=*/true);
   } else {
-    prompt = BuildChatPrompt(messages, model.GetOgaTokenizer(), tool_ctx.tools_json);
+    prompt = BuildChatPrompt(messages, model, tool_ctx.tools_json);
   }
 
   // 2. Token budgeting.
   //    Text path: encode the prompt up front so we know its token count.
-  //    Vision path: defer; OgaGenerator::SetInputs will derive input_ids from
-  //    the named tensors, and we read TokenCount() back after the call.
+  //    Media path: process inputs first and read the expanded input_ids shape.
   std::unique_ptr<OgaSequences> sequences;
   int input_token_count = 0;
 
-  if (!vision_branch) {
-    sequences = EncodePrompt(prompt, model.GetOgaTokenizer());
+  if (!media_branch) {
+    sequences = EncodePrompt(prompt, model);
     input_token_count = static_cast<int>(sequences->SequenceCount(0));
-  } else {
-    // Approximate budget for ApplySearchOptions: encode the prompt once with
-    // the text tokenizer to get a token count. The actual prompt fed to the
-    // generator comes from ProcessImages and may be slightly longer due to
-    // image-token expansion, but this is the best estimate we have for
-    // max_length budgeting and matches upstream's pattern of reading
-    // TokenCount() after SetInputs for the authoritative count.
-    auto approx = EncodePrompt(prompt, model.GetOgaTokenizer());
-    input_token_count = static_cast<int>(approx->SequenceCount(0));
   }
 
-  // 3. Create GeneratorParams from the model
-  auto gen_params = OgaGeneratorParams::Create(model.GetOgaModel());
-
-  // 4. Apply search options (temperature, top_p, max_length, etc.) and validate token budget.
-  //    Default output budget mirrors C# OnnxChatGenerator: 3072 for vision requests
-  //    (image tokens push the prompt much higher), 2048 for text.
-  int default_max_output = vision_branch ? 3072 : 2048;
-  ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, use_full_context,
-                     default_max_output);
-
-  // 5. Compute guidance for constrained decoding.
-  // Priority: user-specified guidance (from response_format) > auto-generated LARK grammar.
-  // Matches C# GetGuidance() — always compute, then guard application.
-  std::string guidance_type;
-  std::string guidance_data;
-
-  if (!tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty()) {
-    // User specified guidance via response_format
-    guidance_type = tool_ctx.guidance_type;
-    guidance_data = tool_ctx.guidance_data;
-  } else {
-    // Auto-generate LARK grammar from tool definitions and reasoning state
-    std::string json_schema;
-    if (tool_ctx.HasTools()) {
-      json_schema = BuildToolJsonSchema(tool_ctx);
-    }
-
-    guidance_data = BuildLarkGrammar(tool_ctx, json_schema);
-    if (!guidance_data.empty()) {
-      guidance_type = "lark_grammar";
-    }
-  }
-
-  // Guard: Apply guidance only for tool-call-only mode (tool output requested, no text output). Text-only reasoning
-  // (cot_text_only) cannot use grammar guidance because a completed grammar signals EOS to the ORT GenAI generator —
-  // making IsDone() return true immediately on the next turn, breaking multi-turn continuous decoding. For
-  // tool-call-only mode the generator is typically invalidated after a successful call anyway, so this is acceptable.
-  // Reasoning content for text-only mode is handled via StripReasoningContent post-processing.
-  bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
-
-  if (!guidance_type.empty() && !guidance_data.empty() && tool_call_only) {
-    try {
-      gen_params->SetGuidance(guidance_type.c_str(), guidance_data.c_str());
-    } catch (const std::runtime_error& e) {
-      // SetGuidance may not be supported by all models; continue without guidance
-      (void)e;
-    }
-  }
-
-  // 6. Create the Generator and feed it the prompt.
-  //    Text path: append the encoded token sequences.
-  //    Vision path: process images via OgaMultiModalProcessor and feed the
-  //    resulting named tensors via SetInputs (which extracts input_ids and
-  //    appends them internally — do NOT also call AppendTokenSequences).
-  std::unique_ptr<OgaGenerator> generator;
+  // Process media before sizing the generator so max_length includes the
+  // exact token expansion produced by the multimodal processor.
   std::unique_ptr<OgaNamedTensors> named_tensors;
-  try {
-    generator = OgaGenerator::Create(model.GetOgaModel(), *gen_params);
-
-    if (vision_branch) {
-      // Materialise raw image bytes and pointer/size arrays for OgaImages::Load.
+  if (media_branch) {
+    std::unique_ptr<OgaImages> oga_images;
+    if (!images.empty()) {
       std::vector<std::vector<std::uint8_t>> image_bytes;
       image_bytes.reserve(images.size());
       std::vector<const void*> buffers;
@@ -379,12 +328,57 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
         sizes.push_back(image_bytes.back().size());
       }
 
-      auto oga_images = OgaImages::Load(buffers.data(), sizes.data(), buffers.size());
-      named_tensors = model.GetProcessor()->ProcessImages(prompt.c_str(), oga_images.get());
-      generator->SetInputs(*named_tensors);
+      oga_images = OgaImages::Load(buffers.data(), sizes.data(), buffers.size());
+    }
 
-      // Authoritative prompt token count after image-token expansion.
-      input_token_count = static_cast<int>(generator->GetSequenceCount(0));
+    std::unique_ptr<OgaAudios> oga_audios;
+    if (!audios.empty()) {
+      std::vector<const void*> audio_buffers;
+      audio_buffers.reserve(audios.size());
+      std::vector<size_t> audio_sizes;
+      audio_sizes.reserve(audios.size());
+      for (const auto* audio : audios) {
+        if (audio == nullptr || audio->data == nullptr || audio->data_size == 0) {
+          FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "audio entry must contain bytes");
+        }
+        audio_buffers.push_back(audio->data);
+        audio_sizes.push_back(audio->data_size);
+      }
+
+      oga_audios = OgaAudios::Load(audio_buffers.data(), audio_sizes.data(), audio_buffers.size());
+    }
+
+    named_tensors = model.GetPreprocessor().ProcessMedia(prompt.c_str(), oga_images.get(), oga_audios.get());
+    auto input_ids = named_tensors->Get("input_ids");
+    auto input_shape = input_ids->Shape();
+    if (input_shape.empty() || input_shape.back() <= 0) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "multimodal processor returned invalid input_ids");
+    }
+    input_token_count = static_cast<int>(input_shape.back());
+  }
+
+  // 3. Create GeneratorParams from the model
+  auto gen_params = OgaGeneratorParams::Create(model.GetOgaModel());
+
+  // 4. Apply search options (temperature, top_p, max_length, etc.) and validate token budget.
+  //    Media inputs use a larger default because preprocessing expands them into tokens.
+  ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, model.EP(),
+                     use_full_context, GetDefaultMaxOutputTokens(media_branch));
+
+  // 5. Apply constrained decoding for tool-only output when supported.
+  ApplyGuidanceOptions(tool_ctx, *gen_params);
+
+  // 6. Create the Generator and feed it the prompt.
+  //    Text path: append the encoded token sequences.
+  //    Media path: process inputs via OgaMultiModalProcessor and feed the
+  //    resulting named tensors via SetInputs (which extracts input_ids and
+  //    appends them internally — do NOT also call AppendTokenSequences).
+  std::unique_ptr<OgaGenerator> generator;
+  try {
+    generator = OgaGenerator::Create(model.GetOgaModel(), *gen_params);
+
+    if (media_branch) {
+      generator->SetInputs(*named_tensors);
     } else {
       generator->AppendTokenSequences(*sequences);
     }
@@ -392,19 +386,14 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to create generator: ") + e.what());
   }
 
-  // 7. Create two tokenizer streams:
-  //    - Normal stream: standard decoding (special tokens filtered)
-  //    - Special stream: includes special tokens (for tool call detection)
-
-  auto stream = OgaTokenizerStream::Create(model.GetOgaTokenizer());
-  auto stream_with_special = OgaTokenizerStream::Create(model.GetOgaTokenizerWithSpecial());
+  // 7. Create tokenizer stream (single-decode path).
+  auto stream = model.GetPreprocessor().CreateTokenizerStream();
 
   // `std::make_unique` constructs inside the library helper, which does not have
   // access to this class's private constructor.
   return std::unique_ptr<OnnxChatGenerator>(new OnnxChatGenerator(std::move(gen_params),
                                                                   std::move(generator),
                                                                   std::move(stream),
-                                                                  std::move(stream_with_special),
                                                                   model,
                                                                   input_token_count,
                                                                   std::move(named_tensors)));

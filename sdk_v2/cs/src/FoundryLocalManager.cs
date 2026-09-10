@@ -43,6 +43,26 @@ public class FoundryLocalManager : IDisposable
     public static FoundryLocalManager Instance => instance ??
         throw new FoundryLocalException("FoundryLocalManager has not been created. Call CreateAsync first.");
 
+    private static void OnProcessExit(object? sender, EventArgs eventArgs)
+    {
+        var manager = instance;
+        if (manager == null)
+        {
+            return;
+        }
+
+        try
+        {
+#pragma warning disable IDISP007 // The SDK owns the singleton and must release it before native libraries unload.
+            manager.Dispose();
+#pragma warning restore IDISP007
+        }
+        catch (Exception)
+        {
+            // Process teardown is already in progress; do not depend on logging infrastructure or let cleanup escape.
+        }
+    }
+
     /// <summary>
     /// Bound Urls if the web service has been started. Null otherwise.
     /// See <see cref="StartWebServiceAsync"/>.
@@ -79,6 +99,8 @@ public class FoundryLocalManager : IDisposable
             instance = manager;
             manager = null;
 #pragma warning restore IDISP003
+
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         }
         catch (Exception ex)
         {
@@ -244,10 +266,6 @@ public class FoundryLocalManager : IDisposable
             // Done as a local dict so we don't mutate the user-supplied AdditionalSettings.
             var additionalSettings = new Dictionary<string, string>(StringComparer.Ordinal);
             additionalSettings["UserAgent"] = $"foundry-local-csharp/{AssemblyVersion}";
-            if (_config.DisableNonessentialTelemetry)
-            {
-                additionalSettings["DisableNonessentialTelemetry"] = "true";
-            }
             if (_config.AdditionalSettings != null)
             {
                 foreach (var kvp in _config.AdditionalSettings)
@@ -258,6 +276,10 @@ public class FoundryLocalManager : IDisposable
                     }
                     additionalSettings[kvp.Key] = kvp.Value ?? string.Empty;
                 }
+            }
+            if (_config.DisableNonessentialTelemetry)
+            {
+                additionalSettings["DisableNonessentialTelemetry"] = "true";
             }
 
             if (additionalSettings.Count > 0)
@@ -444,6 +466,8 @@ public class FoundryLocalManager : IDisposable
             // field was the only thing keeping the SDK permanently dead after Dispose.
             if (ReferenceEquals(instance, this))
             {
+                AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+
 #pragma warning disable IDISP003 // Dispose previous before re-assigning — `this` was just disposed above
                 instance = null;
 #pragma warning restore IDISP003

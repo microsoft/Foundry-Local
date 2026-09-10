@@ -22,6 +22,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
@@ -61,7 +62,14 @@ class MockEpBootstrapper : public IEpBootstrapper {
     return succeed_;
   }
 
+  bool PrepareForModelLoad(ILogger&) override {
+    prepare_called_ = true;
+    return prepare_succeeds_;
+  }
+
   bool download_called_ = false;
+  bool prepare_called_ = false;
+  bool prepare_succeeds_ = true;
 
  private:
   std::string name_;
@@ -71,10 +79,9 @@ class MockEpBootstrapper : public IEpBootstrapper {
 
 class RecordingTelemetry : public ITelemetry {
  public:
-  void RecordAction(Action, ActionStatus, const InvocationContext&, int64_t) override {}
+  void RecordAction(Action, ActionStatus, const InvocationContext&, int64_t, const std::string&) override {}
   void RecordException(Action, const std::exception&, const InvocationContext&) override {}
   void RecordModelUsage(const ModelUsageInfo&) override {}
-  void RecordModelId(Action, const std::string&, ActionStatus, const InvocationContext&) override {}
   void RecordEpDownloadAndRegister(const EpDownloadAndRegisterInfo& info) override {
     ep_register_calls.push_back(info);
   }
@@ -133,6 +140,15 @@ TEST_F(EpDetectorTest, GetAvailableDevices_AlwaysIncludesCpu) {
   const auto& devices = detector->GetAvailableDevicesToEPs();
   ASSERT_TRUE(devices.count("CPU"));
   EXPECT_FALSE(devices.at("CPU").empty());
+}
+
+TEST_F(EpDetectorTest, PrepareForModelLoad_DelegatesToMatchingBootstrapper) {
+  std::vector<MockEpBootstrapper*> mocks;
+  auto detector = MakeDetector(mocks, {{"CUDAExecutionProvider", true}, {"WebGpuExecutionProvider", true}});
+
+  EXPECT_TRUE(detector->PrepareForModelLoad("WebGpuExecutionProvider"));
+  EXPECT_FALSE(mocks[0]->prepare_called_);
+  EXPECT_TRUE(mocks[1]->prepare_called_);
 }
 
 TEST_F(EpDetectorTest, DownloadAll_CallsAllBootstrappers) {
@@ -257,8 +273,7 @@ TEST_F(EpDetectorTest, DownloadFiltered_TelemetryCountsRequestedNamesIncludingUn
 TEST_F(EpDetectorTest, DownloadAll_CancelledProgressRecordsSkippedTelemetry) {
   RecordingTelemetry telemetry;
   std::vector<MockEpBootstrapper*> mocks;
-  auto detector = MakeDetector(mocks, {{"CUDAExecutionProvider", true},
-                                       {"QNNExecutionProvider", true}},
+  auto detector = MakeDetector(mocks, {{"CUDAExecutionProvider", true}, {"QNNExecutionProvider", true}},
                                telemetry);
 
   auto result = detector->DownloadAndRegisterEps(nullptr, [](const std::string&, float) { return false; });
@@ -279,6 +294,23 @@ TEST_F(EpDetectorTest, DownloadAll_CancelledProgressRecordsSkippedTelemetry) {
   EXPECT_EQ(telemetry.ep_register_calls[0].register_status, ActionStatus::kCanceled);
 }
 
+TEST_F(EpDetectorTest, DownloadFiltered_TrtRtxMissingCudaRecordsDependencyFailure) {
+  RecordingTelemetry telemetry;
+  std::vector<MockEpBootstrapper*> mocks;
+  auto detector = MakeDetector(mocks, {{"NvTensorRTRTXExecutionProvider", true}}, telemetry);
+  std::vector<std::string> names = {"NvTensorRTRTXExecutionProvider"};
+
+  auto result = detector->DownloadAndRegisterEps(&names, nullptr);
+
+  EXPECT_FALSE(result.success);
+  ASSERT_EQ(telemetry.ep_attempt_calls.size(), 1u);
+  EXPECT_EQ(telemetry.ep_attempt_calls[0].status, ActionStatus::kDependencyFailure);
+  EXPECT_EQ(telemetry.ep_attempt_calls[0].num_providers, 1);
+  EXPECT_EQ(telemetry.ep_attempt_calls[0].attempts, 0);
+  EXPECT_EQ(telemetry.ep_attempt_calls[0].failed, 1);
+  EXPECT_TRUE(telemetry.ep_register_calls.empty());
+}
+
 TEST_F(EpDetectorTest, DownloadFiltered_AllNamesUnknown_SucceedsWithNothing) {
   std::vector<MockEpBootstrapper*> mocks;
   auto detector = MakeDetector(mocks, {{"CUDAExecutionProvider", true}});
@@ -291,4 +323,51 @@ TEST_F(EpDetectorTest, DownloadFiltered_AllNamesUnknown_SucceedsWithNothing) {
   EXPECT_TRUE(result.failed_eps.empty());
 
   EXPECT_FALSE(mocks[0]->download_called_);
+}
+
+// NvTensorRTRTX reuses the GenAI CUDA bridge shipped in the CUDA EP bundle, so requesting it by
+// name must also auto-register the CUDA EP (when a CUDA bootstrapper is present).
+TEST_F(EpDetectorTest, DownloadFiltered_TrtRtxAlsoRegistersCuda) {
+  std::vector<MockEpBootstrapper*> mocks;
+  auto detector = MakeDetector(mocks, {{"NvTensorRTRTXExecutionProvider", true},
+                                       {"CUDAExecutionProvider", true}});
+
+  std::vector<std::string> names = {"NvTensorRTRTXExecutionProvider"};
+  auto result = detector->DownloadAndRegisterEps(&names, nullptr);
+
+  EXPECT_TRUE(result.success);
+  EXPECT_TRUE(mocks[0]->download_called_);
+  EXPECT_TRUE(mocks[1]->download_called_);
+  EXPECT_NE(std::find(result.registered_eps.begin(), result.registered_eps.end(), "CUDAExecutionProvider"),
+            result.registered_eps.end());
+}
+
+TEST_F(EpDetectorTest, DownloadFiltered_TrtRtxWithoutCudaReportsFailure) {
+  std::vector<MockEpBootstrapper*> mocks;
+  auto detector = MakeDetector(mocks, {{"NvTensorRTRTXExecutionProvider", true}});
+
+  std::vector<std::string> names = {"NvTensorRTRTXExecutionProvider"};
+  auto result = detector->DownloadAndRegisterEps(&names, nullptr);
+
+  EXPECT_FALSE(result.success);
+  EXPECT_TRUE(result.registered_eps.empty());
+  ASSERT_EQ(result.failed_eps.size(), 1u);
+  EXPECT_EQ(result.failed_eps[0], "NvTensorRTRTXExecutionProvider");
+  EXPECT_FALSE(mocks[0]->download_called_);
+}
+
+// A host with a CUDA bootstrapper but no NvTensorRTRTX bootstrapper (e.g. Linux + NVIDIA GPU) must
+// preserve unknown-name behavior: requesting the unknown NvTensorRTRTX name must NOT pull in CUDA.
+TEST_F(EpDetectorTest, DownloadFiltered_TrtRtxUnknownWithCudaPresent_NoInjection) {
+  std::vector<MockEpBootstrapper*> mocks;
+  auto detector = MakeDetector(mocks, {{"CUDAExecutionProvider", true},
+                                       {"WebGpuExecutionProvider", true}});
+
+  std::vector<std::string> names = {"NvTensorRTRTXExecutionProvider"};
+  auto result = detector->DownloadAndRegisterEps(&names, nullptr);
+
+  EXPECT_TRUE(result.success);
+  EXPECT_TRUE(result.registered_eps.empty());
+  EXPECT_FALSE(mocks[0]->download_called_);  // CUDA must not be injected
+  EXPECT_FALSE(mocks[1]->download_called_);
 }

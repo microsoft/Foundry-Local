@@ -19,7 +19,7 @@ The Foundry Local Python SDK is a native Python binding for the Foundry Local C+
 pip install foundry-local-sdk
 ```
 
-The wheel ships the Foundry Local native library — bundling the reg-free WinML 2.x runtime on Windows for hardware acceleration — and pulls the matching ONNX Runtime + ONNX Runtime GenAI runtime packages as dependencies.
+The wheel includes the Foundry Local native library and depends on `onnxruntime` and `onnxruntime-genai-core` on every platform. Windows wheels also include the reg-free WinML 2.x runtime.
 
 ### Building from source
 
@@ -56,7 +56,7 @@ pip install -e .
 
 ### Installing native runtime dependencies for development / CI
 
-`foundry-local-install` is a convenience wrapper for end-user / CI environments that want the published wheel plus its ORT / ONNX Runtime GenAI runtime packages installed and verified in one step. It runs `pip install --upgrade foundry-local-sdk` from PyPI and then probes that `onnxruntime[_core]` and `onnxruntime_genai[_core]` import cleanly.
+`foundry-local-install` installs the published wheel and verifies that `onnxruntime` and `onnxruntime_genai_core` are available.
 
 ```bash
 foundry-local-install
@@ -380,7 +380,7 @@ Common session methods:
 | `Response` | Owns an `flResponse*`. Iterable over output items. Exposes `item_count`, `get_item(i)`, `finish_reason` (`FinishReason` enum), and `get_usage()` (`TokenUsage`). Read item data **inside** the response's `with` block — items returned by `get_item` borrow the response's handle. |
 | `FinishReason` | `NONE`, `ERROR`, `STOP`, `LENGTH`, `TOOL_CALLS`. |
 | `TokenUsage` | `prompt_tokens`, `completion_tokens`, `total_tokens`. |
-| `RequestOptions` | Typed inference options passed to `set_options`. Wraps `search: SearchOptions` (sampling params: `temperature`, `top_p`, `top_k`, `max_output_tokens`, `frequency_penalty`, `presence_penalty`, `seed`, `early_stopping`, `do_sample`), `tool_choice: ToolChoice | None` (`AUTO`/`NONE`/`REQUIRED`), and `additional_options: dict[str, str]` as the passthrough escape hatch. |
+| `RequestOptions` | Typed inference options passed to `set_options`. Wraps `search: SearchOptions` (sampling params: `temperature`, `top_p`, `top_k`, `max_output_tokens`, `frequency_penalty` and `presence_penalty`—currently zero only—`seed`, legacy Generator-only beam-search `early_stopping`, and `do_sample`), `tool_choice: ToolChoice | None` (`AUTO`/`NONE`/`REQUIRED`), and `additional_options: dict[str, str]` as the passthrough escape hatch. |
 
 ### Items
 

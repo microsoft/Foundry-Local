@@ -25,6 +25,7 @@ namespace fl {
 class ILogger;     // forward declaration
 class ITelemetry;  // forward declaration
 class Model;       // forward declaration
+struct ModelUsageInfo;
 
 /// Base class for model inference sessions.
 /// Manages lifecycle, request dispatch, streaming callbacks, and tool definitions.
@@ -37,7 +38,7 @@ class Session {
  public:
   virtual ~Session();
 
-  Session(Session&& other) noexcept;
+  Session(Session&&) = default;
   Session& operator=(Session&&) = delete;
 
   Session(const Session&) = delete;
@@ -55,7 +56,9 @@ class Session {
   /// in-flight callbacks and ensures the Response is fully populated on return.
   void ProcessRequest(const Request& request, Response& response);
 
-  /// Signal all active requests in this session to stop.
+  /// Signal every in-flight request on this session to cancel. Only sets each request's atomic
+  /// cancel flag — never blocks and never joins — so it is safe to call from a shutdown path while
+  /// another thread holds a manager lock. Generation loops poll the flag and stop within ~one token.
   void Cancel();
 
   /// Add a tool definition to this session.
@@ -106,14 +109,12 @@ class Session {
     callback_user_data_ = user_data;
   }
 
-  /// Telemetry context for the next ProcessRequest. HTTP handlers set this to an
-  /// indirect child of the route's context so the kSessionProcessRequest action
-  /// and the per-inference Model event are marked indirect and share the route's
-  /// correlation id. When unset (direct SDK use), ProcessRequest mints its own
-  /// direct context per call.
-  void SetRequestContext(InvocationContext context) {
-    std::lock_guard<std::mutex> lock(request_context_mutex_);
-    request_context_ = std::move(context);
+  /// Stage telemetry context for the next operation (including a cached session's next turn).
+  /// HTTP callers exclusively own the session while staging an indirect child of the route context.
+  /// Without a staged context, each ProcessRequest creates an independent direct context.
+  void SetInvocationContext(InvocationContext context) {
+    std::lock_guard<std::mutex> lock(*invocation_context_mutex_);
+    invocation_context_ = std::move(context);
   }
 
  protected:
@@ -147,16 +148,13 @@ class Session {
   /// Requests are serialized if the derived class does not opt into concurrency via allow_concurrent_requests_.
   virtual void ProcessRequestImpl(const Request& request, Response& response) = 0;
 
-  /// Execution provider the loaded model runs on (e.g. "CPU", "CUDA"). Surfaced
-  /// on the per-inference Model telemetry event. Empty when not known.
   virtual std::string ExecutionProvider() const { return {}; }
 
-  /// Derived sessions can emit modality-specific inference telemetry after the generic Model event.
-  virtual void RecordAdditionalModelUsage(const Request& /*request*/, const Response& /*response*/,
-                                          const InvocationContext& /*context*/, int64_t /*total_time_ms*/,
-                                          bool /*streaming*/) {}
+  /// Called inside the telemetry-only failure boundary after inference has populated the response.
+  virtual void RecordAdditionalModelUsage(const Response& /*response*/, const ModelUsageInfo& /*usage*/) {}
 
   ITelemetry& Telemetry() { return telemetry_; }
+  static int32_t TelemetryTokenCount(int64_t count);
 
   /// Create a per-request callback handler. Returns nullptr if no callback is set.
   /// The handler is owned by the caller (unique_ptr) and drains+joins on destruction.
@@ -171,6 +169,13 @@ class Session {
   const KeyValuePairs& SessionOptions() const { return session_options_; }
 
  private:
+  /// Reject items (and message content parts) whose type the model's task does not advertise as an
+  /// input. Currently applies to chat tasks only.
+  void ValidateRequestItems(const Request& request) const;
+  InvocationContext TakeInvocationContext();
+  void RecordUsage(const Request& request, const Response& response,
+                   const InvocationContext& context, int64_t total_time_ms);
+
   const fl::Model& catalog_model_;
   ILogger& logger_;
   ITelemetry& telemetry_;
@@ -178,13 +183,22 @@ class Session {
   KeyValuePairs session_options_;
   StreamingCallbackFn callback_fn_;
   void* callback_user_data_ = nullptr;
-  mutable std::mutex request_context_mutex_;
-  std::optional<InvocationContext> request_context_;
+  std::optional<InvocationContext> invocation_context_;
+  std::unique_ptr<std::mutex> invocation_context_mutex_ = std::make_unique<std::mutex>();
   const bool allow_concurrent_requests_;
   mutable std::unique_ptr<std::mutex> request_mutex_ = std::make_unique<std::mutex>();
-  mutable std::mutex active_requests_mutex_;
-  bool session_canceled_ = false;
+
+  // In-flight requests tracked so Cancel() can flip their cancel flags from another thread. Guarded
+  // by its own mutex (not request_mutex_) because concurrent sessions (e.g. audio) may hold several
+  // at once, and Cancel() must run without waiting on an active generation holding request_mutex_.
+  // unique_ptr<mutex> keeps Session movable (std::mutex is not movable), matching request_mutex_.
   std::unordered_set<const Request*> active_requests_;
+  mutable std::unique_ptr<std::mutex> active_requests_mutex_ = std::make_unique<std::mutex>();
+
+  // Latched by Cancel() under active_requests_mutex_. A request admitted after Cancel() ran (its streaming
+  // thread hadn't reached ProcessRequest when the shutdown sweep happened) is stamped canceled on insert,
+  // so a late arrival during shutdown never runs a full generation while JoinAll() waits to drain.
+  bool session_canceled_ = false;
 };
 
 }  // namespace fl

@@ -1,13 +1,12 @@
 // EmbeddingClient (V1 OpenAI-JSON pass-through) against a real loaded
 // embeddings model. Gated by FOUNDRY_TEST_DATA_DIR.
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { EmbeddingClient } from "../src/openai/embeddingClient.js";
 
 import {
   type RealModelManagerFixture,
   haveTestModelCache,
-  SkipFixture,
   setupRealModelManager,
   teardownRealModelManager,
   testModelCacheDiagnostic,
@@ -45,33 +44,16 @@ function l2Distance(a: number[], b: number[]): number {
 describe.skipIf(!haveTestModelCache)("EmbeddingClient (real model, V1 OpenAI-JSON pass-through)", () => {
   let fixture: RealModelManagerFixture | undefined;
   let client: EmbeddingClient | undefined;
-  let skipReason: string | undefined;
 
   beforeAll(async () => {
-    try {
-      fixture = await setupRealModelManager({
-        task: "embeddings",
-        namePreference: "qwen3-embedding-0.6b-generic-cpu",
-        skipUnavailableInCi: true,
-      });
-    } catch (error) {
-      if (error instanceof SkipFixture) {
-        skipReason = error.message;
-        console.warn(error.message);
-        return;
-      }
-      throw error;
-    }
+    fixture = await setupRealModelManager({
+      task: "embeddings",
+      namePreference: "qwen3-embedding-0.6b-generic-cpu",
+    });
     if (fixture !== undefined) {
       client = fixture.model.createEmbeddingClient();
     }
   }, 5 * 60_000);
-
-  beforeEach((context) => {
-    if (skipReason !== undefined) {
-      context.skip(skipReason);
-    }
-  });
 
   afterAll(() => {
     client?.dispose();

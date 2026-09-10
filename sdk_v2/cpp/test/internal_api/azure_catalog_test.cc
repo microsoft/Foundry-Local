@@ -256,7 +256,7 @@ TEST(AzureCatalogClientTest, ParsesModelResponseCorrectly) {
   EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_DISPLAY_NAME_STR), "Phi-4 Mini Instruct");
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT), 1);
   EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MIN_FL_VERSION_STR), "0.3.0");
-  EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "AzureFoundry");
+  EXPECT_EQ(info.string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "FoundryLocal");
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT), 4096);
   EXPECT_EQ(info.int_properties.at(FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT), 4096);  // 4GB → 4096 MB
 }
@@ -594,7 +594,7 @@ TEST(AzureCatalogClientTest, WithCachedModels_UnresolvedId_TriggersSecondFetch) 
   EXPECT_TRUE(found_old);
 }
 
-TEST(AzureCatalogClientTest, WithCachedModels_FullyUnresolved_CreatesBYOEntry) {
+TEST(AzureCatalogClientTest, WithCachedModels_FullyUnresolved_DoesNotCreatePublicEntry) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   int http_call_count = 0;
@@ -618,21 +618,8 @@ TEST(AzureCatalogClientTest, WithCachedModels_FullyUnresolved_CreatesBYOEntry) {
 
   EXPECT_EQ(http_call_count, 2);
 
-  // Find the BYO entry.
-  const ModelInfo* byo = nullptr;
-  for (const auto& info : result) {
-    if (info.model_id == "custom-model:0") {
-      byo = &info;
-    }
-  }
-
-  ASSERT_NE(byo, nullptr);
-  EXPECT_EQ(byo->name, "custom-model");
-  EXPECT_EQ(byo->alias, "custom-model");
-  EXPECT_EQ(byo->uri, "local://custom-model");
-  EXPECT_EQ(byo->version, 0);
-  EXPECT_EQ(byo->string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR), "Local");
-  EXPECT_EQ(byo->string_properties.at(FOUNDRY_LOCAL_MODEL_PROP_MODEL_TYPE_STR), "ONNX");
+  ASSERT_EQ(result.size(), 1u);
+  EXPECT_EQ(result.front().model_id, "phi-4-mini:3");
 }
 
 // ========================================================================

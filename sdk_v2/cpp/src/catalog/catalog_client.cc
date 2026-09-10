@@ -1,11 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "catalog/catalog_client.h"
-#include "ep_detection/ep_detector.h"
 #include "telemetry/telemetry.h"
-#include "utils.h"
-
-#include <foundry_local/foundry_local_c.h>
 
 #include <fmt/format.h>
 
@@ -42,8 +38,10 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
     info.error_message = error;
     try {
       telemetry.RecordCatalogFetch(info);
+    } catch (const std::exception& ex) {
+      logger.Log(LogLevel::Warning, fmt::format("telemetry CatalogFetch failed: {}", ex.what()));
     } catch (...) {
-      // Telemetry is best-effort and must not affect catalog results or mask catalog errors.
+      logger.Log(LogLevel::Warning, "telemetry CatalogFetch failed.");
     }
   };
 
@@ -55,6 +53,9 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
       result = client.FetchAllModelInfos();
     } catch (const std::exception&) {
       emit("FetchAll", ActionStatus::kDependencyFailure, elapsed_ms(start), 0, kCatalogFetchFailure);
+      throw;
+    } catch (...) {
+      emit("FetchAll", ActionStatus::kDependencyFailure, elapsed_ms(start), 0, "unknown error");
       throw;
     }
     emit("FetchAll", ActionStatus::kSuccess, elapsed_ms(start), static_cast<int32_t>(result.size()), "");
@@ -97,25 +98,8 @@ std::vector<ModelInfo> FetchAllModelInfosWithCachedModels(
       emit("FetchByIds", ActionStatus::kDependencyFailure, elapsed_ms(start), 0, "unknown error");
     }
 
-    // Step 4: Create basic entries for any IDs still unresolved (BYO models).
-    for (const auto& id : unresolved_ids) {
-      if (resolved_ids.find(id) != resolved_ids.end()) {
-        continue;
-      }
-
-      auto [name, version] = Utils::SplitModelNameAndVersion(id);
-
-      ModelInfo info;
-      info.model_id = id;
-      info.name = name;
-      info.alias = name;
-      info.uri = "local://" + name;
-      info.version = version;
-      info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR] = "Local";
-      info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_TYPE_STR] = "ONNX";
-
-      result.push_back(std::move(info));
-    }
+    // IDs the public source does not recognize are intentionally omitted. Arbitrary models copied into the
+    // cache must be explicitly registered in the local catalog instead of appearing in the public catalog.
   }
 
   return result;

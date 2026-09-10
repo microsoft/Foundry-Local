@@ -12,10 +12,11 @@ Usage (after all platform builds have completed)::
         --version 0.1.0 \\
         --ort_version 1.24.4 \\
         --genai_version 0.13.1 \\
-        --win_x64  path/to/win-x64/bin \\
-        --win_arm64 path/to/win-arm64/bin \\
-        --linux_x64 path/to/linux-x64/bin \\
-        --osx_arm64 path/to/osx-arm64/bin \\
+        --win_x64    path/to/win-x64/bin \\
+        --win_arm64  path/to/win-arm64/bin \\
+        --linux_x64  path/to/linux-x64/bin \\
+        --linux_arm64 path/to/linux-arm64/bin \\
+        --osx_arm64  path/to/osx-arm64/bin \\
         --output_dir ./out
 
 Each ``--<rid>`` argument points to the directory containing the built
@@ -39,9 +40,9 @@ REPO_ROOT = SCRIPT_DIR.parent  # sdk_v2/cpp
 #
 # Vcpkg is statically linked on every platform (see sdk_v2/cpp/triplets/), so
 # the foundry_local shared library carries its transitive deps inside itself
-# and the upstream platform-build artifact for each RID contains only the
-# primary library (plus, on Windows, .pdb and .lib companions consumed by the
-# Python wheel build). We copy that one file into runtimes/<rid>/native/.
+# and the upstream platform-build artifact for each RID contains the primary
+# library plus platform-specific companions. We copy the redistributable files
+# into runtimes/<rid>/native/.
 #
 # On Windows the build also drops Microsoft.Windows.AI.MachineLearning.dll — the
 # reg-free WinML 2.x runtime — next to foundry_local.dll (the cmake post-build
@@ -52,13 +53,16 @@ RIDS: dict[str, tuple[str, str]] = {
     "win_x64":    ("win-x64",    "foundry_local.dll"),
     "win_arm64":  ("win-arm64",  "foundry_local.dll"),
     "linux_x64":  ("linux-x64",  "libfoundry_local.so"),
+    "linux_arm64": ("linux-arm64", "libfoundry_local.so"),
     "osx_arm64":  ("osx-arm64",  "libfoundry_local.dylib"),
 }
 
 # Sibling files copied into runtimes/<rid>/native/ when present in the upstream
-# artifact. Windows builds drop Microsoft.Windows.AI.MachineLearning.dll alongside
-# foundry_local.dll; other platforms don't, so presence alone drives inclusion.
+# artifact. Windows builds provide the import library needed by applications
+# that link against foundry_local.dll, plus the WinML runtime DLL. Other
+# platforms don't provide these files, so presence alone drives inclusion.
 OPTIONAL_SIBLINGS: tuple[str, ...] = (
+    "foundry_local.lib",
     "Microsoft.Windows.AI.MachineLearning.dll",
 )
 
@@ -72,7 +76,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--version", required=True,
                         help="Package version (e.g. 0.1.0 or 0.1.0-dev.20260419).")
     parser.add_argument("--ort_version", required=True,
-                        help="Minimum Microsoft.ML.OnnxRuntime.Foundry version.")
+                        help="Minimum Microsoft.ML.OnnxRuntime version.")
     parser.add_argument("--genai_version", required=True,
                         help="Minimum Microsoft.ML.OnnxRuntimeGenAI.Foundry version.")
     parser.add_argument("--package_id", default="Microsoft.AI.Foundry.Local.Runtime",
@@ -133,6 +137,14 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
     else:
         log.warning("LICENSE.txt not found at %s", license_file)
 
+    # --- package documentation and notices ---
+    for document_name in ("README.md", "Privacy.md", "ThirdPartyNotices.txt"):
+        document_file = SCRIPT_DIR / document_name
+        if document_file.is_file():
+            shutil.copy2(document_file, staging)
+        else:
+            log.warning("Package document not found at %s", document_file)
+
     # --- runtimes/{rid}/native/ ---
     rid_count = 0
     for arg_name, (rid, lib_name) in RIDS.items():
@@ -150,11 +162,8 @@ def stage(args: argparse.Namespace, staging: Path) -> int:
         native_dir = staging / "runtimes" / rid / "native"
         native_dir.mkdir(parents=True, exist_ok=True)
 
-        # The upstream artifact for each RID is the primary library plus, on
-        # Windows, .pdb / .lib companions used by the Python wheel build, and
-        # Microsoft.Windows.AI.MachineLearning.dll (the WinML 2.x runtime).
-        # We forward the primary library plus any present OPTIONAL_SIBLINGS;
-        # everything else (.pdb, .lib) stays out of the NuGet runtime payload.
+        # Forward the primary library plus any present redistributable siblings.
+        # Build symbols such as .pdb remain out of the NuGet runtime payload.
         shutil.copy2(lib_path, native_dir)
         log.info("  %s → runtimes/%s/native/%s", lib_path, rid, lib_path.name)
         staged = 1

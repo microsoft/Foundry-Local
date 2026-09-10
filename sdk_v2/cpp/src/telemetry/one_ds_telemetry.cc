@@ -4,7 +4,7 @@
 #include "telemetry/one_ds_telemetry.h"
 
 #include "telemetry/device_id.h"
-#include "telemetry/telemetry_context.h"
+#include "telemetry/telemetry_event_properties_sanitizer.h"
 #include "telemetry/telemetry_environment.h"
 #include "telemetry/telemetry_redaction.h"
 #include "telemetry/telemetry_sampling.h"
@@ -25,37 +25,30 @@
 #include <EventProperties.hpp>
 #include "one_ds_tenant_token.h"
 
-#if defined(__ANDROID__)
-extern "C" bool FoundryLocalIsAndroidTelemetryReady() noexcept;
-#endif
-
 namespace fl {
 
 namespace {
 
 using MatILogManager = ::Microsoft::Applications::Events::ILogManager;
 using MatILogger = ::Microsoft::Applications::Events::ILogger;
-using ::Microsoft::Applications::Events::EventProperties;
-using ::Microsoft::Applications::Events::EventPriority;
-using ::Microsoft::Applications::Events::PiiKind_None;
-using ::Microsoft::Applications::Events::SessionState;
 using ::Microsoft::Applications::Events::CFG_BOOL_SESSION_RESET_ENABLED;
 using ::Microsoft::Applications::Events::CFG_INT_MAX_TEARDOWN_TIME;
-using ::Microsoft::Applications::Events::CFG_INT_RAM_QUEUE_SIZE;
 using ::Microsoft::Applications::Events::CFG_INT_SDK_MODE;
 using ::Microsoft::Applications::Events::CFG_INT_TRACE_LEVEL_MASK;
-using ::Microsoft::Applications::Events::CFG_STR_COLLECTOR_URL;
-using ::Microsoft::Applications::Events::CFG_STR_PRIMARY_TOKEN;
 using ::Microsoft::Applications::Events::CFG_STR_CACHE_FILE_PATH;
+using ::Microsoft::Applications::Events::CFG_STR_PRIMARY_TOKEN;
+using ::Microsoft::Applications::Events::EventPriority;
+using ::Microsoft::Applications::Events::EventProperties;
 using ::Microsoft::Applications::Events::ILogConfiguration;
 using ::Microsoft::Applications::Events::LogManagerProvider;
+using ::Microsoft::Applications::Events::PiiKind_None;
 using ::Microsoft::Applications::Events::SdkModeTypes_CS;
+using ::Microsoft::Applications::Events::SessionState;
 using ::Microsoft::Applications::Events::STATUS_SUCCESS;
-using ::Microsoft::Applications::Events::TransmitProfile_BestEffort;
 using ::Microsoft::Applications::Events::status_t;
 
 constexpr uint64_t kCriticalData = MICROSOFT_KEYWORD_CRITICAL_DATA;
-constexpr int kMaxTeardownUploadTimeSec = 0;
+constexpr int kMaxTeardownUploadTimeSec = 1;
 
 std::string DecodeBase64(std::string_view encoded) {
   auto DecodeChar = [](char c) -> int {
@@ -101,30 +94,54 @@ std::string GetToken() {
 }
 
 void SetCommonContext(MatILogger* mat_logger, const TelemetryMetadata& m) {
-  mat_logger->SetContext("AppName", m.app_name);
-  mat_logger->SetContext("AppVersion", m.app_version);
-  mat_logger->SetContext("FoundryLocalVersion", m.version);
-  mat_logger->SetContext("AppSessionGuid", m.app_session_guid);
-  mat_logger->SetContext("OsName", m.os_name);
-  mat_logger->SetContext("OsVersion", m.os_version);
-  mat_logger->SetContext("CpuArch", m.cpu_arch);
+  mat_logger->SetContext("AppName", ScrubStringForTelemetry(m.app_name));
+  mat_logger->SetContext("AppVersion", ScrubStringForTelemetry(m.app_version));
+  mat_logger->SetContext("FoundryLocalVersion", ScrubStringForTelemetry(m.version));
+  mat_logger->SetContext("AppSessionGuid", ScrubStringForTelemetry(m.app_session_guid));
+  mat_logger->SetContext("OsName", ScrubStringForTelemetry(m.os_name));
+  mat_logger->SetContext("OsVersion", ScrubStringForTelemetry(m.os_version));
+  mat_logger->SetContext("CpuArch", ScrubStringForTelemetry(m.cpu_arch));
 }
 
-EventProperties MakeEvent(const char* name) {
+EventProperties MakeEvent(
+    const char* name, double sample_rate_percent = TelemetryInternal::kTelemetrySampleRatePercent) {
   EventProperties ev(name);
   ev.SetPriority(EventPriority::EventPriority_Normal);
   ev.SetPolicyBitFlags(kCriticalData);
-  ev.SetPopsample(TelemetryInternal::kTelemetrySampleRatePercent);
+  ev.SetPopsample(sample_rate_percent);
   return ev;
 }
 
-bool ShouldSampleEvent(std::string_view app_session_guid, std::string_view correlation_id) {
+void CleanupLogManager(MatILogManager* log_manager, ILogConfiguration& config) noexcept {
+  if (log_manager == nullptr) {
+    return;
+  }
+
+  try {
+    log_manager->Flush();
+  } catch (...) {
+  }
+
+  try {
+    log_manager->FlushAndTeardown();
+  } catch (...) {
+  }
+
+  try {
+    LogManagerProvider::Release(config);
+  } catch (...) {
+  }
+}
+
+bool ShouldSampleEvent(std::string_view app_session_guid, std::string_view correlation_id,
+                       double sample_rate_percent = TelemetryInternal::kTelemetrySampleRatePercent) {
   return TelemetryInternal::ShouldSampleTelemetryEvent(
-      app_session_guid, correlation_id.empty() ? app_session_guid : correlation_id);
+      app_session_guid, correlation_id.empty() ? app_session_guid : correlation_id, sample_rate_percent);
 }
 
 void SafeLog(MatILogger* mat_logger, EventProperties& ev) {
   if (mat_logger != nullptr) {
+    TelemetryInternal::SanitizeEventProperties(ev);
     mat_logger->LogEvent(ev);
   }
 }
@@ -141,27 +158,6 @@ struct OneDsTelemetry::Impl {
   MatILogger* logger = nullptr;
 };
 
-void OneDsTelemetry::TeardownImpl() noexcept {
-  if (!impl_ || impl_->log_manager == nullptr) {
-    impl_.reset();
-    return;
-  }
-
-  try {
-    impl_->log_manager->Flush();
-  } catch (...) {
-  }
-  try {
-    impl_->log_manager->FlushAndTeardown();
-  } catch (...) {
-  }
-  try {
-    LogManagerProvider::Release(impl_->config);
-  } catch (...) {
-  }
-  impl_.reset();
-}
-
 std::shared_lock<std::shared_mutex> OneDsTelemetry::LockForLogging(bool require_upload) const {
   std::shared_lock<std::shared_mutex> lock(mutex_);
   if (!initialized_.load(std::memory_order_acquire) || !impl_ || impl_->logger == nullptr ||
@@ -177,9 +173,14 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
     : local_log_(app_name, logger),
       metadata_(BuildTelemetryMetadata(app_name)),
       logger_(logger) {
-  if (TelemetryEnvironment::ShouldSuppressTelemetry()) {
+  if (TelemetryEnvironment::IsCiEnvironment()) {
     logger_.Log(LogLevel::Information,
-                "[Telemetry] CI or unit-test environment detected; 1DS upload disabled "
+                "[Telemetry] CI environment detected; 1DS upload disabled (events still logged locally)");
+    return;
+  }
+  if (TelemetryEnvironment::IsTelemetryDisabledByEnvVar()) {
+    logger_.Log(LogLevel::Information,
+                "[Telemetry] Disabled via ORT_TELEMETRY_DISABLED; 1DS upload disabled "
                 "(events still logged locally)");
     return;
   }
@@ -189,14 +190,6 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
                 "[Telemetry] Disabled via configuration; non-essential 1DS upload disabled "
                 "(ProcessInfo still uploads)");
   }
-#if defined(__ANDROID__)
-  if (!FoundryLocalIsAndroidTelemetryReady()) {
-    logger_.Log(LogLevel::Information,
-                "[Telemetry] Android 1DS Java HTTP bridge is not initialized; 1DS upload disabled "
-                "(events still logged locally)");
-    return;
-  }
-#endif
   const auto token = GetToken();
   if (token.empty()) {
     logger_.Log(LogLevel::Information,
@@ -208,44 +201,39 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
   try {
     impl_ = std::make_unique<Impl>();
     auto& config = impl_->config;
-    config[CFG_STR_COLLECTOR_URL] = "https://mobile.events.data.microsoft.com/OneCollector/1.0";
     config[CFG_STR_PRIMARY_TOKEN] = token;
     config[CFG_BOOL_SESSION_RESET_ENABLED] = true;
     config[CFG_INT_TRACE_LEVEL_MASK] = 0;
     config[CFG_INT_SDK_MODE] = SdkModeTypes_CS;
-    config[CFG_INT_RAM_QUEUE_SIZE] = 512 * 1024;
     config[CFG_INT_MAX_TEARDOWN_TIME] = kMaxTeardownUploadTimeSec;
-#if !defined(__ANDROID__)
     if (const auto cache_dir = TelemetryDeviceId::EnsureCacheDirectory(); !cache_dir.empty()) {
-      config[CFG_STR_CACHE_FILE_PATH] = (cache_dir / "foundry-local.db").string();
+      const auto cache_file_name =
+          disable_nonessential_telemetry ? "foundry-local-processinfo.db" : "foundry-local.db";
+      config[CFG_STR_CACHE_FILE_PATH] = (cache_dir / cache_file_name).string();
     }
-#endif
 
     status_t status = STATUS_SUCCESS;
     impl_->log_manager = LogManagerProvider::CreateLogManager("FoundryLocal", true, config, status);
-    log_manager_initialized = impl_->log_manager != nullptr;
     if (status != STATUS_SUCCESS || impl_->log_manager == nullptr) {
-      TeardownImpl();
+      impl_.reset();
       logger_.Log(LogLevel::Warning,
                   "[Telemetry] LogManagerProvider::CreateLogManager failed; 1DS upload disabled");
       return;
     }
+    log_manager_initialized = true;
     impl_->logger = impl_->log_manager->GetLogger(token);
     if (impl_->logger == nullptr) {
-      TeardownImpl();
+      CleanupLogManager(impl_->log_manager, impl_->config);
+      impl_.reset();
       logger_.Log(LogLevel::Warning,
                   "[Telemetry] ILogManager::GetLogger returned null; 1DS upload disabled");
       return;
     }
-    impl_->log_manager->SetTransmitProfile(TransmitProfile_BestEffort);
-    if (auto* semantic_context = impl_->logger->GetSemanticContext(); semantic_context != nullptr) {
-      (void)TelemetryInternal::TrySuppressContext(
-          [&] { TelemetryInternal::SuppressUnneededCommonContext(*semantic_context); });
-      if (!disable_nonessential_telemetry) {
-        const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
-        if (!hashed_device_id.empty()) {
-          semantic_context->SetDeviceId(hashed_device_id);
-        }
+    if (!disable_nonessential_telemetry && impl_->logger->GetSemanticContext() != nullptr) {
+      auto* semantic_context = impl_->logger->GetSemanticContext();
+      const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
+      if (!hashed_device_id.empty()) {
+        semantic_context->SetDeviceId(hashed_device_id);
       }
     }
     SetCommonContext(impl_->logger, metadata_);
@@ -256,14 +244,21 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
     initialized_.store(true, std::memory_order_release);
   } catch (const std::exception& ex) {
     if (log_manager_initialized) {
-      TeardownImpl();
+      if (impl_ != nullptr) {
+        CleanupLogManager(impl_->log_manager, impl_->config);
+      }
+      impl_.reset();
     }
     logger_.Log(LogLevel::Warning,
                 fmt::format("[Telemetry] LogManagerProvider initialization threw: {}; "
-                            "1DS upload disabled", ex.what()));
+                            "1DS upload disabled",
+                            ex.what()));
   } catch (...) {
     if (log_manager_initialized) {
-      TeardownImpl();
+      if (impl_ != nullptr) {
+        CleanupLogManager(impl_->log_manager, impl_->config);
+      }
+      impl_.reset();
     }
     logger_.Log(LogLevel::Warning,
                 "[Telemetry] LogManagerProvider initialization threw unknown exception; 1DS upload disabled");
@@ -276,26 +271,32 @@ OneDsTelemetry::~OneDsTelemetry() {
     return;
   }
   initialized_.store(false, std::memory_order_release);
-  TeardownImpl();
+  CleanupLogManager(impl_->log_manager, impl_->config);
+  impl_.reset();
 }
 
 void OneDsTelemetry::RecordAction(Action action, ActionStatus status, const InvocationContext& context,
-                                  int64_t duration_ms) {
-  local_log_.RecordAction(action, status, context, duration_ms);
+                                  int64_t duration_ms, const std::string& model_id) {
+  local_log_.RecordAction(action, status, context, duration_ms, model_id);
   auto lock = LockForLogging();
   if (!lock.owns_lock()) {
     return;
   }
-  if (!ShouldSampleEvent(metadata_.app_session_guid, context.correlation_id)) {
+  if (!ShouldSampleEvent(metadata_.app_session_guid, context.correlation_id,
+                         TelemetryInternal::SampleRateForAction(ActionToString(action)))) {
     return;
   }
-  auto ev = MakeEvent("Action");
+  const auto sample_rate_percent = TelemetryInternal::SampleRateForAction(ActionToString(action));
+  auto ev = MakeEvent("Action", sample_rate_percent);
   ev.SetProperty("Action", std::string(ActionToString(action)));
   ev.SetProperty("Status", std::string(ActionStatusToString(status)));
   ev.SetProperty("UserAgent", context.user_agent);
   ev.SetProperty("CorrelationId", context.correlation_id);
   ev.SetProperty("Direct", !context.indirect);
   ev.SetProperty("TimeMs", duration_ms);
+  if (!model_id.empty()) {
+    ev.SetProperty("ModelId", model_id);
+  }
   SafeLog(impl_->logger, ev);
 }
 
@@ -374,25 +375,6 @@ void OneDsTelemetry::RecordAudioUsage(const AudioUsageInfo& info) {
   ev.SetProperty("AudioDurationMs", info.audio_duration_ms);
   ev.SetProperty("SampleRate", static_cast<int64_t>(info.sample_rate));
   ev.SetProperty("Channels", static_cast<int64_t>(info.channels));
-  SafeLog(impl_->logger, ev);
-}
-
-void OneDsTelemetry::RecordModelId(Action action, const std::string& model_id,
-                                   ActionStatus status, const InvocationContext& context) {
-  local_log_.RecordModelId(action, model_id, status, context);
-  auto lock = LockForLogging();
-  if (!lock.owns_lock() || model_id.empty()) {
-    return;
-  }
-  if (!ShouldSampleEvent(metadata_.app_session_guid, context.correlation_id)) {
-    return;
-  }
-  auto ev = MakeEvent("ModelId");
-  ev.SetProperty("Action", std::string(ActionToString(action)));
-  ev.SetProperty("ModelId", model_id);
-  ev.SetProperty("Status", std::string(ActionStatusToString(status)));
-  ev.SetProperty("UserAgent", context.user_agent);
-  ev.SetProperty("CorrelationId", context.correlation_id);
   SafeLog(impl_->logger, ev);
 }
 
@@ -506,7 +488,6 @@ void OneDsTelemetry::RecordProcessInfo(const ProcessInfo& info) {
   ev.SetProperty("DeviceInfo.Status", info.device_id_status);
   ev.SetProperty("cpuCount", static_cast<int64_t>(info.cpu_count));
   ev.SetProperty("totalMemoryMB", info.total_memory_mb);
-  ev.SetProperty("locale", info.locale);
   SafeLog(impl_->logger, ev);
 }
 
@@ -536,6 +517,7 @@ void OneDsTelemetry::StartSession() {
   // LogSession(Started) opens an app-usage session; the SDK stamps ext.app.sesId
   // on subsequent events and records session duration on End.
   auto ev = MakeEvent("Session");
+  TelemetryInternal::SanitizeEventProperties(ev);
   impl_->logger->LogSession(SessionState::Session_Started, ev);
 }
 
@@ -546,6 +528,7 @@ void OneDsTelemetry::EndSession() {
     return;
   }
   auto ev = MakeEvent("Session");
+  TelemetryInternal::SanitizeEventProperties(ev);
   impl_->logger->LogSession(SessionState::Session_Ended, ev);
 }
 

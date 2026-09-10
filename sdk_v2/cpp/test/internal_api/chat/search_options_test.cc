@@ -5,6 +5,8 @@
 // to construct params). Validates parameter mapping, token budget validation, and defaults.
 
 #include "inferencing/generative/chat/search_options.h"
+#include "inferencing/generative/chat/stop_strings.h"
+#include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "exception.h"
 #include "inferencing/generative/genai_config.h"
 #include "inferencing/model_load_manager.h"
@@ -16,10 +18,311 @@
 #include <ort_genai.h>
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 using namespace fl;
+
+TEST(SearchOptionsParsingTest, TemperatureOutsideSupportedRangeThrows) {
+  for (const char* temperature : {"-1", "2.1", "nan"}) {
+    KeyValuePairs params;
+    params.Add(FOUNDRY_LOCAL_PARAM_TEMPERATURE, temperature);
+
+    EXPECT_THROW(SearchOptions::FromParameters(params), fl::Exception);
+  }
+}
+
+TEST(SearchOptionsParsingTest, OmittedOutputLimitUsesTextAndMediaDefaults) {
+  SearchOptions defaults;
+  EXPECT_EQ(GetDefaultMaxOutputTokens(/*has_media=*/false), 2048);
+  EXPECT_EQ(GetDefaultMaxOutputTokens(/*has_media=*/true), 3072);
+  EXPECT_EQ(ResolveMaxOutputTokens(defaults, GetDefaultMaxOutputTokens(/*has_media=*/false)), 2048);
+  EXPECT_EQ(ResolveMaxOutputTokens(defaults, GetDefaultMaxOutputTokens(/*has_media=*/true)), 3072);
+}
+
+TEST(SearchOptionsParsingTest, ExplicitOutputLimitOverridesTurnDefault) {
+  SearchOptions explicit_limit;
+  explicit_limit.max_output_tokens = 64;
+  EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit, GetDefaultMaxOutputTokens(/*has_media=*/false)), 64);
+  EXPECT_EQ(ResolveMaxOutputTokens(explicit_limit, GetDefaultMaxOutputTokens(/*has_media=*/true)), 64);
+}
+
+TEST(SearchOptionsParsingTest, RetainedGenerationSettingsAreBackendAware) {
+  SearchOptions first;
+  first.temperature = 0.5f;
+  first.seed = 1;
+  first.max_output_tokens = 16;
+  first.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_AUTO;
+
+  SearchOptions second = first;
+  second.max_output_tokens = 64;
+  second.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
+
+  second.temperature = 1.0f;
+  second.seed = 2;
+  EXPECT_FALSE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kEngine));
+
+  second = first;
+  second.frequency_penalty = 0.0f;
+  second.presence_penalty = 0.0f;
+  second.early_stopping = false;
+  EXPECT_TRUE(first.HasSameRetainedGenerationSettings(second, ChatBackendKind::kGenerator));
+}
+
+TEST(SearchOptionsParsingTest, StopStringsRoundTripWithoutReplacingEarlyStopping) {
+  KeyValuePairs params;
+  StoreStopStringsOption({"END", "STOP"}, params);
+  params.Add(FOUNDRY_LOCAL_PARAM_EARLY_STOPPING, "true");
+
+  const SearchOptions options = SearchOptions::FromParameters(params);
+  ASSERT_TRUE(options.early_stopping.has_value());
+  EXPECT_TRUE(*options.early_stopping);
+  EXPECT_EQ(options.stop_sequences, (std::vector<std::string>{"END", "STOP"}));
+}
+
+TEST(SamplingPlanTest, UnsetOptionsLeaveEveryKnobToModelPolicy) {
+  const auto plan = ResolveSamplingPlan(SearchOptions{});
+  EXPECT_FALSE(plan.greedy);
+  EXPECT_FALSE(plan.do_sample.has_value());
+  EXPECT_FALSE(plan.temperature.has_value());
+  EXPECT_FALSE(plan.top_p.has_value());
+  EXPECT_FALSE(plan.top_k.has_value());
+}
+
+TEST(SamplingPlanTest, ZeroTemperatureDropsIrrelevantTopPAndTopK) {
+  SearchOptions options;
+  options.temperature = 0.0f;
+  options.top_p = 0.9f;
+  options.top_k = 40;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_TRUE(plan.greedy);
+  ASSERT_TRUE(plan.temperature.has_value());
+  EXPECT_FLOAT_EQ(*plan.temperature, 0.0f);
+  EXPECT_FALSE(plan.top_p.has_value());
+  EXPECT_FALSE(plan.top_k.has_value());
+  ASSERT_TRUE(plan.do_sample.has_value());
+  EXPECT_FALSE(*plan.do_sample);
+}
+
+TEST(SamplingPlanTest, GreedyKeepsNeutralScalarsUpstreamAccepts) {
+  SearchOptions options;
+  options.do_sample = false;
+  options.temperature = 1.0f;
+  options.top_p = 1.0f;
+  options.top_k = 0;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_TRUE(plan.greedy);
+  ASSERT_TRUE(plan.do_sample.has_value());
+  EXPECT_FALSE(*plan.do_sample);
+  ASSERT_TRUE(plan.temperature.has_value());
+  EXPECT_FLOAT_EQ(*plan.temperature, 1.0f);
+  ASSERT_TRUE(plan.top_p.has_value());
+  EXPECT_FLOAT_EQ(*plan.top_p, 1.0f);
+  ASSERT_TRUE(plan.top_k.has_value());
+  EXPECT_EQ(*plan.top_k, 0);
+}
+
+TEST(SamplingPlanTest, DoSampleFalseDropsContradictoryDistributionScalars) {
+  SearchOptions options;
+  options.do_sample = false;
+  options.temperature = 0.7f;
+  options.top_p = 0.9f;
+  options.top_k = 32;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_TRUE(plan.greedy);
+  ASSERT_TRUE(plan.do_sample.has_value());
+  EXPECT_FALSE(*plan.do_sample);
+  EXPECT_FALSE(plan.temperature.has_value());
+  EXPECT_FALSE(plan.top_p.has_value());
+  EXPECT_FALSE(plan.top_k.has_value());
+}
+
+TEST(SamplingPlanTest, TopKOneIsItsOwnGreedyCauseAndSurvives) {
+  SearchOptions options;
+  options.top_k = 1;
+  options.top_p = 0.5f;
+  options.temperature = 0.7f;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_TRUE(plan.greedy);
+  ASSERT_TRUE(plan.top_k.has_value());
+  EXPECT_EQ(*plan.top_k, 1);
+  EXPECT_FALSE(plan.top_p.has_value());
+  EXPECT_FALSE(plan.temperature.has_value());
+}
+
+TEST(SamplingPlanTest, ExplicitDoSampleAndZeroTemperatureBothSurvive) {
+  SearchOptions options;
+  options.do_sample = true;
+  options.temperature = 0.0f;
+
+  // Upstream accepts do_sample=true when the caller spelled greedy out itself (temperature 0 here).
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_TRUE(plan.greedy);
+  ASSERT_TRUE(plan.do_sample.has_value());
+  EXPECT_TRUE(*plan.do_sample);
+  ASSERT_TRUE(plan.temperature.has_value());
+  EXPECT_FLOAT_EQ(*plan.temperature, 0.0f);
+}
+
+TEST(SamplingPlanTest, SampledTurnForwardsEveryExplicitScalar) {
+  SearchOptions options;
+  options.do_sample = true;
+  options.temperature = 0.7f;
+  options.top_p = 0.9f;
+  options.top_k = 40;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_FALSE(plan.greedy);
+  ASSERT_TRUE(plan.temperature.has_value());
+  EXPECT_FLOAT_EQ(*plan.temperature, 0.7f);
+  ASSERT_TRUE(plan.top_p.has_value());
+  EXPECT_FLOAT_EQ(*plan.top_p, 0.9f);
+  ASSERT_TRUE(plan.top_k.has_value());
+  EXPECT_EQ(*plan.top_k, 40);
+}
+
+TEST(SamplingPlanTest, PositiveTemperatureEnablesSampling) {
+  SearchOptions options;
+  options.temperature = 0.7f;
+
+  const auto plan = ResolveSamplingPlan(options);
+  EXPECT_FALSE(plan.greedy);
+  ASSERT_TRUE(plan.do_sample.has_value());
+  EXPECT_TRUE(*plan.do_sample);
+}
+
+TEST(SamplingPlanTest, OutOfRangeScalarsAreRejected) {
+  for (float top_p : {-0.1f, 1.1f, std::numeric_limits<float>::infinity()}) {
+    SearchOptions options;
+    options.top_p = top_p;
+    EXPECT_THROW(ResolveSamplingPlan(options), fl::Exception) << "top_p=" << top_p;
+  }
+
+  SearchOptions negative_top_k;
+  negative_top_k.top_k = -1;
+  EXPECT_THROW(ResolveSamplingPlan(negative_top_k), fl::Exception);
+}
+
+TEST(EngineTurnOptionsPlanTest, LeavesMaxOutputAndSamplingUnsetWhenCallerOmitsThem) {
+  const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, ToolCallContext{}, ChatBackendKind::kEngine);
+  EXPECT_FALSE(plan.max_generated_tokens.has_value());
+  EXPECT_FALSE(plan.sampling.do_sample.has_value());
+  EXPECT_FALSE(plan.sampling.temperature.has_value());
+  EXPECT_FALSE(plan.seed.has_value());
+  EXPECT_TRUE(plan.stop_sequences.empty());
+  EXPECT_FALSE(plan.guidance.has_value());
+}
+
+TEST(EngineTurnOptionsPlanTest, RejectsNonpositiveExplicitMaxOutputTokens) {
+  for (int max_output_tokens : {0, -1}) {
+    SearchOptions options;
+    options.max_output_tokens = max_output_tokens;
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine), fl::Exception);
+  }
+}
+
+TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBackend) {
+  SearchOptions options;
+  options.max_output_tokens = 64;
+  options.seed = 42;
+  options.stop_sequences = {"END", "STOP"};
+
+  ToolCallContext tool_ctx;
+  tool_ctx.text_output = false;
+  tool_ctx.tool_output = true;
+  tool_ctx.guidance_type = "json_schema";
+  tool_ctx.guidance_data = R"({"type":"object"})";
+
+  const auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, ChatBackendKind::kEngine);
+  ASSERT_TRUE(plan.max_generated_tokens.has_value());
+  EXPECT_EQ(*plan.max_generated_tokens, 64);
+  ASSERT_TRUE(plan.seed.has_value());
+  EXPECT_EQ(*plan.seed, 42);
+  EXPECT_EQ(plan.stop_sequences, (std::vector<std::string>{"END", "STOP"}));
+  ASSERT_TRUE(plan.guidance.has_value());
+  EXPECT_EQ(plan.guidance->type, "json_schema");
+  EXPECT_EQ(plan.guidance->data, R"({"type":"object"})");
+}
+
+TEST(EngineTurnOptionsPlanTest, NegativeSeedIsOmitted) {
+  for (int seed : {-1, -2, std::numeric_limits<int>::min()}) {
+    SearchOptions options;
+    options.seed = seed;
+
+    const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine);
+    EXPECT_FALSE(plan.seed.has_value());
+  }
+}
+
+TEST(EngineTurnOptionsPlanTest, ZeroSeedIsForwarded) {
+  SearchOptions options;
+  options.seed = 0;
+
+  const auto plan = BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine);
+  ASSERT_TRUE(plan.seed.has_value());
+  EXPECT_EQ(*plan.seed, 0);
+}
+
+TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
+  ToolCallContext tool_ctx;
+  tool_ctx.guidance_type = "json_schema";
+  tool_ctx.guidance_data = R"({"type":"object","required":["answer"]})";
+
+  const auto plan =
+      BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine);
+
+  ASSERT_TRUE(plan.guidance.has_value());
+  EXPECT_EQ(plan.guidance->type, "json_schema");
+  EXPECT_EQ(plan.guidance->data, R"({"type":"object","required":["answer"]})");
+}
+
+TEST(EngineTurnOptionsPlanTest, NeutralPenaltiesDoNotOverrideModelDefaults) {
+  SearchOptions options;
+  options.frequency_penalty = 0.0f;
+  options.presence_penalty = 0.0f;
+
+  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine));
+}
+
+TEST(EngineTurnOptionsPlanTest, RejectsNonzeroPenalties) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f},
+        std::pair{0.0f, -0.3f}}) {
+    SearchOptions options;
+    options.frequency_penalty = frequency;
+    options.presence_penalty = presence;
+
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine),
+                 fl::Exception);
+  }
+}
+
+TEST(EngineTurnOptionsPlanTest, RejectsTrueEarlyStoppingAndAcceptsNeutralFalse) {
+  SearchOptions enabled;
+  enabled.early_stopping = true;
+  EXPECT_THROW(BuildEngineTurnOptionsPlan(enabled, ToolCallContext{}, ChatBackendKind::kEngine), fl::Exception);
+
+  SearchOptions disabled;
+  disabled.early_stopping = false;
+  EXPECT_NO_THROW(BuildEngineTurnOptionsPlan(disabled, ToolCallContext{}, ChatBackendKind::kEngine));
+}
+
+TEST(SearchOptionsParsingTest, EngineSupportsPerTurnStopStringsAndSeed) {
+  EXPECT_TRUE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kEngine));
+  EXPECT_FALSE(ShouldForwardStopSequencesToEngine(ChatBackendKind::kGenerator));
+
+  EXPECT_TRUE(SupportsPerTurnSeed(ChatBackendKind::kEngine));
+  EXPECT_FALSE(SupportsPerTurnSeed(ChatBackendKind::kGenerator));
+}
 
 // ---------------------------------------------------------------------------
 // Test fixture: loads the shared test model once per suite
@@ -75,7 +378,7 @@ TEST_F(SearchOptionsTest, DefaultOptionsApplySuccessfully) {
   SearchOptions opts;
   auto params = MakeParams();
 
-  int max_length = ApplySearchOptions(opts, 10, GetConfig(), *params);
+  int max_length = ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_GT(max_length, 10);
   // Default output tokens = 2048, so max_length should be 10 + 2048 = 2058
   EXPECT_EQ(max_length, 2058);
@@ -86,7 +389,7 @@ TEST_F(SearchOptionsTest, MaxOutputTokensRespected) {
   opts.max_output_tokens = 100;
   auto params = MakeParams();
 
-  int max_length = ApplySearchOptions(opts, 50, GetConfig(), *params);
+  int max_length = ApplySearchOptions(opts, 50, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_EQ(max_length, 150);  // 50 input + 100 output
 }
 
@@ -96,7 +399,8 @@ TEST_F(SearchOptionsTest, TokenBudgetExceededThrows) {
   opts.max_output_tokens = 32000;
   auto params = MakeParams();
 
-  EXPECT_THROW(ApplySearchOptions(opts, 1000, GetConfig(), *params), fl::Exception);
+  EXPECT_THROW(ApplySearchOptions(opts, 1000, GetConfig(), *params, ExecutionProvider::kDefault),
+               fl::Exception);
 }
 
 TEST_F(SearchOptionsTest, TemperatureZeroDisablesSampling) {
@@ -104,8 +408,70 @@ TEST_F(SearchOptionsTest, TemperatureZeroDisablesSampling) {
   opts.temperature = 0.0f;
   auto params = MakeParams();
 
-  // Should not throw — temperature 0 → do_sample=false
-  EXPECT_NO_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params));
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_EQ(params->GetSearchNumber("temperature"), 0.0);
+  EXPECT_FALSE(params->GetSearchBool("do_sample"));
+}
+
+TEST_F(SearchOptionsTest, GreedyTurnDoesNotForwardIrrelevantTopP) {
+  SearchOptions opts;
+  opts.temperature = 0.0f;
+  opts.top_p = 0.9f;
+  auto params = MakeParams();
+  const double model_top_p = params->GetSearchNumber("top_p");
+  ASSERT_NE(model_top_p, 0.9);
+
+  // Upstream rejects an explicitly set top_p strictly inside (0, 1) on a turn that selects the top logit, so a
+  // request that only asked for temperature 0 must not be turned into a rejected combination.
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_EQ(params->GetSearchNumber("top_p"), model_top_p);
+}
+
+TEST_F(SearchOptionsTest, SampledTurnForwardsTopPAndTopK) {
+  SearchOptions opts;
+  opts.temperature = 0.7f;
+  opts.top_p = 0.9f;
+  opts.top_k = 25;
+  auto params = MakeParams();
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_FLOAT_EQ(static_cast<float>(params->GetSearchNumber("top_p")), 0.9f);
+  EXPECT_EQ(params->GetSearchNumber("top_k"), 25);
+}
+
+TEST_F(SearchOptionsTest, AbsentDoSamplePreservesGeneratorSamplingDefault) {
+  SearchOptions opts;
+  auto params = MakeParams();
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_TRUE(params->GetSearchBool("do_sample"));
+}
+
+TEST_F(SearchOptionsTest, ExplicitDoSampleFalseIsForwarded) {
+  SearchOptions opts;
+  opts.do_sample = false;
+  auto params = MakeParams();
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_FALSE(params->GetSearchBool("do_sample"));
+}
+
+TEST_F(SearchOptionsTest, OutOfRangeTopPOrNegativeTopKThrows) {
+  SearchOptions bad_top_p;
+  bad_top_p.top_p = 1.5f;
+  auto params = MakeParams();
+  EXPECT_THROW(ApplySearchOptions(bad_top_p, 10, GetConfig(), *params, ExecutionProvider::kDefault), fl::Exception);
+
+  SearchOptions bad_top_k;
+  bad_top_k.top_k = -1;
+  auto other_params = MakeParams();
+  EXPECT_THROW(ApplySearchOptions(bad_top_k, 10, GetConfig(), *other_params, ExecutionProvider::kDefault),
+               fl::Exception);
 }
 
 TEST_F(SearchOptionsTest, TemperaturePositiveEnablesSampling) {
@@ -113,7 +479,30 @@ TEST_F(SearchOptionsTest, TemperaturePositiveEnablesSampling) {
   opts.temperature = 0.7f;
   auto params = MakeParams();
 
-  EXPECT_NO_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params));
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_TRUE(params->GetSearchBool("do_sample"));
+}
+
+TEST_F(SearchOptionsTest, TemperatureOutsideSupportedRangeThrows) {
+  for (float temperature : {-1.0f, 2.1f, std::stof("nan")}) {
+    SearchOptions opts;
+    opts.temperature = temperature;
+    auto params = MakeParams();
+
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault),
+                 fl::Exception);
+  }
+}
+
+TEST_F(SearchOptionsTest, TemperatureRangeBoundariesApplySuccessfully) {
+  for (float temperature : {0.0f, 2.0f}) {
+    SearchOptions opts;
+    opts.temperature = temperature;
+    auto params = MakeParams();
+
+    EXPECT_NO_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault));
+  }
 }
 
 TEST_F(SearchOptionsTest, AllOptionsSetSimultaneously) {
@@ -122,39 +511,73 @@ TEST_F(SearchOptionsTest, AllOptionsSetSimultaneously) {
   opts.top_p = 0.9f;
   opts.top_k = 50;
   opts.max_output_tokens = 256;
-  opts.frequency_penalty = 1.1f;
-  opts.presence_penalty = 0.5f;
   opts.seed = 42;
   opts.do_sample = true;
   auto params = MakeParams();
 
-  int max_length = ApplySearchOptions(opts, 20, GetConfig(), *params);
+  int max_length = ApplySearchOptions(opts, 20, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_EQ(max_length, 276);  // 20 + 256
 }
 
-TEST_F(SearchOptionsTest, ZeroMaxOutputTokensThrows) {
+TEST_F(SearchOptionsTest, EarlyStoppingRemainsSupportedByClassicGenerator) {
   SearchOptions opts;
-  opts.max_output_tokens = 0;
+  opts.early_stopping = true;
   auto params = MakeParams();
 
-  EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params), fl::Exception);
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_TRUE(params->GetSearchBool("early_stopping"));
 }
 
-TEST_F(SearchOptionsTest, NegativeMaxOutputTokensThrows) {
+TEST_F(SearchOptionsTest, ZeroPenaltiesDoNotOverrideModelDefaults) {
   SearchOptions opts;
-  opts.max_output_tokens = -5;
+  opts.frequency_penalty = 0.0f;
+  opts.presence_penalty = 0.0f;
   auto params = MakeParams();
+  const auto repetition_penalty = params->GetSearchNumber("repetition_penalty");
+  const auto diversity_penalty = params->GetSearchNumber("diversity_penalty");
 
-  EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params), fl::Exception);
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_EQ(params->GetSearchNumber("repetition_penalty"), repetition_penalty);
+  EXPECT_EQ(params->GetSearchNumber("diversity_penalty"), diversity_penalty);
 }
 
-TEST_F(SearchOptionsTest, ExplicitDoSampleOverridesTemperature) {
+TEST_F(SearchOptionsTest, NonzeroPenaltiesAreRejected) {
+  for (const auto& [frequency, presence] :
+       {std::pair{0.5f, 0.0f}, std::pair{0.0f, 0.3f}, std::pair{-0.5f, 0.0f}, std::pair{0.0f, -0.3f}}) {
+    SearchOptions opts;
+    opts.frequency_penalty = frequency;
+    opts.presence_penalty = presence;
+    auto params = MakeParams();
+
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault), fl::Exception);
+  }
+}
+
+TEST_F(SearchOptionsTest, NonpositiveMaxOutputTokensThrow) {
+  for (int max_output_tokens : {0, -5}) {
+    SearchOptions opts;
+    opts.max_output_tokens = max_output_tokens;
+    auto params = MakeParams();
+
+    EXPECT_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault),
+                 fl::Exception)
+        << "max_output_tokens=" << max_output_tokens;
+  }
+}
+
+TEST_F(SearchOptionsTest, ExplicitDoSampleAndZeroTemperatureAreBothForwarded) {
   SearchOptions opts;
-  opts.temperature = 0.0f;  // Would normally disable sampling
-  opts.do_sample = true;    // But explicit override takes priority
+  opts.temperature = 0.0f;
+  opts.do_sample = true;
   auto params = MakeParams();
 
-  EXPECT_NO_THROW(ApplySearchOptions(opts, 10, GetConfig(), *params));
+  // The caller spelled greedy out itself with temperature 0, which upstream accepts alongside do_sample=true.
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kDefault);
+
+  EXPECT_TRUE(params->GetSearchBool("do_sample"));
+  EXPECT_EQ(params->GetSearchNumber("temperature"), 0.0);
 }
 
 TEST_F(SearchOptionsTest, LargeInputFitsExactly) {
@@ -163,7 +586,7 @@ TEST_F(SearchOptionsTest, LargeInputFitsExactly) {
   opts.max_output_tokens = 768;
   auto params = MakeParams();
 
-  int max_length = ApplySearchOptions(opts, 32000, GetConfig(), *params);
+  int max_length = ApplySearchOptions(opts, 32000, GetConfig(), *params, ExecutionProvider::kDefault);
   EXPECT_EQ(max_length, 32768);  // Exactly at limit
 }
 
@@ -172,5 +595,59 @@ TEST_F(SearchOptionsTest, LargeInputExceedsByOneThrows) {
   opts.max_output_tokens = 769;
   auto params = MakeParams();
 
-  EXPECT_THROW(ApplySearchOptions(opts, 32000, GetConfig(), *params), fl::Exception);
+  EXPECT_THROW(ApplySearchOptions(opts, 32000, GetConfig(), *params, ExecutionProvider::kDefault),
+               fl::Exception);
+}
+
+TEST_F(SearchOptionsTest, ChunkedPrefillDefaultsTo2048ForSupportedExecutionProviders) {
+  SearchOptions opts;
+
+  for (ExecutionProvider ep : {ExecutionProvider::kCPU, ExecutionProvider::kCUDA,
+                               ExecutionProvider::kTensorRT_RTX, ExecutionProvider::kWebGPU}) {
+    auto params = MakeParams();
+    ApplySearchOptions(opts, 10, GetConfig(), *params, ep);
+    EXPECT_EQ(params->GetSearchNumber("chunk_size"), 2048) << "EP: " << static_cast<int>(ep);
+  }
+}
+
+TEST_F(SearchOptionsTest, ChunkedPrefillSkippedForUnlistedEp) {
+  SearchOptions opts;
+  auto params = MakeParams();
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kOpenVINO);
+  EXPECT_EQ(params->GetSearchNumber("chunk_size"), 0);
+}
+
+TEST_F(SearchOptionsTest, ChunkedPrefillResolvesSupportedProvidersFromConfig) {
+  SearchOptions opts;
+  GenAIConfig config;
+  auto& model = config.model.emplace();
+  auto& decoder = model.decoder.emplace();
+  auto& session_options = decoder.session_options.emplace();
+  config.search.emplace().max_length = 32768;
+
+  for (const char* provider : {"cpu", "cuda", "NvTensorRtRtx", "WebGPU"}) {
+    session_options.provider_options = {{{provider, "{}"}}};
+    auto params = MakeParams();
+    ApplySearchOptions(opts, 10, config, *params, ExecutionProvider::kDefault);
+    EXPECT_EQ(params->GetSearchNumber("chunk_size"), 2048) << "Provider: " << provider;
+  }
+}
+
+TEST_F(SearchOptionsTest, ChunkedPrefillPreservesModelSetting) {
+  SearchOptions opts;
+  auto params = MakeParams();
+  params->SetSearchOption("chunk_size", 1024);
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kCPU);
+  EXPECT_EQ(params->GetSearchNumber("chunk_size"), 1024);
+}
+
+TEST_F(SearchOptionsTest, ChunkedPrefillTreatsZeroAsUnset) {
+  SearchOptions opts;
+  auto params = MakeParams();
+  params->SetSearchOption("chunk_size", 0);
+
+  ApplySearchOptions(opts, 10, GetConfig(), *params, ExecutionProvider::kCPU);
+  EXPECT_EQ(params->GetSearchNumber("chunk_size"), 2048);
 }

@@ -3,6 +3,7 @@
 #include "inferencing/generative/genai_model_instance.h"
 #include "exception.h"
 #include "inferencing/execution_provider.h"
+#include "inferencing/generative/chat/onnx_chat_engine.h"
 #include "util/key_value_pairs.h"
 #include "utils.h"
 
@@ -35,12 +36,15 @@ GenAIModelInstance::GenAIModelInstance(std::string model_id,
                      "failed to create OGA config for model ", model_id_, ": ", e.what());
   }
 
-  // Apply EP override to the OGA config
+  // Every explicit EP overrides providers from genai_config.json. CPU is OGA's default when the provider list is
+  // empty, and EPtoGenAI intentionally has no CPU name, so CPU clears the list without appending a provider.
   if (ep_ != ExecutionProvider::kDefault) {
     try {
       oga_config->ClearProviders();
-      std::string_view provider_str = EPUtils::EPtoGenAI(ep_);
-      oga_config->AppendProvider(provider_str.data());
+      if (ep_ != ExecutionProvider::kCPU) {
+        std::string_view provider_str = EPUtils::EPtoGenAI(ep_);
+        oga_config->AppendProvider(provider_str.data());
+      }
 
       // Disable CUDA graph for CUDA EP (matches C# behavior)
       if (ep_ == ExecutionProvider::kCUDA) {
@@ -60,39 +64,38 @@ GenAIModelInstance::GenAIModelInstance(std::string model_id,
                      "failed to load model ", model_id_, ": ", e.what());
   }
 
-  // Create Tokenizer
   try {
-    tokenizer_ = OgaTokenizer::Create(*oga_model_);
+    preprocessor_ = Preprocessor::Create(*oga_model_, IsMultiModal());
   } catch (const std::runtime_error& e) {
     FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INTERNAL,
-                     "failed to create tokenizer for model ", model_id_, ": ", e.what());
+                     "failed to create preprocessor for model ", model_id_, ": ", e.what());
   }
 
-  // Create second Tokenizer for special token detection
-  try {
-    tokenizer_with_special_ = OgaTokenizer::Create(*oga_model_);
-    KeyValuePairs options;
-    options.Add("skip_special_tokens", "0");
-    tokenizer_with_special_->UpdateOptions(options.Keys().data(), options.Values().data(), options.size());
-  } catch (const std::runtime_error& e) {
+  if (IsMultiModal() && genai_config_.GetChatBackendKind() == ChatBackendKind::kEngine) {
     FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INTERNAL,
-                     "failed to create special-token tokenizer for model ", model_id_, ": ", e.what());
+                     "model ", model_id_,
+                     " declares an Engine backend, but Engine is not supported for multimodal models");
   }
 
-  // Create MultiModalProcessor if multimodal
-  if (genai_config_.model.has_value() && genai_config_.model->IsMultiModal()) {
+  if (genai_config_.GetChatBackendKind() == ChatBackendKind::kEngine) {
+#if FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE
     try {
-      processor_ = OgaMultiModalProcessor::Create(*oga_model_);
+      chat_engine_ = std::make_unique<OnnxChatEngine>(*this);
     } catch (const std::runtime_error& e) {
       FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INTERNAL,
-                       "failed to create multimodal processor for model ", model_id_, ": ", e.what());
+                       "failed to create chat engine for model ", model_id_, ": ", e.what());
     }
+#else
+    FL_LOG_AND_THROW(logger, FOUNDRY_LOCAL_ERROR_INTERNAL,
+                     "model ", model_id_,
+                     " requires the ORT GenAI dynamic Engine API, but this build does not provide it");
+#endif
   }
 }
 
 // Destructor: unique_ptr members are destroyed in reverse declaration order.
 // OGA objects have custom operator delete that calls OgaDestroy* functions.
-// Destruction order: processor → tokenizer → oga_model (correct: dependents first).
+// Destruction order: chat engine → preprocessor → OGA model (correct: dependents first).
 GenAIModelInstance::~GenAIModelInstance() = default;
 
 // ---------------------------------------------------------------------------
@@ -111,33 +114,59 @@ OgaModel& GenAIModelInstance::GetOgaModel() {
   return *oga_model_;
 }
 
-OgaTokenizer& GenAIModelInstance::GetOgaTokenizer() {
-  if (!tokenizer_) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "OGA tokenizer is null");
+Preprocessor& GenAIModelInstance::GetPreprocessor() {
+  if (!preprocessor_) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "preprocessor is null");
   }
 
-  return *tokenizer_;
+  return *preprocessor_;
 }
 
-OgaTokenizer& GenAIModelInstance::GetOgaTokenizerWithSpecial() {
-  if (!tokenizer_with_special_) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "OGA tokenizer with special is null");
-  }
+const GenAIModelInstance::TagInfo& GenAIModelInstance::GetTagInfo() {
+  std::call_once(tag_info_init_flag_, [this]() {
+    std::unique_ptr<OgaTokenizer> tokenizer;
+    std::unique_ptr<OgaTokenizer> tokenizer_with_special;
+    try {
+      tokenizer = OgaTokenizer::Create(GetOgaModel());
+      tokenizer_with_special = OgaTokenizer::Create(GetOgaModel());
+      KeyValuePairs options;
+      options.Add("skip_special_tokens", "0");
+      tokenizer_with_special->UpdateOptions(options.Keys().data(), options.Values().data(), options.size());
+    } catch (...) {
+      return;
+    }
 
-  return *tokenizer_with_special_;
-}
+    // Get tag IDs from the tokenizer (reads from config, with fallback vocab lookup).
+    // These throw if the model doesn't define the token, so we catch and leave as nullopt.
+    auto try_get_id = [](auto&& getter) -> std::optional<int32_t> {
+      try {
+        return getter();
+      } catch (...) {
+        return std::nullopt;
+      }
+    };
+    tag_info_.bot_id = try_get_id([&] { return tokenizer->GetBotTokenId(); });
+    tag_info_.eot_id = try_get_id([&] { return tokenizer->GetEotTokenId(); });
+    tag_info_.bor_id = try_get_id([&] { return tokenizer->GetBorTokenId(); });
+    tag_info_.eor_id = try_get_id([&] { return tokenizer->GetEorTokenId(); });
 
-OgaMultiModalProcessor* GenAIModelInstance::GetProcessor() {
-  return processor_.get();
-}
+    // Decode each valid ID once through the special tokenizer to get the string.
+    // Uses tokenizer_with_special_ so that special token text (e.g., "<tool_call>") is produced.
+    auto decode_id = [&](std::optional<int32_t> id) -> std::string {
+      if (!id.has_value()) return {};
+      int32_t val = *id;
+      OgaString text = tokenizer_with_special->Decode(&val, 1);
+      const char* p = text;
+      return p ? std::string(p) : std::string();
+    };
 
-const std::vector<int32_t>& GenAIModelInstance::GetEosTokenIds() {
-  std::call_once(eos_token_ids_init_flag_, [this]() {
-    auto ids = tokenizer_->GetEosTokenIds();
-    eos_token_ids_.assign(ids.begin(), ids.end());
+    tag_info_.bot_str = decode_id(tag_info_.bot_id);
+    tag_info_.eot_str = decode_id(tag_info_.eot_id);
+    tag_info_.bor_str = decode_id(tag_info_.bor_id);
+    tag_info_.eor_str = decode_id(tag_info_.eor_id);
   });
 
-  return eos_token_ids_;
+  return tag_info_;
 }
 
 }  // namespace fl

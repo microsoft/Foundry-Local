@@ -10,7 +10,9 @@
 #include <oatpp/web/protocol/http/outgoing/Response.hpp>
 #include <oatpp/web/server/HttpRequestHandler.hpp>
 
-#include "telemetry/telemetry.h"
+#include "model.h"
+#include "service/web_service.h"
+#include "telemetry/telemetry_action_tracker.h"
 
 #include <condition_variable>
 #include <cstring>
@@ -22,6 +24,8 @@
 #include <string>
 
 namespace fl {
+
+class GenAIModelInstance;
 
 using oatpp::web::protocol::http::Status;
 using oatpp::web::server::HttpRequestHandler;
@@ -54,21 +58,51 @@ inline std::shared_ptr<HttpRequestHandler::OutgoingResponse> ErrorResponse(const
   return JsonResponse(status, body);
 }
 
-inline ActionStatus HttpStatusToActionStatus(const Status& status) {
-  if (status.code == 408 || status.code == 504) {
-    return ActionStatus::kTimeout;
-  }
-  if (status.code >= 500) {
+inline ActionStatus ResponseToActionStatus(const std::shared_ptr<HttpRequestHandler::OutgoingResponse>& response,
+                                           bool canceled = false) {
+  if (!response) {
     return ActionStatus::kFailure;
   }
-  if (status.code >= 400) {
+
+  const auto code = response->getStatus().code;
+  if (code == 408 || code == 504) {
+    return ActionStatus::kTimeout;
+  }
+
+  if (code >= 500) {
+    return ActionStatus::kFailure;
+  }
+
+  if (code >= 400) {
     return ActionStatus::kClientError;
   }
-  return ActionStatus::kSuccess;
+
+  return canceled ? ActionStatus::kCanceled : ActionStatus::kSuccess;
 }
 
-inline ActionStatus ResponseToActionStatus(const std::shared_ptr<HttpRequestHandler::OutgoingResponse>& response) {
-  return response ? HttpStatusToActionStatus(response->getStatus()) : ActionStatus::kFailure;
+inline std::string GetUserAgent(const std::shared_ptr<HttpRequestHandler::IncomingRequest>& request) {
+  if (!request) {
+    return {};
+  }
+
+  const auto user_agent = request->getHeader("User-Agent");
+  return user_agent ? *user_agent : std::string{};
+}
+
+/// Track construction separately from processing, with the route's indirect context for both.
+template <typename SessionType>
+std::unique_ptr<SessionType> CreateSessionWithTelemetry(const Model& model, GenAIModelInstance& loaded,
+                                                       ServiceContext& ctx, const InvocationContext& context) {
+  ActionTracker tracker(Action::kSessionCreate, ctx.telemetry, context);
+  tracker.SetModelId(model.Id());
+  try {
+    auto session = std::make_unique<SessionType>(model, loaded, ctx.logger, ctx.telemetry);
+    tracker.SetStatus(ActionStatus::kSuccess);
+    return session;
+  } catch (const std::exception& ex) {
+    tracker.RecordException(ex);
+    throw;
+  }
 }
 
 /// Generate a random ID with the given prefix (e.g. "chatcmpl").
@@ -79,16 +113,6 @@ inline std::string GenerateCompletionId(const std::string& prefix) {
   std::ostringstream ss;
   ss << prefix << "-" << std::hex << std::setfill('0') << std::setw(16) << dist(rng);
   return ss.str();
-}
-
-/// Extract the User-Agent header from an incoming request ("" if absent), for
-/// attribution on the telemetry events the request drives.
-inline std::string GetUserAgent(const std::shared_ptr<HttpRequestHandler::IncomingRequest>& request) {
-  if (!request) {
-    return {};
-  }
-  auto ua = request->getHeader("User-Agent");
-  return ua ? *ua : std::string{};
 }
 
 // ========================================================================
@@ -102,16 +126,10 @@ class SseStreamBody : public oatpp::web::protocol::http::outgoing::Body {
   SseStreamBody() : done_(false) {}
 
   /// Push a formatted SSE event (e.g. "data: {...}\n\n") into the queue.
-  bool Push(std::string chunk) {
+  void Push(std::string chunk) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (done_ || queue_.size() >= kMaxQueuedChunks) {
-      done_ = true;
-      cv_.notify_one();
-      return false;
-    }
     queue_.push(std::move(chunk));
     cv_.notify_one();
-    return true;
   }
 
   /// Signal that no more data will be pushed.
@@ -172,7 +190,6 @@ class SseStreamBody : public oatpp::web::protocol::http::outgoing::Body {
   std::condition_variable cv_;
   std::queue<std::string> queue_;
   bool done_;
-  static constexpr size_t kMaxQueuedChunks = 1024;
 };
 
 }  // namespace fl
