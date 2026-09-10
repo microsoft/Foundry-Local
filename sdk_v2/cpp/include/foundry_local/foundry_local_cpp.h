@@ -946,7 +946,7 @@ struct SearchOptions {
   std::optional<float> frequency_penalty;  ///< Currently only the neutral value 0 is supported.
   std::optional<float> presence_penalty;   ///< Currently only the neutral value 0 is supported.
   std::optional<int> seed;                 ///< Random seed for reproducibility.
-  std::optional<bool> early_stopping;      ///< Beam-search early-stopping policy. Only false is currently supported.
+  std::optional<bool> early_stopping;      ///< Beam-search policy; true is unsupported by Engine backends.
   std::optional<bool> do_sample;           ///< Whether to sample (false = greedy).
 };
 

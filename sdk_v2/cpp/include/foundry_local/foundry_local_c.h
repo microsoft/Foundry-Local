@@ -269,13 +269,13 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_MODEL_PROP_CREATION_TIME_STR "creation_time"              ///< ISO-8601 UTC timestamp
 
 /* flModelInfo Int properties. Comments provide details on the type and expected values. */
-#define FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT "supports_tool_calling"          ///< optional bool (not set or -1=unknown, 0=false, 1=true)
-#define FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT "supports_reasoning"                ///< optional bool (not set or -1=unknown, 0=false, 1=true)
-#define FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT "filesize_mb"                              ///< optional int32_t
-#define FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT "max_output_tokens"                  ///< optional int32_t
-#define FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT "created_at_unix"                      ///< Unix timestamp. default=0
-#define FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT "is_test_model"                          ///< bool (0=false, 1=true)
-#define FOUNDRY_LOCAL_MODEL_PROP_CONTEXT_LENGTH_INT "context_length"                        ///< optional int64_t
+#define FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT "supports_tool_calling"  ///< optional bool (not set or -1=unknown, 0=false, 1=true)
+#define FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT "supports_reasoning"        ///< optional bool (not set or -1=unknown, 0=false, 1=true)
+#define FOUNDRY_LOCAL_MODEL_PROP_FILESIZE_MB_INT "filesize_mb"                      ///< optional int32_t
+#define FOUNDRY_LOCAL_MODEL_PROP_MAX_OUTPUT_TOKENS_INT "max_output_tokens"          ///< optional int32_t
+#define FOUNDRY_LOCAL_MODEL_PROP_CREATED_AT_UNIX_INT "created_at_unix"              ///< Unix timestamp. default=0
+#define FOUNDRY_LOCAL_MODEL_PROP_IS_TEST_MODEL_INT "is_test_model"                  ///< bool (0=false, 1=true)
+#define FOUNDRY_LOCAL_MODEL_PROP_CONTEXT_LENGTH_INT "context_length"                ///< optional int64_t
 #define FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_HYBRID_REASONING_INT "supports_hybrid_reasoning"  ///< optional bool
 
 #define FOUNDRY_LOCAL_MODEL_PROP_INPUT_MODALITIES_STR "input_modalities"    ///< optional, comma-separated
@@ -298,10 +298,9 @@ typedef enum flTensorDataType {
 #define FOUNDRY_LOCAL_PARAM_FREQUENCY_PENALTY "frequency_penalty"
 /// Float presence penalty. Currently only the neutral value 0 is supported.
 #define FOUNDRY_LOCAL_PARAM_PRESENCE_PENALTY "presence_penalty"
-#define FOUNDRY_LOCAL_PARAM_SEED "seed"  ///< int. for reproducible outputs
-/// Bool. Beam-search early-stopping policy. Only false is currently supported.
-#define FOUNDRY_LOCAL_PARAM_EARLY_STOPPING "early_stopping"
-#define FOUNDRY_LOCAL_PARAM_DO_SAMPLE "do_sample"  ///< bool. whether to sample (false = greedy decoding)
+#define FOUNDRY_LOCAL_PARAM_SEED "seed"                            ///< int. for reproducible outputs
+#define FOUNDRY_LOCAL_PARAM_EARLY_STOPPING "early_stopping"        ///< bool. whether to stop on stop sequence or only at max tokens
+#define FOUNDRY_LOCAL_PARAM_DO_SAMPLE "do_sample"                  ///< bool. whether to sample (false = greedy decoding)
 
 /* Request options */
 #define FOUNDRY_LOCAL_PARAM_TOOL_CHOICE "tool_choice"  ///< string: See flToolChoice for the typed enum.

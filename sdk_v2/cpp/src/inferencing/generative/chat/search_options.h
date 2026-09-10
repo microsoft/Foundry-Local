@@ -93,7 +93,7 @@ struct SearchOptions {
 inline constexpr int kDefaultChatTextMaxOutputTokens = 2048;
 inline constexpr int kDefaultChatMediaMaxOutputTokens = 3072;
 
-/// Return the default output-token limit for a text or media generation turn.
+/// Return the host default for classic Generator and media turns. Engine text turns remain unset unless specified.
 constexpr int GetDefaultMaxOutputTokens(bool has_media) noexcept {
   return has_media ? kDefaultChatMediaMaxOutputTokens : kDefaultChatTextMaxOutputTokens;
 }

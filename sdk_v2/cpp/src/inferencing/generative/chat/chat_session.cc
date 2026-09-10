@@ -601,10 +601,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     cached_search_options_ = effective_options;
   }
 
-  const int max_output =
-      ResolveMaxOutputTokens(effective_options, GetDefaultMaxOutputTokens(media_turn));
-  const bool enforce_host_output_limit =
-      chat_session_internal::ShouldEnforceHostOutputLimit(backend_kind, media_turn);
+  std::optional<int> host_max_output;
+  if (chat_session_internal::ShouldEnforceHostOutputLimit(backend_kind, media_turn)) {
+    host_max_output = ResolveMaxOutputTokens(effective_options, GetDefaultMaxOutputTokens(media_turn));
+  }
   const auto committed_tool_ctx = cached_tool_ctx_;
 
   // Generate token-by-token with optional streaming.
@@ -705,9 +705,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     // Classic text generators use the full context window, and media turns always use OnnxChatGenerator directly,
     // so retain the host boundary guard for both. Engine text turns receive this limit in their per-turn options and
     // report completion asynchronously; checking IsDone() here could race their definitive finish notification.
-    if (enforce_host_output_limit &&
+    if (host_max_output.has_value() &&
         chat_session_internal::DidHostOutputLimitTruncate(
-            output_tokens, max_output, cached_generator_->IsDone())) {
+            output_tokens, *host_max_output, cached_generator_->IsDone())) {
       host_output_limit_reached = true;
       break;
     }
