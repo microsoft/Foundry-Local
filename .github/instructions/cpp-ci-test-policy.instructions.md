@@ -24,9 +24,11 @@ The integration test suite must never pull a multi-GB model over the network dur
 Engine-capable builds compile `DynamicEngineChatTest`. Set `FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_MODEL_PATH` to a
 pre-staged model directory whose `genai_config.json` defines `engine.dynamic_batching` to run generation,
 continuation, concurrency, capacity, cancellation-recovery, and unload coverage. The fixture stages writable metadata
-without modifying the shared model and sets `max_batch_size` to two. Current GenAI 0.15.2 builds exclude these tests;
-any CI lane that enables the newer Engine API must stage the model and set this variable so skips do not hide a
-regression.
+without modifying the shared model and sets `max_batch_size` to two. Required lanes must also set
+`FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_REQUIRED=1` and configure with
+`FOUNDRY_LOCAL_REQUIRE_DYNAMIC_ENGINE_TESTS=ON`; the former converts a missing model fixture into a test failure, and
+the latter rejects a GenAI package that cannot compile the suite. Current GenAI 0.15.2 builds exclude these tests, so
+an Engine lane must use a newer package and a real pre-staged paged-KV model rather than relying on skips.
 
 ## Debugging skips in CI
 
