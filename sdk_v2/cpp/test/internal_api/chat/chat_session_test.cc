@@ -842,17 +842,19 @@ TEST_F(ChatSessionTest, UnchangedInstructionsKeepTheCachedGeneratorAndDoNotRepea
 
 TEST_F(ChatSessionTest, OrdinaryWarmContinuationMatchesFreshFullTranscriptReplay) {
   ChatSession warm_session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
-  const std::string first_user = "Reply with the single word blue.";
-  const std::string second_user = "Reply with the single word green.";
+  const std::string first_user = "What is 2+2? Answer with just the number.";
+  const std::string second_user = "Add 1 to the previous answer. Answer with just the number.";
 
   const auto first = RunTurnResponse(warm_session, first_user, "", /*disable_tools=*/true,
-                                     /*max_output_tokens=*/64);
+                                     /*max_output_tokens=*/32);
+  ASSERT_EQ(first.finish_reason, FOUNDRY_LOCAL_FINISH_STOP)
+      << "the first turn must finish naturally so its Generator can be retained";
   auto full_messages = warm_session.Transcript().Messages();
   full_messages.emplace_back(FOUNDRY_LOCAL_ROLE_USER, second_user);
   const auto expected_prompt = BuildChatPrompt(full_messages, GetModel());
 
   const auto warm = RunTurnResponse(warm_session, second_user, "", /*disable_tools=*/true,
-                                    /*max_output_tokens=*/64);
+                                    /*max_output_tokens=*/32);
   ASSERT_TRUE(warm_session.Transcript().Turns()[1].tokens.pre_turn.has_value())
       << "the ordinary continuation must exercise the retained Generator path";
 
@@ -862,7 +864,7 @@ TEST_F(ChatSessionTest, OrdinaryWarmContinuationMatchesFreshFullTranscriptReplay
   fresh_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, GetAssistantText(first)));
   fresh_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, second_user));
   fresh_request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "none");
-  fresh_request.options.Add("max_output_tokens", "64");
+  fresh_request.options.Add("max_output_tokens", "32");
   fresh_request.options.Add("temperature", "0");
 
   const auto fresh_input = BuildTranscriptMessages(fresh_request.items);
