@@ -28,6 +28,9 @@ class GenAIModelInstance;
 /// in one place.
 std::string RenderMessageForPrompt(const MessageItem& msg);
 
+/// Serialize messages into the JSON shape consumed by the model chat template.
+std::string BuildChatMessagesJson(const std::vector<MessageItem>& messages);
+
 /// Build a chat prompt string from a list of messages.
 /// Uses the tokenizer's built-in chat template (via GenAIModelInstance::ApplyChatTemplate).
 ///
@@ -38,6 +41,12 @@ std::string RenderMessageForPrompt(const MessageItem& msg);
 std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
                             GenAIModelInstance& model,
                             const std::string& tools_json = "");
+
+/// Build the fragment appended after an Engine-generated assistant response.
+/// Engine does not retain the generated EOS token, so this includes the template's assistant-turn boundary.
+std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
+                                        GenAIModelInstance& model,
+                                        const std::string& tools_json = "");
 
 /// Encode a prompt string into token sequences using the model's shared tokenizer (thread-safe).
 /// Returns a unique_ptr to OgaSequences. Caller takes ownership.

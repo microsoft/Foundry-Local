@@ -41,9 +41,7 @@ std::string RenderMessageForPrompt(const MessageItem& msg) {
   return text;
 }
 
-std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
-                            GenAIModelInstance& model,
-                            const std::string& tools_json) {
+std::string BuildChatMessagesJson(const std::vector<MessageItem>& messages) {
   if (messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "messages must not be empty");
   }
@@ -52,15 +50,51 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
   // Format: [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}, ...]
   nlohmann::json messages_json = nlohmann::json::array();
   for (const auto& msg : messages) {
-    messages_json.push_back({{"role", Utils::RoleToString(msg.role)}, {"content", RenderMessageForPrompt(msg)}});
+    nlohmann::json message = {
+        {"role", Utils::RoleToString(msg.role)}, {"content", RenderMessageForPrompt(msg)}};
+    if (!msg.tool_calls.empty()) {
+      message["tool_calls"] = nlohmann::json::array();
+      for (const auto& tool_call : msg.tool_calls) {
+        message["tool_calls"].push_back({
+            {"name", tool_call.name}, {"arguments", tool_call.arguments}});
+      }
+    }
+    messages_json.push_back(std::move(message));
   }
 
-  std::string messages_str = messages_json.dump();
+  return messages_json.dump();
+}
+
+std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
+                            GenAIModelInstance& model,
+                            const std::string& tools_json) {
+  std::string messages_str = BuildChatMessagesJson(messages);
+
   const char* tools_ptr = tools_json.empty() ? nullptr : tools_json.c_str();
 
   // ApplyChatTemplate uses the model's built-in template (template_str=nullptr) and appends the assistant
   // turn prefix (add_generation_prompt=true).
   return model.GetPreprocessor().ApplyChatTemplate(messages_str.c_str(), tools_ptr, /*add_generation_prompt=*/true);
+}
+
+std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
+                                        GenAIModelInstance& model,
+                                        const std::string& tools_json) {
+  constexpr std::string_view kAssistantMarker = "__foundry_engine_assistant_boundary__";
+
+  std::vector<MessageItem> marked_messages;
+  marked_messages.reserve(messages.size() + 1);
+  marked_messages.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::string(kAssistantMarker));
+  marked_messages.insert(marked_messages.end(), messages.begin(), messages.end());
+
+  auto marked_prompt = BuildChatPrompt(marked_messages, model, tools_json);
+  const auto marker_position = marked_prompt.find(kAssistantMarker);
+  if (marker_position == std::string::npos) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "chat template did not preserve assistant content needed to build an Engine continuation");
+  }
+
+  return marked_prompt.substr(marker_position + kAssistantMarker.size());
 }
 
 std::unique_ptr<OgaSequences> EncodePrompt(const std::string& prompt,

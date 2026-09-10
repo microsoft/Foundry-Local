@@ -6,18 +6,86 @@
 #include "catalog/local_model_scanner.h"
 #include "model.h"
 #include "model_info.h"
+#include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
+#include <system_error>
 #include <unordered_set>
 #include <utility>
 
 namespace fl {
 
 namespace {
+
+// Merge selected fields from the model directory's inference_model.json into
+// a BYOM ModelInfo. The scanner only extracts the model name, so tool-calling
+// and reasoning tags declared by the model author would otherwise be dropped.
+void MergeInferenceModelJson(ModelInfo& info, const std::string& local_path) {
+  if (local_path.empty()) {
+    return;
+  }
+
+  auto json_path = std::filesystem::path(local_path) / "inference_model.json";
+  std::error_code ec;
+  if (!std::filesystem::exists(json_path, ec)) {
+    return;
+  }
+
+  try {
+    std::ifstream file(json_path);
+    if (!file.is_open()) {
+      return;
+    }
+    auto j = nlohmann::json::parse(file, /*cb=*/nullptr, /*allow_exceptions=*/false);
+    if (j.is_discarded() || !j.is_object()) {
+      return;
+    }
+
+    auto read_string = [&](const char* key, const char* prop) {
+      if (j.contains(key) && j[key].is_string()) {
+        info.string_properties[prop] = j[key].get<std::string>();
+      }
+    };
+    auto read_bool_as_int = [&](const char* key, const char* prop) {
+      if (j.contains(key) && j[key].is_boolean()) {
+        info.int_properties[prop] = j[key].get<bool>() ? 1 : 0;
+      }
+    };
+
+    read_bool_as_int("supportsToolCalling", FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT);
+    read_bool_as_int("supportsReasoning", FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_REASONING_INT);
+    read_string("toolCallStart", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR);
+    read_string("toolCallEnd", FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR);
+    read_string("reasoningStart", FOUNDRY_LOCAL_MODEL_PROP_REASONING_START_STR);
+    read_string("reasoningEnd", FOUNDRY_LOCAL_MODEL_PROP_REASONING_END_STR);
+  } catch (...) {
+    // inference_model.json is best-effort metadata; ignore parse failures.
+  }
+}
+
+ModelInfo MakeByomModelInfo(const std::string& model_id, const std::string& local_path) {
+  auto [name, version] = Utils::SplitModelNameAndVersion(model_id);
+
+  ModelInfo info;
+  info.model_id = model_id;
+  info.name = name;
+  info.alias = name;
+  info.uri = "local://" + name;
+  info.version = version;
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR] = "Local";
+  info.string_properties[FOUNDRY_LOCAL_MODEL_PROP_MODEL_TYPE_STR] = "ONNX";
+
+  MergeInferenceModelJson(info, local_path);
+
+  return info;
+}
 
 std::vector<ModelInfo> DeduplicateByModelId(std::vector<ModelInfo> model_infos) {
   std::vector<ModelInfo> deduplicated;
@@ -31,13 +99,6 @@ std::vector<ModelInfo> DeduplicateByModelId(std::vector<ModelInfo> model_infos) 
   }
 
   return deduplicated;
-}
-
-void RemoveLegacyLocalEntries(std::vector<ModelInfo>& model_infos) {
-  std::erase_if(model_infos, [](const auto& info) {
-    const auto* provider = info.GetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_MODEL_PROVIDER_STR);
-    return provider && *provider == "Local";
-  });
 }
 
 }  // namespace
@@ -107,24 +168,35 @@ AzureModelCatalog::CatalogResult AzureModelCatalog::GetLiveCatalogOrLocalSnapsho
   CatalogCache cache(cache_dir_, logger_);
   cache.Load();
   auto cached = cache.GetCachedModels();
-  auto snapshot_model_infos = cached ? std::move(*cached) : std::vector<ModelInfo>{};
-  RemoveLegacyLocalEntries(snapshot_model_infos);
 
   return {
-      .model_infos = DeduplicateByModelId(std::move(snapshot_model_infos)),
+      .model_infos = cached ? DeduplicateByModelId(std::move(*cached)) : std::vector<ModelInfo>{},
       .source = CatalogSource::kSnapshot,
   };
 }
 
-std::vector<Model> AzureModelCatalog::CreateModelsWithLocalPaths(const std::vector<ModelInfo>& model_infos,
-                                                                const LocalModels& local_models) const {
+std::vector<Model> AzureModelCatalog::AddLocalModels(std::vector<ModelInfo>& model_infos,
+                                                     const LocalModels& local_models) const {
   std::vector<Model> models;
-  models.reserve(model_infos.size());
+  models.reserve(model_infos.size() + local_models.size());
 
+  std::unordered_set<std::string> model_ids;
+  model_ids.reserve(model_infos.size() + local_models.size());
   for (const auto& info : model_infos) {
+    model_ids.insert(info.model_id);
+
     auto local_model = local_models.find(info.model_id);
     auto local_path = local_model != local_models.end() ? local_model->second : std::string{};
     models.push_back(model_factory_(ModelInfo(info), std::move(local_path)));
+  }
+
+  for (const auto& [model_id, local_path] : local_models) {
+    if (!model_ids.insert(model_id).second) {
+      continue;
+    }
+
+    model_infos.push_back(MakeByomModelInfo(model_id, local_path));
+    models.push_back(model_factory_(ModelInfo(model_infos.back()), local_path));
   }
 
   return models;
@@ -143,7 +215,7 @@ std::vector<Model> AzureModelCatalog::FetchModels() const {
   logger_.Log(LogLevel::Information, fmt::format("Found {} locally cached models.", cached_model_ids.size()));
 
   auto catalog_result = GetLiveCatalogOrLocalSnapshot(cached_model_ids);
-  auto models = CreateModelsWithLocalPaths(catalog_result.model_infos, local_models);
+  auto models = AddLocalModels(catalog_result.model_infos, local_models);
 
   logger_.Log(LogLevel::Information, fmt::format("Populated model info for {} models.", models.size()));
 

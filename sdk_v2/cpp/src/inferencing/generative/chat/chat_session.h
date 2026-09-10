@@ -18,7 +18,7 @@
 namespace fl {
 
 class GenAIModelInstance;
-class OnnxChatGenerator;
+class ChatGenerator;
 
 using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, ParsedToolCall>;
 
@@ -40,6 +40,7 @@ class ChatSession : public Session {
     size_t input_count;         // number of input messages (user + tool results) in this turn
     int pre_turn_token_count;   // generator sequence length before this turn's input was appended
     int post_turn_token_count;  // generator sequence length after generation completed
+    bool can_rewind_to_pre_turn;
     // The assistant reply is at history_[history_start + input_count]
   };
 
@@ -89,11 +90,11 @@ class ChatSession : public Session {
   /// while keeping session-level tool definitions and marker tokens stable.
   void UpdateToolContextForTurn(const Request& request, ToolCallContext& tool_ctx) const;
 
-  /// Build final response items from the typed segments and tool calls produced during generation.
-  void ProcessGeneratedOutput(std::vector<GeneratedOutputEvent> events,
+  /// Build final response items from the generated text and tool calls produced during generation.
+  void ProcessGeneratedOutput(std::string text, const ToolCallContext& tool_ctx,
                               const SearchOptions& effective_options, bool canceled,
                               Response& response, int prompt_tokens, int total_tokens,
-                              int reasoning_tokens);
+                              std::vector<ParsedToolCall> pre_parsed_calls = {});
 
   /// Process a request whose first item is a TextItem tagged OPENAI_JSON containing an OpenAI chat completions
   /// request. Parses the JSON, converts to internal items, runs generation, and produces an OPENAI_JSON-tagged
@@ -103,8 +104,8 @@ class ChatSession : public Session {
                                   Response& response);
 
   /// Commit input messages and assistant reply to history after a successful turn.
-  void CommitTurn(std::vector<MessageItem>&& new_messages, std::string assistant_history,
-                  int pre_turn_token_count, int post_turn_token_count);
+  void CommitTurn(std::vector<MessageItem>&& new_messages, const Response& response,
+                  int pre_turn_token_count, int post_turn_token_count, bool can_rewind_to_pre_turn);
 
   GenAIModelInstance& Model() { return model_; }
   const GenAIModelInstance& Model() const { return model_; }
@@ -120,11 +121,14 @@ class ChatSession : public Session {
 
   // Cached generator for continuous decoding (non-JSON path only).
   // Null until first non-JSON ProcessRequestImpl call.
-  std::unique_ptr<OnnxChatGenerator> cached_generator_;
+  std::unique_ptr<ChatGenerator> cached_generator_;
 
   // Tool context used when creating the cached generator.
   // Reused for subsequent turns to maintain tool definition consistency.
   ToolCallContext cached_tool_ctx_;
+
+  // Search settings baked into the retained generator or Engine request.
+  SearchOptions cached_search_options_;
 };
 
 }  // namespace fl

@@ -45,10 +45,14 @@ class ToolCallStreamAccumulator {
 
   struct Output {
     std::vector<Event> events;
+    std::string visible_text;
+    std::vector<ParsedToolCall> ready_calls;
   };
 
-  ToolCallStreamAccumulator(std::string start_marker, std::string end_marker)
-      : start_marker_(std::move(start_marker)), end_marker_(std::move(end_marker)) {}
+  ToolCallStreamAccumulator(std::string start_marker, std::string end_marker, std::string tools_json = {})
+      : start_marker_(std::move(start_marker)),
+        end_marker_(std::move(end_marker)),
+        tools_json_(std::move(tools_json)) {}
 
   /// Feed a chunk into the accumulator. Returns ordered visible-text and completed-tool-call events.
   Output Push(const std::string& chunk) {
@@ -92,6 +96,7 @@ class ToolCallStreamAccumulator {
     if (text.empty()) {
       return;
     }
+    out.visible_text += text;
     if (!out.events.empty()) {
       if (auto* previous = std::get_if<std::string>(&out.events.back())) {
         *previous += text;
@@ -99,6 +104,11 @@ class ToolCallStreamAccumulator {
       }
     }
     out.events.emplace_back(std::move(text));
+  }
+
+  static void EmitToolCall(Output& out, ParsedToolCall parsed_call) {
+    out.ready_calls.push_back(parsed_call);
+    out.events.emplace_back(std::move(parsed_call));
   }
 
   void Drain(Output& out, bool flushing) {
@@ -114,14 +124,14 @@ class ToolCallStreamAccumulator {
           tool_call_buffer_ += buffer_.substr(0, found + marker.size());
           buffer_.erase(0, found + marker.size());
 
-          auto parsed = ParseToolCalls(tool_call_buffer_, start_marker_, end_marker_);
+          auto parsed = ParseToolCalls(tool_call_buffer_, start_marker_, end_marker_, tools_json_);
           if (parsed.empty()) {
             // A marker-shaped block that cannot be parsed is model text, not a tool call. Preserve it rather than
             // silently dropping generated output.
             EmitVisible(out, tool_call_buffer_);
           } else {
             for (auto& pc : parsed) {
-              out.events.emplace_back(std::move(pc));
+              EmitToolCall(out, std::move(pc));
             }
           }
 
@@ -144,9 +154,21 @@ class ToolCallStreamAccumulator {
       // No full marker.
       if (flushing) {
         if (inside_tool_call_) {
-          // Unterminated tool-call block: surface the buffered bytes as visible text so the caller still sees what
-          // the model produced. Matches ReasoningStreamSplitter::Flush behavior for unterminated reasoning.
-          EmitVisible(out, tool_call_buffer_ + buffer_);
+          std::string incomplete = tool_call_buffer_ + buffer_;
+          std::string candidate = incomplete;
+          if (const size_t stray_reasoning_end = candidate.find("</think>");
+              stray_reasoning_end != std::string::npos) {
+            candidate.erase(stray_reasoning_end);
+          }
+          candidate += end_marker_;
+          auto parsed = ParseToolCalls(candidate, start_marker_, end_marker_, tools_json_);
+          if (parsed.empty()) {
+            EmitVisible(out, std::move(incomplete));
+          } else {
+            for (auto& parsed_call : parsed) {
+              EmitToolCall(out, std::move(parsed_call));
+            }
+          }
           tool_call_buffer_.clear();
           inside_tool_call_ = false;
         } else {
@@ -197,6 +219,7 @@ class ToolCallStreamAccumulator {
 
   std::string start_marker_;
   std::string end_marker_;
+  std::string tools_json_;
   std::string buffer_;            // pending bytes from Push() that haven't yet been routed
   std::string tool_call_buffer_;  // accumulated bytes of the in-progress tool-call block (incl. start marker)
   bool inside_tool_call_ = false;

@@ -32,12 +32,14 @@ class ReasoningStreamSplitter {
                           std::string end_marker,
                           std::vector<int32_t> start_token_ids = {},
                           std::vector<int32_t> end_token_ids = {},
-                          std::vector<int32_t> ignored_token_ids = {})
+                          std::vector<int32_t> ignored_token_ids = {},
+                          bool start_inside_reasoning = false)
       : start_marker_(std::move(start_marker)),
         end_marker_(std::move(end_marker)),
         start_token_ids_(std::move(start_token_ids)),
         end_token_ids_(std::move(end_token_ids)),
-        ignored_token_ids_(std::move(ignored_token_ids)) {}
+        ignored_token_ids_(std::move(ignored_token_ids)),
+        inside_reasoning_(start_inside_reasoning) {}
 
   /// Feed one generated token into the splitter. Marker IDs are consumed even when decoded_text is empty.
   std::vector<Segment> Push(int32_t token_id, std::string decoded_text) {

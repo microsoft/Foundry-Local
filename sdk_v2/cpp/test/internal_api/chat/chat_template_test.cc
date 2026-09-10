@@ -98,11 +98,20 @@ TEST_F(ChatTemplateTest, MultiTurnConversation) {
   EXPECT_NE(prompt.find("3+3"), std::string::npos);
 }
 
-TEST(ChatTemplateUnitTest, EmptyAssistantMessageRendersAsEmptyContent) {
-  MessageItem empty_assistant;
-  empty_assistant.role = FOUNDRY_LOCAL_ROLE_ASSISTANT;
+TEST(ChatTemplateSerializationTest, AssistantToolCallPrecedesToolResponse) {
+  std::vector<MessageItem> messages = {
+      {FOUNDRY_LOCAL_ROLE_USER, "Inspect the repository."},
+      {FOUNDRY_LOCAL_ROLE_ASSISTANT, "I'll inspect it now."},
+      {FOUNDRY_LOCAL_ROLE_TOOL, "file.txt"}};
+  messages[1].tool_calls.emplace_back("call_1", "shell", R"({"cmd":"ls"})");
 
-  EXPECT_EQ(RenderMessageForPrompt(empty_assistant), "");
+  std::string messages_json = BuildChatMessagesJson(messages);
+  const auto call_pos = messages_json.find(R"("tool_calls":[{"arguments":"{\"cmd\":\"ls\"}","name":"shell"}])");
+  const auto result_pos = messages_json.find("file.txt");
+
+  ASSERT_NE(call_pos, std::string::npos) << messages_json;
+  ASSERT_NE(result_pos, std::string::npos) << messages_json;
+  EXPECT_LT(call_pos, result_pos) << messages_json;
 }
 
 TEST_F(ChatTemplateTest, EmptyMessagesThrows) {
@@ -120,6 +129,17 @@ TEST_F(ChatTemplateTest, PromptEndsWithAssistantPrefix) {
   // Qwen2.5 uses <|im_start|>assistant format
   EXPECT_NE(prompt.find("assistant"), std::string::npos)
       << "Prompt should end with assistant prefix for generation. Got: " << prompt;
+}
+
+TEST_F(ChatTemplateTest, EngineContinuationIncludesAssistantTurnBoundary) {
+  std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "What is the codeword?"}};
+
+  std::string prompt = BuildChatContinuationPrompt(messages, GetModel());
+
+  EXPECT_EQ(prompt.find("__foundry_engine_assistant_boundary__"), std::string::npos);
+  EXPECT_NE(prompt.find("<|im_end|>"), std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("What is the codeword?"), std::string::npos) << prompt;
+  EXPECT_NE(prompt.find("assistant"), std::string::npos) << prompt;
 }
 
 // ---------------------------------------------------------------------------

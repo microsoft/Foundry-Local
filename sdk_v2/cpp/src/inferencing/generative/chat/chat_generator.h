@@ -5,8 +5,18 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace fl {
+
+class GenAIModelInstance;
+struct MessageItem;
+struct SearchOptions;
+
+struct ChatTurnUsage {
+  int prompt_tokens = 0;
+  int generated_tokens = 0;
+};
 
 /// Abstract interface for token-by-token text generation.
 /// One generator per request — not reusable, not thread-safe.
@@ -32,6 +42,9 @@ class ChatGenerator {
   /// Get the most recently generated token ID before Decode consumes it.
   virtual std::optional<int32_t> CurrentTokenId() const = 0;
 
+  /// Return whether the rendered prompt ends with an open reasoning marker.
+  virtual bool PromptEndsInReasoning() const = 0;
+
   /// Get the total number of tokens (input + generated) so far.
   virtual int TokenCount() const = 0;
 
@@ -45,6 +58,22 @@ class ChatGenerator {
   /// Request cancellation of generation. Thread-safe — can be called from another thread.
   /// After cancellation, IsDone() should return true on the next check.
   virtual void Cancel() = 0;
+
+  /// Append a new conversational turn to retained model state.
+  virtual int AppendMessages(const std::vector<MessageItem>& new_messages,
+                             GenAIModelInstance& model,
+                             const std::string& tools_json,
+                             const SearchOptions& options,
+                             const std::string& reasoning_start = {}) = 0;
+
+  /// Returns whether this backend can rewind retained model state directly.
+  virtual bool CanRewind() const = 0;
+
+  /// Rewind retained model state to a prior token position.
+  virtual void RewindTo(int token_count) = 0;
+
+  /// Return exact usage for the most recently completed turn when the backend exposes it.
+  virtual std::optional<ChatTurnUsage> GetTurnUsage() const;
 
  protected:
   ChatGenerator() = default;
