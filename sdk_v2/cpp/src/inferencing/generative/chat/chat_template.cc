@@ -67,8 +67,9 @@ std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages
                                         GenAIModelInstance& model,
                                         const std::string& tools_json) {
   const auto rendered_inputs = BuildChatPrompt(messages, model, tools_json);
-  // The Engine retains the earlier turns, so apply the model template with a collision-free assistant marker and
-  // return only the suffix that represents the newly appended messages.
+  // ApplyChatTemplate can render only a complete conversation. Prepending a synthetic assistant message creates a
+  // model-template-aware cut point after any BOS/default-system framing and before the assistant terminator that must
+  // separate retained output from the new messages. The marker is removed before this text is tokenized.
   constexpr std::string_view kMarkerPrefix = "__foundry_engine_assistant_boundary_";
   size_t marker_suffix = 0;
   std::string assistant_marker;

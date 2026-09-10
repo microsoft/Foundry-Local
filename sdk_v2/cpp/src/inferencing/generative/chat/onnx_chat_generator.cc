@@ -162,7 +162,13 @@ int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messag
 
 void OnnxChatGenerator::RewindTo(int token_count) {
   try {
+    if (cancelled_) {
+      generator_->SetRuntimeOption("terminate_session", "0");
+    }
+
     generator_->RewindTo(token_count);
+    current_token_.reset();
+    cancelled_ = false;
   } catch (const std::runtime_error& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to rewind generator: ") + e.what());
   }

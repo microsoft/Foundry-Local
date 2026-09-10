@@ -157,8 +157,7 @@ bool SupportsPerTurnSeed(ChatBackendKind backend_kind) {
 
 EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  const ToolCallContext& tool_ctx,
-                                                 ChatBackendKind backend_kind,
-                                                 int default_max_output_tokens) {
+                                                 ChatBackendKind backend_kind) {
   ValidatePenalties(options);
   if (options.early_stopping.value_or(false)) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
@@ -167,7 +166,10 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
   }
 
   EngineTurnOptionsPlan plan;
-  plan.max_generated_tokens = ResolveMaxOutputTokens(options, default_max_output_tokens);
+  if (options.max_output_tokens.has_value() && *options.max_output_tokens < 1) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "max_output_tokens must be >= 1");
+  }
+  plan.max_generated_tokens = options.max_output_tokens;
   plan.sampling = ResolveSamplingPlan(options);
 
   // Negative seeds preserve classic ORT GenAI's nondeterministic behavior and require no per-turn seed support.

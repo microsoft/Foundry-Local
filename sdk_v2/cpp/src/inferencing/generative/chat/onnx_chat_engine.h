@@ -33,6 +33,8 @@ struct ToolCallContext;
 /// Owns one ORT GenAI Engine and serializes every Engine operation onto its owner thread.
 class OnnxChatEngine {
  public:
+  static constexpr std::chrono::seconds kDefaultCapacityWaitTimeout{30};
+
   class ConversationEvictedError : public std::runtime_error {
    public:
     ConversationEvictedError() : std::runtime_error("Engine conversation was evicted for capacity") {}
@@ -62,11 +64,16 @@ class OnnxChatEngine {
     uint64_t turn_id = 0;
     size_t sequence_length = 0;
     std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point turn_started_at;
+    uint64_t admission_sequence = 0;
+    bool turn_has_progress = false;
     bool turn_finished = true;
     bool closed = false;
   };
 
-  explicit OnnxChatEngine(GenAIModelInstance& model);
+  explicit OnnxChatEngine(
+      GenAIModelInstance& model,
+      std::chrono::milliseconds capacity_wait_timeout = kDefaultCapacityWaitTimeout);
   ~OnnxChatEngine();
 
   OnnxChatEngine(const OnnxChatEngine&) = delete;
@@ -97,10 +104,12 @@ class OnnxChatEngine {
   void WorkerLoop(std::promise<void> initialized);
   void RouteEvents();
   bool EvictDormantConversation();
+  bool ExpireCapacityBlockedConversation();
   void FailAll(std::exception_ptr error);
   NativeConversation& FindNative(const std::shared_ptr<Conversation>& conversation);
 
   GenAIModelInstance& model_;
+  const std::chrono::milliseconds capacity_wait_timeout_;
   mutable std::mutex command_mutex_;
   std::condition_variable command_cv_;
   std::deque<PendingCommand> commands_;
@@ -112,6 +121,7 @@ class OnnxChatEngine {
   std::unique_ptr<OgaEngine> engine_;
   std::unique_ptr<OgaEngineEventBuffer> event_buffer_;
   std::unordered_map<Conversation*, std::unique_ptr<NativeConversation>> conversations_;
+  uint64_t next_admission_sequence_ = 1;
 };
 
 }  // namespace fl

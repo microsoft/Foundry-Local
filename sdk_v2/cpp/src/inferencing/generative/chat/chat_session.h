@@ -123,14 +123,16 @@ using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, Pars
 /// and is sent with each generation request (for use with the OpenAI
 /// Responses API pattern).
 ///
-/// Generator caching: after the first non-JSON request, the ORT GenAI generator is cached.
-/// Subsequent turns append only new messages to the cached generator, reusing the KV cache.
+/// Retained inference state: after the first non-JSON request, compatible subsequent turns append only new messages
+/// and reuse the existing KV cache. Cancellation never commits the partial assistant response to history. When the
+/// selected inference path can restore its pre-turn token position, the same allocation is reused; otherwise the
+/// retained state is discarded and the next request rebuilds it from committed history.
 /// OpenAI chat completions JSON requests (TextItem with text_type == OPENAI_JSON) always create a fresh
-/// generator and never use the cache.
+/// inference stream and never use retained state.
 class ChatSession : public Session {
  public:
   /// Tracks the token-level and history-level boundaries of a single conversation turn.
-  /// Used for generator rewind and history rollback on error or undo.
+  /// Used for retained-state restoration and history rollback on error or undo.
   struct TurnRecord {
     size_t history_start;       // index in history_ where this turn's input messages begin
     size_t input_count;         // number of input messages (user + tool results) in this turn
@@ -158,9 +160,9 @@ class ChatSession : public Session {
   /// Get the number of completed turns.
   size_t TurnCount() const override;
 
-  /// Undo the last `count` completed turns: rewinds the cached generator and removes
-  /// each turn's input messages and assistant reply from history.
-  /// If all turns are undone, the cached generator is destroyed.
+  /// Undo the last `count` completed turns and remove each turn's input messages and assistant reply from history.
+  /// Retained inference state is restored when supported and discarded otherwise. If all turns are undone, retained
+  /// state is always discarded.
   ///
   /// Vision turns: image input is only allowed on the first turn of a
   /// session. UndoTurns rolls back history but does not undo this

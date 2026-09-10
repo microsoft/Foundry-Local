@@ -63,6 +63,8 @@ void OnnxEngineChatStream::GenerateNextToken() {
 
   try {
     current_token_ = engine_.WaitForToken(conversation_);
+  } catch (const fl::Exception&) {
+    throw;
   } catch (const std::runtime_error& e) {
     if (!cancelled_) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("Engine token generation failed: ") + e.what());

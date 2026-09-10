@@ -39,8 +39,13 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
                             GenAIModelInstance& model,
                             const std::string& tools_json = "");
 
-/// Build the fragment appended after an Engine-generated assistant response.
-/// Engine does not retain the generated EOS token, so this includes the template's assistant-turn boundary.
+/// Build the model-specific fragment that continues a retained conversation.
+///
+/// The chat-template API renders complete conversations, not suffixes for retained token state. This helper prepends
+/// a synthetic assistant message with a collision-free marker, renders it with the new messages, and removes
+/// everything through the marker. The marker is never tokenized or submitted for inference. The remaining fragment
+/// contains the template-defined assistant-turn boundary, new messages, and next assistant prefix without repeating
+/// conversation-start framing such as a BOS token or default system prompt.
 std::string BuildChatContinuationPrompt(const std::vector<MessageItem>& messages,
                                         GenAIModelInstance& model,
                                         const std::string& tools_json = "");

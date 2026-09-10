@@ -209,13 +209,14 @@ TEST_F(ChatGeneratorTest, SystemPromptInfluencesOutput) {
 // ---------------------------------------------------------------------------
 
 TEST_F(ChatGeneratorTest, CancelStopsGeneration) {
-  std::vector<MessageItem> messages = {
+  const std::vector<MessageItem> messages = {
       {FOUNDRY_LOCAL_ROLE_USER, "Write a very long essay about the history of mathematics."}};
   SearchOptions opts;
-  opts.max_output_tokens = 1024;
+  opts.max_output_tokens = 32;
   opts.temperature = 0.0f;
 
   auto gen = OnnxChatGenerator::Create(messages, opts, GetModel());
+  const int initial_prompt_token_count = gen->PromptTokenCount();
 
   // Generate a few tokens, then cancel
   gen->GenerateNextToken();
@@ -224,6 +225,18 @@ TEST_F(ChatGeneratorTest, CancelStopsGeneration) {
 
   // After cancel, IsDone should return true
   EXPECT_TRUE(gen->IsDone()) << "IsDone should return true after Cancel";
+
+  // Cancellation is a terminal generation latch, not a loss of rewind capability. Recover the retained generator and
+  // retry the canceled turn from the beginning without rebuilding its full-context KV cache allocation.
+  ASSERT_TRUE(gen->CanRewind());
+  gen->RewindTo(0);
+  EXPECT_FALSE(gen->IsDone());
+  EXPECT_EQ(gen->TokenCount(), 0);
+
+  EXPECT_GT(gen->AppendMessages(messages, GetModel(), {}, opts), 0);
+  EXPECT_GE(gen->TokenCount(), initial_prompt_token_count);
+
+  EXPECT_FALSE(gen->GenerateAll().empty());
 }
 
 TEST_F(ChatGeneratorTest, CancelFromAnotherThread) {

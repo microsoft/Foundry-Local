@@ -17,13 +17,13 @@ namespace fl {
 
 namespace {
 
-constexpr int kDefaultTextMaxOutputTokens = 2048;
-
 // Only options the caller expressed are set. Upstream treats an unset turn option as "use the model-configured
 // default for this Turn", so forwarding a Foundry-invented default would silently override model policy — and an
 // explicit do_sample=true is rejected outright when the model's own defaults still resolve the turn to greedy.
 void ApplyEngineTurnOptions(const EngineTurnOptionsPlan& plan, OgaTurnOptions& options) {
-  options.SetMaxGeneratedTokens(static_cast<uint64_t>(plan.max_generated_tokens));
+  if (plan.max_generated_tokens.has_value()) {
+    options.SetMaxGeneratedTokens(static_cast<uint64_t>(*plan.max_generated_tokens));
+  }
 
   if (plan.sampling.do_sample.has_value()) {
     options.SetDoSample(*plan.sampling.do_sample);
@@ -68,7 +68,12 @@ struct OnnxChatEngine::NativeConversation {
   std::shared_ptr<Conversation> state;
 };
 
-OnnxChatEngine::OnnxChatEngine(GenAIModelInstance& model) : model_(model) {
+OnnxChatEngine::OnnxChatEngine(GenAIModelInstance& model, std::chrono::milliseconds capacity_wait_timeout)
+    : model_(model), capacity_wait_timeout_(capacity_wait_timeout) {
+  if (capacity_wait_timeout_ <= std::chrono::milliseconds::zero()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "Engine capacity wait timeout must be positive");
+  }
+
   std::promise<void> initialized;
   auto ready = initialized.get_future();
   worker_ = std::thread(&OnnxChatEngine::WorkerLoop, this, std::move(initialized));
@@ -145,22 +150,25 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
           conversation->error = nullptr;
           conversation->result = {};
           conversation->turn_finished = false;
+          conversation->turn_has_progress = false;
         }
 
-        auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, model_.GetGenAIConfig().GetChatBackendKind(),
-                                               kDefaultTextMaxOutputTokens);
-        // The per-turn limit is part of the caller contract. Validate that it fits after retained and newly appended
-        // input, then forward it to OGA so the Engine, rather than the host, terminates at the requested boundary.
-        const uint64_t total_required = static_cast<uint64_t>(existing_tokens) + static_cast<uint64_t>(tokens.size()) +
-                                        static_cast<uint64_t>(plan.max_generated_tokens);
-        const uint64_t model_max_tokens = static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig()));
-        if (total_required > model_max_tokens) {
-          FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-                   "request requires " + std::to_string(total_required) + " total tokens (" +
-                       std::to_string(existing_tokens) + " existing + " + std::to_string(tokens.size()) +
-                       " input + " + std::to_string(plan.max_generated_tokens) +
-                       " output), which exceeds the model's maximum context length of " +
-                       std::to_string(model_max_tokens) + " tokens");
+        auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, model_.GetGenAIConfig().GetChatBackendKind());
+        if (plan.max_generated_tokens.has_value()) {
+          // Validate only the limit the caller requested. When it is absent, leave the turn uncapped and let OGA
+          // enforce the Request's model-context session limit.
+          const uint64_t total_required =
+              static_cast<uint64_t>(existing_tokens) + static_cast<uint64_t>(tokens.size()) +
+              static_cast<uint64_t>(*plan.max_generated_tokens);
+          const uint64_t model_max_tokens = static_cast<uint64_t>(GetModelMaxContextLength(model_.GetGenAIConfig()));
+          if (total_required > model_max_tokens) {
+            FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
+                     "request requires " + std::to_string(total_required) + " total tokens (" +
+                         std::to_string(existing_tokens) + " existing + " + std::to_string(tokens.size()) +
+                         " input + " + std::to_string(*plan.max_generated_tokens) +
+                         " output), which exceeds the model's maximum context length of " +
+                         std::to_string(model_max_tokens) + " tokens");
+          }
         }
 
         ApplyEngineTurnOptions(plan, *turn_options);
@@ -170,7 +178,9 @@ uint64_t OnnxChatEngine::BeginTurn(const std::shared_ptr<Conversation>& conversa
           std::lock_guard<std::mutex> lock(conversation->mutex);
           conversation->turn_id = turn_id;
           conversation->sequence_length += tokens.size();
-          conversation->last_activity = std::chrono::steady_clock::now();
+          conversation->turn_started_at = std::chrono::steady_clock::now();
+          conversation->last_activity = conversation->turn_started_at;
+          conversation->admission_sequence = next_admission_sequence_++;
         }
         completion->set_value(turn_id);
       },
@@ -365,6 +375,10 @@ void OnnxChatEngine::RouteEvents() {
         continue;
       }
       if ((flags & (OgaEngineEventFlag_CapacityBlocked | OgaEngineEventFlag_Retryable)) != 0) {
+        if ((flags & OgaEngineEventFlag_CapacityBlocked) != 0 && ExpireCapacityBlockedConversation()) {
+          continue;
+        }
+
         // Capacity pressure is transient while resident requests are active. Leave the request queued in OGA and
         // return to the dispatcher so cancellation and close commands can still make progress.
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -382,6 +396,8 @@ void OnnxChatEngine::RouteEvents() {
     auto& conversation = it->second->state;
     {
       std::lock_guard<std::mutex> lock(conversation->mutex);
+      conversation->turn_has_progress = true;
+      conversation->last_activity = std::chrono::steady_clock::now();
       if ((flags & OgaEngineEventFlag_Token) != 0) {
         conversation->tokens.push_back(event->Token());
         ++conversation->sequence_length;
@@ -393,14 +409,12 @@ void OnnxChatEngine::RouteEvents() {
         conversation->result.cached_prompt_tokens = usage.CachedPromptTokens();
         conversation->result.finish_reason = event->FinishReason();
         conversation->turn_finished = true;
-        conversation->last_activity = std::chrono::steady_clock::now();
       }
       if ((flags & OgaEngineEventFlag_Failed) != 0) {
         conversation->error = std::make_exception_ptr(
             std::runtime_error("ORT GenAI Engine request failed with error code " +
                                std::to_string(event->ErrorCode())));
         conversation->turn_finished = true;
-        conversation->last_activity = std::chrono::steady_clock::now();
       }
     }
     conversation->cv.notify_all();
@@ -432,6 +446,48 @@ bool OnnxChatEngine::EvictDormantConversation() {
 
   victim->second->request->Close();
   conversations_.erase(victim);
+  conversation->cv.notify_all();
+  return true;
+}
+
+bool OnnxChatEngine::ExpireCapacityBlockedConversation() {
+  auto candidate = conversations_.end();
+  uint64_t newest_admission = 0;
+  const auto now = std::chrono::steady_clock::now();
+  for (auto it = conversations_.begin(); it != conversations_.end(); ++it) {
+    const auto& conversation = it->second->state;
+    std::lock_guard<std::mutex> lock(conversation->mutex);
+    if (!conversation->turn_finished && !conversation->turn_has_progress &&
+        now - conversation->turn_started_at >= capacity_wait_timeout_ &&
+        conversation->admission_sequence > newest_admission) {
+      candidate = it;
+      newest_admission = conversation->admission_sequence;
+    }
+  }
+
+  if (candidate == conversations_.end()) {
+    return false;
+  }
+
+  auto conversation = candidate->second->state;
+  uint64_t turn_id;
+  {
+    std::lock_guard<std::mutex> lock(conversation->mutex);
+    turn_id = conversation->turn_id;
+  }
+
+  candidate->second->request->CancelTurn(turn_id);
+  candidate->second->request->Close();
+  conversations_.erase(candidate);
+
+  {
+    std::lock_guard<std::mutex> lock(conversation->mutex);
+    conversation->error = std::make_exception_ptr(std::runtime_error(
+        "ORT GenAI Engine capacity remained unavailable for " +
+        std::to_string(capacity_wait_timeout_.count()) + " ms"));
+    conversation->turn_finished = true;
+    conversation->closed = true;
+  }
   conversation->cv.notify_all();
   return true;
 }

@@ -512,6 +512,7 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   request.options.Add("temperature", "0");
 
   int tokens_received = 0;
+  bool cancel_enabled = true;
 
   fl::Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void* /*user_data*/) -> int {
     fl::ItemQueue* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
@@ -522,8 +523,8 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
     }
 
     ++tokens_received;
-    bool cancel = tokens_received >= 3;  // example cancellation condition: after receiving 3 tokens
-    return cancel ? 1 : 0;               // cancel after 3 tokens
+    bool cancel = cancel_enabled && tokens_received >= 3;  // cancel the first request after receiving 3 tokens
+    return cancel ? 1 : 0;
   };
 
   session.SetStreamingCallback(callback_fn);
@@ -540,6 +541,22 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   // Cancelled requests should not commit to history (delayed commit)
   EXPECT_EQ(session.MessageCount(), 0u);
   EXPECT_EQ(session.TurnCount(), 0u);
+
+  cancel_enabled = false;
+  Request retry;
+  retry.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "What is 2+2? Answer with just the number."));
+  retry.options.Add("max_output_tokens", "32");
+  retry.options.Add("temperature", "0");
+
+  Response retry_response;
+  session.ProcessRequest(retry, retry_response);
+  const auto retry_text = GetAssistantText(retry_response);
+
+  EXPECT_NE(retry_text.find("4"), std::string::npos)
+      << "The retained generator should recover after cancellation. Got: " << retry_text;
+  EXPECT_EQ(retry_response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
+  EXPECT_EQ(session.MessageCount(), 2u);
+  EXPECT_EQ(session.TurnCount(), 1u);
 }
 
 // ===========================================================================

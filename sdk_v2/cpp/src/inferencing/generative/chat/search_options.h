@@ -47,7 +47,7 @@ struct SamplingPlan {
 /// Only fields upstream actually implements are represented; anything absent stays at the model's own default for
 /// that turn (upstream: "an unset option means use the model-configured default for this Turn").
 struct EngineTurnOptionsPlan {
-  int max_generated_tokens = 0;
+  std::optional<int> max_generated_tokens;
   SamplingPlan sampling;
   std::optional<int> seed;
   std::vector<std::string> stop_sequences;
@@ -122,8 +122,7 @@ bool SupportsPerTurnSeed(ChatBackendKind backend_kind);
 /// Throws fl::Exception when the request asks for something this backend cannot honor per turn.
 EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
                                                  const ToolCallContext& tool_ctx,
-                                                 ChatBackendKind backend_kind,
-                                                 int default_max_output_tokens = kDefaultChatTextMaxOutputTokens);
+                                                 ChatBackendKind backend_kind);
 
 /// Apply search options to OgaGeneratorParams.
 /// Validates token budget (input + output vs model max_length from config).

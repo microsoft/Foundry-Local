@@ -212,9 +212,9 @@ TEST(SamplingPlanTest, OutOfRangeScalarsAreRejected) {
   EXPECT_THROW(ResolveSamplingPlan(negative_top_k), fl::Exception);
 }
 
-TEST(EngineTurnOptionsPlanTest, DefaultsToMaxOutputLimitAndNoInventedSampling) {
+TEST(EngineTurnOptionsPlanTest, LeavesMaxOutputAndSamplingUnsetWhenCallerOmitsThem) {
   const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, ToolCallContext{}, ChatBackendKind::kEngine);
-  EXPECT_EQ(plan.max_generated_tokens, 2048);
+  EXPECT_FALSE(plan.max_generated_tokens.has_value());
   EXPECT_FALSE(plan.sampling.do_sample.has_value());
   EXPECT_FALSE(plan.sampling.temperature.has_value());
   EXPECT_FALSE(plan.seed.has_value());
@@ -222,8 +222,17 @@ TEST(EngineTurnOptionsPlanTest, DefaultsToMaxOutputLimitAndNoInventedSampling) {
   EXPECT_FALSE(plan.guidance.has_value());
 }
 
+TEST(EngineTurnOptionsPlanTest, RejectsNonpositiveExplicitMaxOutputTokens) {
+  for (int max_output_tokens : {0, -1}) {
+    SearchOptions options;
+    options.max_output_tokens = max_output_tokens;
+    EXPECT_THROW(BuildEngineTurnOptionsPlan(options, ToolCallContext{}, ChatBackendKind::kEngine), fl::Exception);
+  }
+}
+
 TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBackend) {
   SearchOptions options;
+  options.max_output_tokens = 64;
   options.seed = 42;
   options.stop_sequences = {"END", "STOP"};
 
@@ -234,6 +243,8 @@ TEST(EngineTurnOptionsPlanTest, CarriesStopStringsSeedAndGuidanceOnDynamicBacken
   tool_ctx.guidance_data = R"({"type":"object"})";
 
   const auto plan = BuildEngineTurnOptionsPlan(options, tool_ctx, ChatBackendKind::kEngine);
+  ASSERT_TRUE(plan.max_generated_tokens.has_value());
+  EXPECT_EQ(*plan.max_generated_tokens, 64);
   ASSERT_TRUE(plan.seed.has_value());
   EXPECT_EQ(*plan.seed, 42);
   EXPECT_EQ(plan.stop_sequences, (std::vector<std::string>{"END", "STOP"}));
