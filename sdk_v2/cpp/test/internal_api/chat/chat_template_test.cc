@@ -20,8 +20,10 @@
 using namespace fl;
 
 namespace {
+#if FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS
 constexpr const char* kTestChatTemplateKwargsModelAlias = "qwen3.5-0.8b-generic-cpu-2";
-}
+#endif
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Test fixture: loads the shared test model once per suite
@@ -63,6 +65,7 @@ class ChatTemplateTest : public ::testing::Test {
   static inline GenAIModelInstance* model_ = nullptr;
 };
 
+#if FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS
 class ChatTemplateKwargsTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
@@ -96,6 +99,7 @@ class ChatTemplateKwargsTest : public ::testing::Test {
   static inline std::unique_ptr<ModelLoadManager> load_manager_;
   static inline GenAIModelInstance* model_ = nullptr;
 };
+#endif
 
 // ---------------------------------------------------------------------------
 // BuildChatPrompt tests
@@ -160,6 +164,7 @@ TEST_F(ChatTemplateTest, PromptEndsWithAssistantPrefix) {
       << "Prompt should end with assistant prefix for generation. Got: " << prompt;
 }
 
+#if FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS
 TEST_F(ChatTemplateKwargsTest, TypedKwargsChangePromptAndOmissionClearsPriorState) {
   std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "Hello!"}};
 
@@ -175,6 +180,20 @@ TEST_F(ChatTemplateKwargsTest, TypedKwargsChangePromptAndOmissionClearsPriorStat
   EXPECT_EQ(default_prompt_after_kwargs, default_prompt)
       << "Omitting kwargs must clear tokenizer state from the previous render";
 }
+#else
+TEST_F(ChatTemplateTest, TemplateKwargsRequireSupportedGenAI) {
+  std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "Hello!"}};
+
+  try {
+    (void)BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":false})");
+    FAIL() << "Expected chat_template_kwargs to be rejected by the stable GenAI dependency";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
+    EXPECT_NE(std::string(e.what()).find("requires a newer ONNX Runtime GenAI package"),
+              std::string::npos);
+  }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // EncodePrompt tests

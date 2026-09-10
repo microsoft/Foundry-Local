@@ -73,9 +73,16 @@ std::string Preprocessor::ApplyChatTemplateWithOptions(const char* messages_json
                                                        const char* template_kwargs_json,
                                                        bool add_generation_prompt) {
   std::lock_guard<std::mutex> lock(mutex_);
+#if FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS
   KeyValuePairs options;
   options.Add("chat_template_kwargs", template_kwargs_json ? template_kwargs_json : "{}");
   tokenizer_->UpdateOptions(options.Keys().data(), options.Values().data(), options.size());
+#else
+  if (template_kwargs_json && *template_kwargs_json) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+             "chat_template_kwargs requires a newer ONNX Runtime GenAI package");
+  }
+#endif
   OgaString result = tokenizer_->ApplyChatTemplate(
       /*template_str=*/nullptr, messages_json, tools_json, add_generation_prompt);
   return std::string(static_cast<const char*>(result));
