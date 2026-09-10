@@ -4,6 +4,7 @@
 #include "inferencing/generative/chat/chat_session.h"
 #include "inferencing/generative/chat/chat_template.h"
 #include "inferencing/generative/chat/onnx_chat_engine.h"
+#include "inferencing/generative/chat/onnx_engine_chat_stream.h"
 #include "inferencing/model_load_manager.h"
 #include "internal_api/test_helpers.h"
 #include "items/text_item.h"
@@ -135,7 +136,7 @@ Request MakeRequest(std::string prompt, int max_output_tokens = 32) {
 }
 
 std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& model) {
-  std::vector<MessageItem> messages;
+  std::vector<TranscriptMessage> messages;
   messages.emplace_back(FOUNDRY_LOCAL_ROLE_USER, std::move(prompt));
   auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
   const auto count = sequences->SequenceCount(0);
@@ -143,37 +144,30 @@ std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& mo
   return {data, data + count};
 }
 
-std::vector<int32_t> EncodeMessages(const std::vector<MessageItem>& messages, GenAIModelInstance& model) {
+std::vector<int32_t> EncodeMessages(const std::vector<TranscriptMessage>& messages, GenAIModelInstance& model) {
   auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
   const auto count = sequences->SequenceCount(0);
   const auto* data = sequences->SequenceData(0);
   return {data, data + count};
 }
 
-struct EngineTurnOutput {
-  std::vector<int32_t> tokens;
+struct StreamTurnOutput {
   std::string text;
-  OnnxChatEngine::TurnResult result;
+  ChatTurnUsage usage;
 };
 
-EngineTurnOutput RunEngineTurn(OnnxChatEngine& engine,
-                               const std::shared_ptr<OnnxChatEngine::Conversation>& conversation,
-                               std::span<const int32_t> input,
-                               const SearchOptions& options,
-                               const ToolCallContext& tool_context,
-                               GenAIModelInstance& model) {
-  engine.BeginTurn(conversation, input, options, tool_context);
-
-  EngineTurnOutput output;
-  auto decoder = model.GetPreprocessor().CreateTokenizerStream();
-  while (const auto token = engine.WaitForToken(conversation)) {
-    output.tokens.push_back(*token);
-    if (const char* text = decoder->Decode(*token)) {
-      output.text += text;
-    }
+StreamTurnOutput FinishStream(OnnxEngineChatStream& stream) {
+  StreamTurnOutput output;
+  while (!stream.IsDone()) {
+    stream.GenerateNextToken();
+    output.text += stream.Decode();
   }
 
-  output.result = engine.GetTurnResult(conversation);
+  const auto usage = stream.GetTurnUsage();
+  if (!usage.has_value()) {
+    throw std::runtime_error("Engine stream did not report final turn usage");
+  }
+  output.usage = *usage;
   return output;
 }
 
@@ -268,12 +262,18 @@ TEST_F(DynamicEngineChatTest, RetainedContinuationReportsFreshPromptUsageParity)
   EXPECT_EQ(first_response.usage.total_tokens,
             first_response.usage.prompt_tokens + first_response.usage.completion_tokens);
 
+  auto full_history = session.Transcript().Messages();
+  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt);
+  const auto expected_second_prompt_tokens = EncodeMessages(full_history, ModelInstance()).size();
+
   auto second = MakeRequest(kSecondPrompt);
   Response second_response;
   session.ProcessRequest(second, second_response);
 
   EXPECT_NE(test::ToLower(AssistantText(second_response)).find("sapphire"), std::string::npos);
   EXPECT_EQ(session.TurnCount(), 2u);
+  EXPECT_EQ(second_response.usage.prompt_tokens, expected_second_prompt_tokens)
+      << "resident suffix admission and fresh replay must report the same complete logical prompt";
   EXPECT_LE(second_response.usage.completion_tokens, 32);
   EXPECT_EQ(second_response.usage.total_tokens,
             second_response.usage.prompt_tokens + second_response.usage.completion_tokens);
@@ -294,51 +294,45 @@ TEST_F(DynamicEngineChatTest, RetainedContinuationReportsFreshPromptUsageParity)
             fresh_response.usage.prompt_tokens + fresh_response.usage.completion_tokens);
 }
 
-TEST_F(DynamicEngineChatTest, FullPromptPrefixContinuationMatchesFreshReplayAfterOutputLimit) {
-  OnnxChatEngine engine(ModelInstance());
+TEST_F(DynamicEngineChatTest, MismatchedResidentPromptIsReplacedAndMatchesFreshReplay) {
   SearchOptions first_options;
   first_options.max_output_tokens = 4;
   first_options.do_sample = false;
   ToolCallContext tool_context;
 
-  std::vector<MessageItem> first_messages = {
+  std::vector<TranscriptMessage> first_messages = {
       {FOUNDRY_LOCAL_ROLE_USER, "Write a detailed explanation of why the sky is blue."}};
-  const auto first_prompt = EncodeMessages(first_messages, ModelInstance());
-  auto warm = engine.CreateConversation(first_options, tool_context, static_cast<int>(first_prompt.size()));
-  const auto first = RunEngineTurn(engine, warm, first_prompt, first_options, tool_context, ModelInstance());
-
-  ASSERT_EQ(first.result.finish_reason, OgaFinishReason_MaxGeneratedTokens);
-  ASSERT_FALSE(first.tokens.empty());
+  auto warm = OnnxEngineChatStream::Create(first_messages, first_options, ModelInstance(), tool_context);
+  const auto first = FinishStream(*warm);
+  ASSERT_EQ(first.usage.finish_reason, FOUNDRY_LOCAL_FINISH_LENGTH);
   ASSERT_FALSE(first.text.empty());
 
-  std::vector<int32_t> expected_resident = first_prompt;
-  expected_resident.insert(expected_resident.end(), first.tokens.begin(), first.tokens.end());
-  EXPECT_EQ(engine.ResidentTokens(warm), expected_resident);
-
-  std::vector<MessageItem> full_history = first_messages;
-  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text);
+  // Deliberately replay different history into the retained stream. This exercises the defensive replacement branch
+  // without assuming generated token bytes survive decode/re-encode as an identical token sequence.
+  std::vector<TranscriptMessage> full_history = {
+      {FOUNDRY_LOCAL_ROLE_USER, "Give a concise explanation of why leaves are green."},
+      {FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text}};
   full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, "Summarize that in one sentence.");
   const auto full_prompt = EncodeMessages(full_history, ModelInstance());
-  ASSERT_LT(expected_resident.size(), full_prompt.size());
-  ASSERT_TRUE(std::equal(expected_resident.begin(), expected_resident.end(), full_prompt.begin()));
 
   SearchOptions second_options;
   second_options.max_output_tokens = 16;
   second_options.do_sample = false;
-  const std::span<const int32_t> suffix(full_prompt.data() + expected_resident.size(),
-                                        full_prompt.size() - expected_resident.size());
-  const auto warm_second =
-      RunEngineTurn(engine, warm, suffix, second_options, tool_context, ModelInstance());
+  const std::vector<TranscriptMessage> new_messages = {full_history.back()};
+  const auto submitted =
+      warm->AppendMessages(new_messages, full_history, ModelInstance(), tool_context, second_options);
+  EXPECT_EQ(submitted, static_cast<int>(full_prompt.size()))
+      << "a mismatched resident prompt must submit a complete replacement, not an unsafe suffix";
+  const auto warm_second = FinishStream(*warm);
 
-  auto fresh = engine.CreateConversation(second_options, tool_context, static_cast<int>(full_prompt.size()));
-  const auto fresh_second =
-      RunEngineTurn(engine, fresh, full_prompt, second_options, tool_context, ModelInstance());
+  auto fresh = OnnxEngineChatStream::Create(full_history, second_options, ModelInstance(), tool_context);
+  const auto fresh_second = FinishStream(*fresh);
 
-  EXPECT_EQ(warm_second.tokens, fresh_second.tokens);
-  EXPECT_EQ(warm_second.result.finish_reason, fresh_second.result.finish_reason);
-
-  engine.Close(warm);
-  engine.Close(fresh);
+  EXPECT_EQ(warm->PromptTokenCount(), fresh->PromptTokenCount());
+  EXPECT_EQ(warm_second.text, fresh_second.text);
+  EXPECT_EQ(warm_second.usage.finish_reason, fresh_second.usage.finish_reason);
+  EXPECT_EQ(warm_second.usage.prompt_tokens, fresh_second.usage.prompt_tokens);
+  EXPECT_EQ(warm_second.usage.generated_tokens, fresh_second.usage.generated_tokens);
 }
 
 TEST_F(DynamicEngineChatTest, RunsTwoConcurrentSessions) {
