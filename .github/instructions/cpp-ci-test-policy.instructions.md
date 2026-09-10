@@ -30,6 +30,16 @@ without modifying the shared model and sets `max_batch_size` to two. Required la
 the latter rejects a GenAI package that cannot compile the suite. Current GenAI 0.15.2 builds exclude these tests, so
 an Engine lane must use a newer package and a real pre-staged paged-KV model rather than relying on skips.
 
+The packaging pipeline includes the unconditional `cpp_test_engine` stage from
+`.pipelines/v2/templates/stages-test-engine.yml`. It uses the Linux A10 GPU pool, test-only CUDA NuGet packages,
+and the SHA-256-pinned paged Qwen fixture in `foundrylocalmodels/staging/paged-attention`. The existing
+`FoundryLocalCore-SP` service connection needs read access to those blobs, and the pipeline needs permission to use
+`onnxruntime-Linux-GPU-A10`. These are required resources: do not bypass failures with skips or `continueOnError`.
+The GPU host must support CUDA 13 (driver 580 or newer); the test image also includes CUDA 12 libraries for GenAI.
+The model is mounted read-only; tests stage their own writable metadata. Missing Engine capability, missing/changed
+model files, missing lifecycle tests, skipped tests, and test failures all fail the lane. Its binaries are not published
+as SDK artifacts and its GenAI pin is independent of the shipping/release dependency pins.
+
 ## Debugging skips in CI
 
 If model-using tests skip unexpectedly in CI, check the `SharedTestEnv: CI detected` banner in stdout — it reports the value of `FOUNDRY_TEST_DATA_DIR`. `(unset; all model-using tests will skip)` means the CI agent didn't mount the shared model cache. A specific `SharedTestEnv: skipping <model> in CI` line means the cache is mounted but that particular model isn't pre-staged.
