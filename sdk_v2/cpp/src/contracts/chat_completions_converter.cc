@@ -100,10 +100,21 @@ void BuildRequestItems(const ChatCompletionRequest& req, Request& session_reques
       continue;
     }
 
+    // A reasoning-only response has no model-visible text to replay, but its assistant role still separates the
+    // messages on either side. Carry that boundary as an empty visible text part; reasoning itself remains private.
+    if (content.empty() && msg.reasoning_content.has_value() && !msg.reasoning_content->empty()) {
+      auto boundary = std::make_unique<MessageItem>();
+      boundary->role = role;
+      boundary->name = msg.name.value_or("");
+      boundary->content.push_back(MessagePart::Own(std::make_unique<TextItem>("")));
+      session_request.AddOwnedItem(std::move(boundary));
+    }
+
     // Assistant messages that issue tool calls usually have null content. When such a message also carries a
     // participant name, emit a content-free MessageItem to carry it: the transcript folds the calls below into that
     // message, so the name reaches the template without fabricating a text part the caller never sent.
-    if (content.empty() && !msg.tool_calls.empty() && msg.name.has_value() && !msg.name->empty()) {
+    if (content.empty() && (!msg.reasoning_content.has_value() || msg.reasoning_content->empty()) &&
+        !msg.tool_calls.empty() && msg.name.has_value() && !msg.name->empty()) {
       auto named = std::make_unique<MessageItem>();
       named->role = role;
       named->name = *msg.name;

@@ -242,8 +242,12 @@ bool ShouldInvalidateRetainedGeneratorForUndo(bool undo_all, bool has_pre_turn_b
 
 }  // namespace chat_session_internal
 
-ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry)
-    : Session(catalog_model, logger, telemetry), logger_(logger), model_(model) {
+ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger,
+                         ITelemetry& telemetry, ChatTranscript::CommitFaultInjector transcript_fault_injector)
+    : Session(catalog_model, logger, telemetry),
+      logger_(logger),
+      model_(model),
+      transcript_(std::move(transcript_fault_injector)) {
   logger_.Log(LogLevel::Debug, fmt::format("Creating ChatSession for model: {}", model.ModelId()));
   // Last so a throw above does not leak a refcount; nothing below can throw.
   model_.AcquireSession();
@@ -1000,6 +1004,12 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
     generator->Cancel();
   }
 
+  // Delivery is asynchronous. Observe cancellation from the last content callback before deriving a success finish
+  // reason, publishing a terminal chunk, or constructing the final completion envelope.
+  if (streaming_callback) {
+    streaming_callback->DrainPending();
+  }
+
   int total_tokens = generator->TokenCount();
   std::optional<flFinishReason> backend_finish_reason;
   if (const auto turn_usage = generator->GetTurnUsage()) {
@@ -1011,6 +1021,10 @@ void ChatSession::ProcessChatCompletionsJson(const std::string& request_json, co
   ProcessGeneratedOutput(std::move(generated_events), options, original_request.canceled,
                          stop_sequence_matched, /*host_output_limit_reached=*/false, response, prompt_tokens,
                          total_tokens, splitter.ReasoningTokenCount(), backend_finish_reason);
+
+  if (original_request.canceled) {
+    return;
+  }
 
   // Emit final streaming chunk with finish_reason
   if (is_streaming) {

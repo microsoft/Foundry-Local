@@ -541,35 +541,29 @@ ChatTranscript::TurnTokens ChatTranscript::UndoTurns(size_t count) {
     }
   }
 
-  messages_.resize(turns_[first_removed].message_start);
-  turns_.resize(first_removed);
-
   // Rebuild rather than unwind: undone tool calls must stop being answerable, and a full recompute is the only
-  // representation that cannot drift from the committed messages.
-  RebuildCallState();
+  // representation that cannot drift from the retained messages. Every potentially throwing operation works on
+  // scratch state; publication is a set of nonthrowing swaps.
+  auto messages = messages_;
+  messages.resize(turns_[first_removed].message_start);
+
+  auto turns = turns_;
+  turns.resize(first_removed);
+
+  std::unordered_set<std::string> issued;
+  std::unordered_set<std::string> outstanding;
+  StageTurn(messages, nullptr, issued, outstanding);
+
+  if (fault_injector_) {
+    fault_injector_(CommitPhase::kUndoBeforePublish);
+  }
+
+  messages_.swap(messages);
+  turns_.swap(turns);
+  issued_.swap(issued);
+  outstanding_.swap(outstanding);
 
   return tokens;
-}
-
-void ChatTranscript::RecordMessageCalls(const TranscriptMessage& message) {
-  if (message.role == FOUNDRY_LOCAL_ROLE_TOOL) {
-    outstanding_.erase(message.tool_call_id);
-    return;
-  }
-
-  for (const auto* call : message.ToolCalls()) {
-    issued_.insert(call->call_id);
-    outstanding_.insert(call->call_id);
-  }
-}
-
-void ChatTranscript::RebuildCallState() {
-  issued_.clear();
-  outstanding_.clear();
-
-  for (const auto& message : messages_) {
-    RecordMessageCalls(message);
-  }
 }
 
 }  // namespace fl

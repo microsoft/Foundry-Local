@@ -8,6 +8,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fl {
@@ -39,11 +40,25 @@ struct ChatCompletionToolCall {
 /// A single message in the conversation. Maps to OpenAI ChatMessage.
 /// JSON keys: "role", "content", "name", "tool_call_id", "tool_calls"
 struct ChatCompletionMessage {
+  ChatCompletionMessage() = default;
+
+  ChatCompletionMessage(std::string role_in, std::optional<std::string> content_in,
+                        std::optional<std::string> name_in, std::optional<std::string> tool_call_id_in,
+                        std::vector<ChatCompletionToolCall> tool_calls_in,
+                        std::optional<std::string> reasoning_content_in = {})
+      : role(std::move(role_in)),
+        content(std::move(content_in)),
+        name(std::move(name_in)),
+        tool_call_id(std::move(tool_call_id_in)),
+        tool_calls(std::move(tool_calls_in)),
+        reasoning_content(std::move(reasoning_content_in)) {}
+
   std::string role;                                // "system", "user", "assistant", "tool"
   std::optional<std::string> content;              // nullable for assistant messages with tool_calls
   std::optional<std::string> name;                 // optional sender name
   std::optional<std::string> tool_call_id;         // for role="tool": the tool call this is responding to
   std::vector<ChatCompletionToolCall> tool_calls;  // for role="assistant": the calls this message issued
+  std::optional<std::string> reasoning_content;    // replay marker only; never projected into the model prompt
 };
 
 /// Function definition within a tool. JSON keys: "name", "description", "parameters", "strict"

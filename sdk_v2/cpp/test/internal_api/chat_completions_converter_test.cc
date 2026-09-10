@@ -198,6 +198,7 @@ TEST(ChatCompletionsConverterTest, BuildRequestItems_SkipsEmptyContent) {
   ChatCompletionRequest req;
   req.messages.push_back({"user", std::nullopt, {}, {}, {}});     // null content
   req.messages.push_back({"user", std::string(""), {}, {}, {}});  // empty string
+  req.messages.push_back({"assistant", std::string(""), {}, {}, {}});  // empty assistant without reasoning
   req.messages.push_back({"user", std::string("Real message"), {}, {}, {}});
 
   Request session_request;
@@ -207,6 +208,31 @@ TEST(ChatCompletionsConverterTest, BuildRequestItems_SkipsEmptyContent) {
   ASSERT_EQ(session_request.items.size(), 1u);
   auto* msg = static_cast<MessageItem*>(session_request.items[0]);
   EXPECT_EQ(msg->GetSimpleText(), "Real message");
+}
+
+TEST(ChatCompletionsConverterTest, BuildRequestItems_ReasoningOnlyAssistantPreservesAnEmptyRoleBoundary) {
+  ChatCompletionRequest req;
+  ChatCompletionMessage assistant;
+  assistant.role = "assistant";
+  assistant.content = std::string("");
+  assistant.reasoning_content = "private scratchpad";
+  req.messages.push_back(std::move(assistant));
+
+  Request session_request;
+  BuildRequestItems(req, session_request);
+
+  ASSERT_EQ(session_request.items.size(), 1u);
+  ASSERT_EQ(session_request.items[0]->type, FOUNDRY_LOCAL_ITEM_MESSAGE);
+  const auto* boundary = static_cast<const MessageItem*>(session_request.items[0]);
+  EXPECT_EQ(boundary->role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(boundary->GetSimpleText(), "");
+
+  const auto messages = BuildTranscriptMessages(session_request.items);
+  ASSERT_EQ(messages.size(), 1u);
+  EXPECT_EQ(messages[0].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_TRUE(messages[0].VisibleText().empty());
+  EXPECT_TRUE(messages[0].ReasoningText().empty());
+  EXPECT_EQ(BuildChatMessagesJson(messages), R"([{"role":"assistant","content":""}])");
 }
 
 TEST(ChatCompletionsConverterTest, BuildRequestItems_ToolRoleCreatesToolResultItem) {
@@ -974,6 +1000,41 @@ TEST(ChatCompletionsConverterTest, BuildResponse_ReasoningOnlyPopulatesReasoning
   // Visible content should be empty
   ASSERT_TRUE(result.choices[0].message.content.has_value());
   EXPECT_TRUE(result.choices[0].message.content->empty());
+}
+
+TEST(ChatCompletionsConverterTest, ReasoningOnlyResponseReplayKeepsAdjacentMessageRolesAndHidesReasoning) {
+  Response response;
+  std::vector<std::unique_ptr<Item>> parts;
+  parts.push_back(std::make_unique<TextItem>("private scratchpad", FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING));
+  response.items.push_back(
+      std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_ASSISTANT, std::move(parts)));
+  response.finish_reason = FOUNDRY_LOCAL_FINISH_LENGTH;
+
+  const auto completion = BuildResponse(response, "id", 0, "m");
+  ASSERT_EQ(completion.choices.size(), 1u);
+
+  const json replay_json = {
+      {"model", "m"},
+      {"messages",
+       json::array({{{"role", "user"}, {"content", "before"}},
+                    json(completion.choices[0].message),
+                    {{"role", "user"}, {"content", "after"}}})}};
+  const auto replay = replay_json.get<ChatCompletionRequest>();
+
+  Request session_request;
+  BuildRequestItems(replay, session_request);
+
+  const auto messages = BuildTranscriptMessages(session_request.items);
+  ASSERT_EQ(messages.size(), 3u);
+  EXPECT_EQ(messages[0].role, FOUNDRY_LOCAL_ROLE_USER);
+  EXPECT_EQ(messages[1].role, FOUNDRY_LOCAL_ROLE_ASSISTANT);
+  EXPECT_EQ(messages[2].role, FOUNDRY_LOCAL_ROLE_USER);
+  EXPECT_TRUE(messages[1].VisibleText().empty());
+  EXPECT_TRUE(messages[1].ReasoningText().empty());
+  EXPECT_EQ(BuildChatMessagesJson(messages),
+            R"([{"role":"user","content":"before"},)"
+            R"({"role":"assistant","content":""},)"
+            R"({"role":"user","content":"after"}])");
 }
 
 TEST(ChatCompletionsConverterTest, BuildResponse_InterleavedReasoningPopulatesBothFields) {

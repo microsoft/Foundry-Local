@@ -115,7 +115,8 @@ using GeneratedOutputEvent = std::variant<ReasoningStreamSplitter::Segment, Pars
 /// generator and never use the cache.
 class ChatSession : public Session {
  public:
-  ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry);
+  ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry,
+              ChatTranscript::CommitFaultInjector transcript_fault_injector = {});
   ~ChatSession();
 
   // Movable: transfers session refcount ownership to the moved-to instance.

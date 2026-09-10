@@ -90,6 +90,7 @@ void from_json(const nlohmann::json& j, ChatCompletionMessage& m) {
 
   opt_str(j, "name", m.name);
   opt_str(j, "tool_call_id", m.tool_call_id);
+  opt_str(j, "reasoning_content", m.reasoning_content);
 
   if (j.contains("tool_calls") && !j["tool_calls"].is_null()) {
     if (!j["tool_calls"].is_array()) {

@@ -280,7 +280,17 @@ class ResponseStore {
   /// state stays bounded by in-flight work and is released with the lease.
   struct PendingResponse {
     std::unordered_set<std::string> ancestors;
+    /// Immutable complete replay state through the leased endpoint. Capacity eviction may remove every corresponding
+    /// metadata entry while inference runs; the snapshot lets Commit repair only the missing prefix without pinning
+    /// those entries or exposing additional response data to clients.
+    std::shared_ptr<const ReplayPrefix> replay_snapshot;
     bool invalidated = false;
+  };
+
+  struct WalkedChain {
+    std::vector<std::list<Entry>::iterator> hops;
+    /// The compacted prefix that joins the oldest resident hop to the missing portion of its ancestry.
+    std::shared_ptr<const ReplayPrefix> replay_prefix;
   };
 
   int capacity_;
@@ -296,10 +306,14 @@ class ResponseStore {
   uint64_t next_lease_id_ = 1;
   uint64_t next_insertion_sequence_ = 0;
 
-  MetadataState PrepareStoreLocked(StoredResponse response);
+  MetadataState PrepareStoreLocked(StoredResponse response,
+                                   const std::shared_ptr<const ReplayPrefix>& replay_snapshot = nullptr);
   void CommitStoreLocked(MetadataState&& state) noexcept;
   void DropEvictedArtifactsLocked(const MetadataState& state);
   void StoreLocked(StoredResponse response, MetadataState& state);
+  void AttachReplaySnapshotIfNeededLocked(MetadataState& state,
+                                          const std::string& response_id,
+                                          const std::shared_ptr<const ReplayPrefix>& replay_snapshot);
   void Evict(MetadataState& state);
   void CompactAndEraseLocked(MetadataState& state, EntryList::iterator root);
   void InjectStoreFault(StorePhase phase) const;
@@ -309,12 +323,13 @@ class ResponseStore {
   bool DependsOnLocked(const Entry& entry, const std::string& response_id) const;
   void TouchLocked(std::list<Entry>::iterator it);
 
-  /// Walk `response_id` back to the oldest retained hop. Returns the stored hops newest-first, or an empty vector
-  /// when a link is missing without a compacted prefix or the links form a cycle.
-  std::vector<std::list<Entry>::iterator> WalkChainLocked(const std::string& response_id);
+  /// Walk `response_id` back to the oldest retained hop. Returns stored hops newest-first and the prefix that fills
+  /// any missing ancestry, or no hops when a link is missing without a usable prefix or the links form a cycle.
+  WalkedChain WalkChainLocked(const std::string& response_id);
 
   /// Every response id a walked chain depends on: its own hops plus the ids folded into its compacted prefix.
-  static std::unordered_set<std::string> ChainIdsLocked(const std::vector<std::list<Entry>::iterator>& chain);
+  static std::unordered_set<std::string> ChainIdsLocked(const WalkedChain& chain);
+  static std::shared_ptr<const ReplayPrefix> SnapshotChainLocked(const WalkedChain& chain);
 };
 
 }  // namespace fl

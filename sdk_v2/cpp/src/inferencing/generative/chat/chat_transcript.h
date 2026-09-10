@@ -323,6 +323,7 @@ class ChatTranscript {
  public:
   enum class CommitPhase {
     kBeforePublish,
+    kUndoBeforePublish,
   };
   using CommitFaultInjector = std::function<void(CommitPhase)>;
 
@@ -394,12 +395,6 @@ class ChatTranscript {
   TurnTokens UndoTurns(size_t count);
 
  private:
-  /// Recompute issued / outstanding call IDs from the committed messages. Called after truncation so undo never has
-  /// to reason about incremental bookkeeping.
-  void RebuildCallState();
-
-  void RecordMessageCalls(const TranscriptMessage& message);
-
   std::vector<TranscriptMessage> messages_;
   std::vector<Turn> turns_;
 

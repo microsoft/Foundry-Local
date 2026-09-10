@@ -174,6 +174,67 @@ TEST(ResponseContinuationTest, AcceptingAContinuationKeepsTheWholeChainResident)
   EXPECT_TRUE(store.Get("resp_3").has_value());
 }
 
+TEST(ResponseContinuationTest, CapacityEvictedParentCommitsFromLeaseSnapshotAndReconstructsExactly) {
+  ResponseStore store(1);
+  const auto parent_input = json::array(
+      {{{"type", "message"}, {"role", "user"}, {"content", "parent input"}}});
+  const auto parent_output = json::array(
+      {{{"type", "message"}, {"role", "assistant"}, {"content", "parent output"}}});
+  auto parent_response = ResponseJson("parent");
+  parent_response["output"] = parent_output;
+  store.Store("parent", std::move(parent_response), parent_input, "model-a");
+
+  auto continuation = store.BeginResponse("parent", "model-a");
+  ASSERT_EQ(continuation.status, ContinuationStatus::kOk);
+
+  store.Store("unrelated", ResponseJson("unrelated"), json::array(), "model-a");
+  ASSERT_FALSE(store.Get("parent").has_value());
+
+  const auto child_input = json::array(
+      {{{"type", "message"}, {"role", "user"}, {"content", "child input"}}});
+  const auto child_output = json::array(
+      {{{"type", "message"}, {"role", "assistant"}, {"content", "child output"}}});
+  auto child_response = ResponseJson("child", "parent");
+  child_response["output"] = child_output;
+  ASSERT_TRUE(store.Commit(
+      continuation.lease,
+      ResponseStore::StoredResponse{"child", "model-a", std::move(child_response), child_input},
+      nullptr));
+
+  const auto context = store.BuildChainContext("child");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 2u);
+  EXPECT_EQ((*context)[0].input_items, parent_input);
+  EXPECT_EQ((*context)[0].output_items, parent_output);
+  EXPECT_EQ((*context)[1].input_items, child_input);
+  EXPECT_EQ((*context)[1].output_items, child_output);
+}
+
+TEST(ResponseContinuationTest, NormalCompactionAndLeaseSnapshotDoNotDuplicateReplayHops) {
+  ResponseStore store(2);
+  store.Store("root", ResponseJson("root"), json::array({{{"content", "root"}}}), "model-a");
+  store.Store("parent", ResponseJson("parent", "root"), json::array({{{"content", "parent"}}}), "model-a");
+
+  auto continuation = store.BeginResponse("parent", "model-a");
+  ASSERT_EQ(continuation.status, ContinuationStatus::kOk);
+
+  // This compacts root into parent. Committing child then normally compacts parent into child; the lease snapshot must
+  // not be layered over either resident prefix.
+  store.Store("unrelated", ResponseJson("unrelated"), json::array(), "model-a");
+  ASSERT_TRUE(store.Commit(
+      continuation.lease,
+      ResponseStore::StoredResponse{
+          "child", "model-a", ResponseJson("child", "parent"), json::array({{{"content", "child"}}})},
+      nullptr));
+
+  const auto context = store.BuildChainContext("child");
+  ASSERT_TRUE(context.has_value());
+  ASSERT_EQ(context->size(), 3u);
+  EXPECT_EQ((*context)[0].input_items[0]["content"], "root");
+  EXPECT_EQ((*context)[1].input_items[0]["content"], "parent");
+  EXPECT_EQ((*context)[2].input_items[0]["content"], "child");
+}
+
 // ========================================================================
 // Lease lifetime
 // ========================================================================
@@ -501,6 +562,26 @@ TEST(ResponseDeleteRaceTest, DeletingAnAncestorThatWasEvictedMidFlightStillRejec
       ResponseStore::StoredResponse{"resp_3", "model-a", ResponseJson("resp_3", "resp_2"), json::array()},
       &admission));
   EXPECT_TRUE(admission.admitted.empty());
+}
+
+TEST(ResponseDeleteRaceTest, DeletingAParentAfterCapacityEvictionStillInvalidatesItsLease) {
+  ResponseStore store(1);
+  store.Store("parent", ResponseJson("parent"), json::array(), "model-a");
+
+  auto continuation = store.BeginResponse("parent", "model-a");
+  ASSERT_EQ(continuation.status, ContinuationStatus::kOk);
+
+  store.Store("unrelated", ResponseJson("unrelated"), json::array(), "model-a");
+  ASSERT_FALSE(store.Get("parent").has_value());
+  EXPECT_FALSE(store.Delete("parent")) << "capacity-evicted metadata remains client-invisible";
+
+  RecordingAdmission admission;
+  EXPECT_FALSE(store.Commit(
+      continuation.lease,
+      ResponseStore::StoredResponse{"child", "model-a", ResponseJson("child", "parent"), json::array()},
+      &admission));
+  EXPECT_TRUE(admission.admitted.empty());
+  EXPECT_FALSE(store.Get("child").has_value());
 }
 
 TEST(ResponseDeleteRaceTest, OnlyTheDependentOfTwoConcurrentRequestsIsRejected) {

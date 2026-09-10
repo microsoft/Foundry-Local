@@ -642,6 +642,109 @@ TEST_F(ChatSessionTest, CancellationFromTheLastQueuedCallbackPreventsCommit) {
   EXPECT_EQ(session.TurnCount(), 0u);
 }
 
+TEST_F(ChatSessionTest, OpenAIJsonCancellationFromLastContentCallbackPublishesNoTerminalSuccess) {
+  ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+
+  nlohmann::json request_json = {
+      {"model", GetModel().ModelId()},
+      {"messages", nlohmann::json::array({
+                       {{"role", "user"}, {"content", "Reply with one word."}},
+                   })},
+      {"max_tokens", 1},
+      {"temperature", 0}};
+
+  Request request;
+  request.AddOwnedItem(std::make_unique<TextItem>(
+      request_json.dump(), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
+
+  std::vector<nlohmann::json> delivered;
+  session.SetStreamingCallback([&delivered](flStreamingCallbackData event, void*) {
+    auto* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
+    auto item = queue->TryPop();
+    if (!item) {
+      return 0;
+    }
+
+    const auto& text = static_cast<const TextItem&>(*item);
+    auto chunk = nlohmann::json::parse(text.text);
+    const bool has_content =
+        chunk["choices"][0]["delta"].contains("content") &&
+        !chunk["choices"][0]["delta"]["content"].get<std::string>().empty();
+    delivered.push_back(std::move(chunk));
+
+    if (has_content) {
+      // Keep the final content delivery outstanding until generation has naturally completed.
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      return 1;
+    }
+
+    return 0;
+  });
+
+  Response response;
+  session.ProcessRequest(request, response);
+
+  EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_NONE);
+  ASSERT_EQ(delivered.size(), 2u);
+  EXPECT_EQ(delivered[0]["choices"][0]["delta"]["role"], "assistant");
+  EXPECT_FALSE(delivered[0]["choices"][0]["finish_reason"].is_string());
+  EXPECT_TRUE(delivered[1]["choices"][0]["delta"].contains("content"));
+  EXPECT_FALSE(delivered[1]["choices"][0]["finish_reason"].is_string());
+  EXPECT_EQ(session.MessageCount(), 0u);
+  EXPECT_EQ(session.TurnCount(), 0u);
+}
+
+TEST_F(ChatSessionTest, TranscriptUndoFailureLeavesGeneratorAndConversationUsable) {
+  bool fail_undo_before_publish = false;
+  ChatSession session(
+      GetCatalogModel(), GetModel(), *logger_, null_telemetry_,
+      [&fail_undo_before_publish](ChatTranscript::CommitPhase phase) {
+        if (fail_undo_before_publish && phase == ChatTranscript::CommitPhase::kUndoBeforePublish) {
+          throw std::runtime_error("injected undo failure");
+        }
+      });
+
+  Request first;
+  first.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "What is 2+2? Answer with just the number."));
+  first.options.Add("max_output_tokens", "32");
+  first.options.Add("temperature", "0");
+  Response first_response;
+  session.ProcessRequest(first, first_response);
+
+  Request second;
+  second.AddOwnedItem(MakeMessage(
+      FOUNDRY_LOCAL_ROLE_USER, "Now add 1 to that. Answer with just the number."));
+  second.options.Add("max_output_tokens", "32");
+  second.options.Add("temperature", "0");
+  Response second_response;
+  session.ProcessRequest(second, second_response);
+  const auto original_second_text = GetAssistantText(second_response);
+  const auto prompt_before = BuildChatMessagesJson(session.Transcript().Messages());
+
+  fail_undo_before_publish = true;
+  EXPECT_THROW(session.UndoTurns(1), std::runtime_error);
+  EXPECT_EQ(session.TurnCount(), 2u);
+  EXPECT_EQ(session.MessageCount(), 4u);
+  EXPECT_EQ(BuildChatMessagesJson(session.Transcript().Messages()), prompt_before);
+
+  fail_undo_before_publish = false;
+  EXPECT_NO_THROW(session.UndoTurns(1));
+  EXPECT_EQ(session.TurnCount(), 1u);
+  EXPECT_EQ(session.MessageCount(), 2u);
+
+  Request retry;
+  retry.AddOwnedItem(MakeMessage(
+      FOUNDRY_LOCAL_ROLE_USER, "Now add 1 to that. Answer with just the number."));
+  retry.options.Add("max_output_tokens", "32");
+  retry.options.Add("temperature", "0");
+  Response retry_response;
+  session.ProcessRequest(retry, retry_response);
+
+  EXPECT_EQ(GetAssistantText(retry_response), original_second_text);
+  EXPECT_EQ(session.TurnCount(), 2u);
+  EXPECT_EQ(session.MessageCount(), 4u);
+}
+
 // ===========================================================================
 // SearchOptions::FromParameters
 // ===========================================================================

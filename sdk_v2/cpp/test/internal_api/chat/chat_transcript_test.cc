@@ -1289,6 +1289,47 @@ TEST(ChatTranscriptTest, UndoingMoreTurnsThanExistIsRejected) {
   EXPECT_EQ(transcript.TurnCount(), 1u);
 }
 
+TEST(ChatTranscriptTest, UndoFailureBeforePublishPreservesMessagesTurnsCallsAndPrompt) {
+  bool fail_undo_before_publish = false;
+  ChatTranscript transcript([&fail_undo_before_publish](ChatTranscript::CommitPhase phase) {
+    if (fail_undo_before_publish && phase == ChatTranscript::CommitPhase::kUndoBeforePublish) {
+      throw std::runtime_error("injected undo failure");
+    }
+  });
+  transcript.CommitTurn({UserMessage("Weather?")},
+                        MakeAssistant("", {MakeCall("call_1", "get_weather", "{}")}), {3, 7});
+  transcript.CommitTurn({TranscriptMessage::ToolResult("call_1", "sunny")},
+                        MakeAssistant("", {MakeCall("call_2", "get_time", "{}")}), {7, 12});
+
+  const auto messages_before = BuildChatMessagesJson(transcript.Messages());
+  const auto turns_before = transcript.Turns();
+  ASSERT_FALSE(transcript.IsOutstanding("call_1"));
+  ASSERT_TRUE(transcript.IsOutstanding("call_2"));
+  EXPECT_NO_THROW(transcript.ValidateInputs({TranscriptMessage::ToolResult("call_2", "noon")}));
+
+  fail_undo_before_publish = true;
+  EXPECT_THROW(transcript.UndoTurns(1), std::runtime_error);
+
+  EXPECT_EQ(BuildChatMessagesJson(transcript.Messages()), messages_before);
+  ASSERT_EQ(transcript.Turns().size(), turns_before.size());
+  for (size_t i = 0; i < turns_before.size(); ++i) {
+    EXPECT_EQ(transcript.Turns()[i].message_start, turns_before[i].message_start);
+    EXPECT_EQ(transcript.Turns()[i].tokens.pre_turn, turns_before[i].tokens.pre_turn);
+    EXPECT_EQ(transcript.Turns()[i].tokens.post_turn, turns_before[i].tokens.post_turn);
+  }
+  EXPECT_FALSE(transcript.IsOutstanding("call_1"));
+  EXPECT_TRUE(transcript.IsOutstanding("call_2"));
+  EXPECT_NO_THROW(transcript.ValidateInputs({TranscriptMessage::ToolResult("call_2", "noon")}));
+  EXPECT_THROW(
+      transcript.ValidateGeneratedOutput(
+          MakeAssistant("", {MakeCall("call_1", "duplicate", "{}")})),
+      fl::Exception);
+  EXPECT_THROW(
+      transcript.ValidateGeneratedOutput(
+          MakeAssistant("", {MakeCall("call_2", "duplicate", "{}")})),
+      fl::Exception);
+}
+
 // ===========================================================================
 // Value semantics and full-history continuation
 // ===========================================================================
