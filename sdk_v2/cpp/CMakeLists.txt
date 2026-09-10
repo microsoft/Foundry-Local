@@ -50,6 +50,8 @@ option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
 option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
 option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
+option(FOUNDRY_LOCAL_REQUIRE_CHAT_TEMPLATE_KWARGS
+       "Fail configuration unless ORT GenAI supports chat template kwargs" OFF)
 
 # Optional 1DS ingestion token override. Override only via environment so it does
 # not appear in CMake cache files.
@@ -148,6 +150,26 @@ if(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
     message(STATUS "ORT GenAI dynamic Engine API: enabled")
 else()
     message(STATUS "ORT GenAI dynamic Engine API: unavailable; using Generator backend")
+endif()
+
+set(FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS OFF)
+if(ORT_GENAI_VERSION MATCHES "^0\\.16\\.0-dev([0-9]+)$")
+    if(CMAKE_MATCH_1 GREATER_EQUAL 1001407373)
+        set(FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS ON)
+    endif()
+elseif(ORT_GENAI_VERSION AND NOT ORT_GENAI_VERSION VERSION_LESS "0.16.0")
+    set(FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS ON)
+endif()
+
+if(FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS)
+    message(STATUS "ORT GenAI chat template kwargs: enabled")
+else()
+    message(STATUS "ORT GenAI chat template kwargs: unavailable")
+endif()
+if(FOUNDRY_LOCAL_REQUIRE_CHAT_TEMPLATE_KWARGS AND
+   NOT FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS)
+    message(FATAL_ERROR
+        "The selected ORT GenAI package does not support required chat template kwargs")
 endif()
 find_package(OnnxRuntime REQUIRED)
 
@@ -400,6 +422,7 @@ function(foundry_local_configure_target TARGET LINK_SCOPE)
         PRIVATE
             FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS=$<BOOL:${FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS}>
             FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE=$<BOOL:${FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE}>
+            FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS=$<BOOL:${FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS}>
     )
 
     if(FOUNDRY_LOCAL_BUILD_SERVICE)
