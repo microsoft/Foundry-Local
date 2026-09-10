@@ -5,6 +5,7 @@
 // Integration tests run actual inference against the shared test model.
 
 #include "inferencing/generative/chat/chat_session.h"
+#include "inferencing/generative/chat/chat_template.h"
 #include "exception.h"
 #include "inferencing/model_load_manager.h"
 #include "inferencing/generative/chat/search_options.h"
@@ -18,14 +19,223 @@
 #include "internal_api/test_helpers.h"
 #include "internal_api/test_model_cache.h"
 #include "utils/string_utils.h"
+#include "utils/temp_path.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
 
 using namespace fl;
+
+namespace {
+
+using Segment = ReasoningStreamSplitter::Segment;
+
+void AppendSegments(std::vector<Segment>& destination, const std::vector<Segment>& source) {
+  for (const auto& segment : source) {
+    if (!destination.empty() && destination.back().type == segment.type) {
+      destination.back().text += segment.text;
+    } else {
+      destination.push_back(segment);
+    }
+  }
+}
+
+}  // namespace
+
+TEST(ChatSessionDecisionTest, HostOutputLimitTruncatesOnlyAnUnfinishedBackendAtTheBoundary) {
+  using chat_session_internal::DidHostOutputLimitTruncate;
+
+  EXPECT_FALSE(DidHostOutputLimitTruncate(/*output_tokens=*/31, /*max_output_tokens=*/32,
+                                          /*backend_finished=*/false));
+  EXPECT_TRUE(DidHostOutputLimitTruncate(/*output_tokens=*/32, /*max_output_tokens=*/32,
+                                         /*backend_finished=*/false));
+  EXPECT_FALSE(DidHostOutputLimitTruncate(/*output_tokens=*/32, /*max_output_tokens=*/32,
+                                          /*backend_finished=*/true));
+}
+
+TEST(ChatSessionDecisionTest, ExactResidentPrefixSelectsOnlyTheUnmatchedFullPromptSuffix) {
+  const std::vector<int32_t> resident = {10, 20, 30};
+  const std::vector<int32_t> full_prompt = {10, 20, 30, 40, 50};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(resident, full_prompt), 3u);
+}
+
+TEST(ChatSessionDecisionTest, ResidentPromptMismatchRequiresRebuild) {
+  const std::vector<int32_t> changed_token = {10, 21, 30};
+  const std::vector<int32_t> longer_resident = {10, 20, 30, 40};
+  const std::vector<int32_t> full_prompt = {10, 20, 30};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(changed_token, full_prompt), std::nullopt);
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(longer_resident, full_prompt), std::nullopt);
+}
+
+TEST(ChatSessionDecisionTest, EqualResidentAndFullPromptHasAnEmptySuffix) {
+  const std::vector<int32_t> tokens = {10, 20, 30};
+
+  EXPECT_EQ(chat_internal::FindUnmatchedPromptSuffix(tokens, tokens), tokens.size());
+}
+
+TEST(ChatSessionDecisionTest, HostOutputLimitAppliesToClassicAndMediaGeneratorsButNotEngineText) {
+  using chat_session_internal::ShouldEnforceHostOutputLimit;
+
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kGenerator, /*media_turn=*/false));
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kGenerator, /*media_turn=*/true));
+  EXPECT_TRUE(ShouldEnforceHostOutputLimit(ChatBackendKind::kEngine, /*media_turn=*/true));
+  EXPECT_FALSE(ShouldEnforceHostOutputLimit(ChatBackendKind::kEngine, /*media_turn=*/false));
+}
+
+TEST(ChatSessionDecisionTest, FinishReasonPrecedenceCoversEveryTerminalSource) {
+  using chat_session_internal::ResolveGeneratedFinishReason;
+
+  struct TestCase {
+    const char* name;
+    bool canceled;
+    bool has_tool_calls;
+    bool stop_sequence_matched;
+    bool host_output_limit_reached;
+    std::optional<flFinishReason> backend_finish_reason;
+    flFinishReason expected;
+  };
+
+  const std::vector<TestCase> cases = {
+      {"cancellation wins", true, true, true, true, FOUNDRY_LOCAL_FINISH_NONE, FOUNDRY_LOCAL_FINISH_NONE},
+      {"tool calls win over stop", false, true, true, false, FOUNDRY_LOCAL_FINISH_STOP,
+       FOUNDRY_LOCAL_FINISH_TOOL_CALLS},
+      {"tool calls win over host limit", false, true, true, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_TOOL_CALLS},
+      {"stop wins over host limit", false, false, true, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_STOP},
+      {"host limit produces length", false, false, false, true, FOUNDRY_LOCAL_FINISH_NONE,
+       FOUNDRY_LOCAL_FINISH_LENGTH},
+      {"backend reason survives natural completion", false, false, false, false, FOUNDRY_LOCAL_FINISH_STOP,
+       FOUNDRY_LOCAL_FINISH_STOP},
+  };
+
+  for (const auto& test : cases) {
+    SCOPED_TRACE(test.name);
+    EXPECT_EQ(ResolveGeneratedFinishReason(test.canceled, test.has_tool_calls, test.stop_sequence_matched,
+                                           test.host_output_limit_reached, test.backend_finish_reason,
+                                           /*completion_tokens=*/32, /*max_output_tokens=*/32),
+              test.expected);
+  }
+}
+
+TEST(ChatSessionDecodedStreamTest, CombinedFilterOutputUsesTextMarkerFallback) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>", {101}, {102});
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "S", 1, &stop_filter, splitter, process));
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>hidden</think>visible", 2, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 3u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+  EXPECT_EQ(segments[0].text, "S");
+  EXPECT_EQ(segments[1].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[1].text, "hidden");
+  EXPECT_EQ(segments[2].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+  EXPECT_EQ(segments[2].text, "visible");
+}
+
+TEST(ChatSessionDecodedStreamTest, FlushReleasesUnmatchedStopPrefixThroughReasoningSplitter) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>");
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>unfinished ST", 1, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 1u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[0].text, "unfinished ST");
+}
+
+TEST(ChatSessionDecodedStreamTest, MatchedStopSuppressesStopBytesButFlushesPendingReasoningText) {
+  StopStringFilter stop_filter({"STOP"});
+  ReasoningStreamSplitter splitter("<think>", "</think>");
+  std::vector<Segment> segments;
+  const auto process = [&](const std::vector<Segment>& emitted) { AppendSegments(segments, emitted); };
+
+  EXPECT_FALSE(chat_session_internal::PushDecodedFragment(
+      "<think>hidden</thiST", 1, &stop_filter, splitter, process));
+  EXPECT_TRUE(chat_session_internal::PushDecodedFragment(
+      "OPignored", 2, &stop_filter, splitter, process));
+  chat_session_internal::FlushDecodedStream(&stop_filter, splitter, process);
+
+  ASSERT_EQ(segments.size(), 1u);
+  EXPECT_EQ(segments[0].type, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING);
+  EXPECT_EQ(segments[0].text, "hidden</thi");
+}
+
+TEST(ChatSessionDecisionTest, PreAppendRebuildTracksBackendBakedSettings) {
+  using chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend;
+
+  // A dynamic Engine or classic generator may continue when nothing that is baked into retained state changed.
+  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                          /*guidance_requirement_changed=*/false,
+                                                          /*guidance_payload_changed=*/false,
+                                                          /*retained_generation_settings_changed=*/false));
+  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kEngine,
+                                                          /*guidance_requirement_changed=*/false,
+                                                          /*guidance_payload_changed=*/false,
+                                                          /*retained_generation_settings_changed=*/false));
+
+  // The caller reports only options baked into the selected backend. These changes rebuild a classic Generator;
+  // dynamic Engine settings are per-turn and therefore reach this helper as unchanged.
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/true,
+                                                         /*guidance_payload_changed=*/false,
+                                                         /*retained_generation_settings_changed=*/false));
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/false,
+                                                         /*guidance_payload_changed=*/true,
+                                                         /*retained_generation_settings_changed=*/false));
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
+                                                         /*guidance_requirement_changed=*/false,
+                                                         /*guidance_payload_changed=*/false,
+                                                         /*retained_generation_settings_changed=*/true));
+}
+
+TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSemantics) {
+  using chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn;
+
+  EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kEngine,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator,
+      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/true));
+}
 
 // ===========================================================================
 // Integration test fixture: loads the shared test model once per suite
@@ -325,6 +535,7 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   request.options.Add("temperature", "0");
 
   int tokens_received = 0;
+  bool cancel_enabled = true;
 
   fl::Session::StreamingCallbackFn callback_fn = [&](flStreamingCallbackData event, void* /*user_data*/) -> int {
     fl::ItemQueue* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
@@ -335,8 +546,8 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
     }
 
     ++tokens_received;
-    bool cancel = tokens_received >= 3;  // example cancellation condition: after receiving 3 tokens
-    return cancel ? 1 : 0;               // cancel after 3 tokens
+    bool cancel = cancel_enabled && tokens_received >= 3;  // cancel the first request after receiving 3 tokens
+    return cancel ? 1 : 0;
   };
 
   session.SetStreamingCallback(callback_fn);
@@ -353,6 +564,22 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   // Cancelled requests should not commit to history (delayed commit)
   EXPECT_EQ(session.MessageCount(), 0u);
   EXPECT_EQ(session.TurnCount(), 0u);
+
+  cancel_enabled = false;
+  Request retry;
+  retry.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "What is 2+2? Answer with just the number."));
+  retry.options.Add("max_output_tokens", "32");
+  retry.options.Add("temperature", "0");
+
+  Response retry_response;
+  session.ProcessRequest(retry, retry_response);
+  const auto retry_text = GetAssistantText(retry_response);
+
+  EXPECT_NE(retry_text.find("4"), std::string::npos)
+      << "The retained generator should recover after cancellation. Got: " << retry_text;
+  EXPECT_EQ(retry_response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
+  EXPECT_EQ(session.MessageCount(), 2u);
+  EXPECT_EQ(session.TurnCount(), 1u);
 }
 
 // ===========================================================================

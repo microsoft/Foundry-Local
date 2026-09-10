@@ -28,6 +28,7 @@ add_executable(foundry_local_tests
     internal_api/chat/chat_session_test.cc
     internal_api/chat/chat_template_test.cc
     internal_api/chat/onnx_chat_generator_vision_test.cc
+    internal_api/chat/stop_strings_test.cc
     internal_api/chat_completions_test.cc
     internal_api/chat_completions_converter_test.cc
     internal_api/configuration_test.cc
@@ -86,7 +87,17 @@ if(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS)
     )
 endif()
 
+if(FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE)
+    target_sources(foundry_local_tests PRIVATE
+        internal_api/chat/dynamic_engine_chat_test.cc
+    )
+endif()
+
 target_compile_options(foundry_local_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+target_compile_definitions(
+    foundry_local_tests
+    PRIVATE FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE=$<BOOL:${FOUNDRY_LOCAL_OGA_HAS_DYNAMIC_ENGINE}>
+)
 
 target_link_libraries(foundry_local_tests
     PRIVATE
