@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft. All rights reserved.
 # Find/acquire ONNX Runtime.
 #
-# Sources ORT from Microsoft.ML.OnnxRuntime via FetchContent from the approved
-# CFS feed. The version comes
+# Sources ORT from Microsoft.ML.OnnxRuntime via FetchContent — nuget.org for
+# releases and the ORT-Nightly ADO feed for -dev- versions. The version comes
 # from sdk_v2/deps_versions.json and is shared by all platforms.
 #
 # Creates an IMPORTED target: OnnxRuntime::OnnxRuntime
@@ -59,7 +59,7 @@ if(ORT_HOME)
     endif()
 else()
     # -----------------------------------------------------------------------
-    # Standard path: FetchContent from AIFoundryLocal_PublicPackages.
+    # Standard path: FetchContent from nuget.org (releases) or ORT-Nightly ADO feed (dev builds)
     # -----------------------------------------------------------------------
     if(NOT ORT_VERSION)
         # Single source of truth: sdk_v2/deps_versions.json. The Python SDK
@@ -75,12 +75,22 @@ else()
     endif()
     set(ORT_PACKAGE_NAME "Microsoft.ML.OnnxRuntime")
 
-    # ORT_FETCH_URL can be set externally, for example to a local prefetch archive.
+    # ORT_FETCH_URL can be set externally (e.g. for CI where nuget.org is blocked).
     set(ORT_FETCH_URL "" CACHE STRING "Override URL or local path for the OnnxRuntime NuGet package")
 
     if(NOT ORT_FETCH_URL)
-        set(ORT_FETCH_URL "https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_apis/packaging/feeds/AIFoundryLocal_PublicPackages/nuget/packages/${ORT_PACKAGE_NAME}/versions/${ORT_VERSION}/content?api-version=6.0-preview.1")
-        message(STATUS "Downloading ${ORT_PACKAGE_NAME} ${ORT_VERSION} from AIFoundryLocal_PublicPackages")
+        # Dev builds come from the ADO nightly feed; release versions come from nuget.org.
+        if(ORT_VERSION MATCHES "-dev-")
+            set(ORT_FEED_ORG  "aiinfra")
+            set(ORT_FEED_PROJECT "2692857e-05ef-43b4-ba9c-ccf1c22c437c")
+            set(ORT_FEED_ID   "7982ae20-ed19-4a35-a362-a96ac99897b7")
+            set(ORT_FETCH_URL "https://pkgs.dev.azure.com/${ORT_FEED_ORG}/${ORT_FEED_PROJECT}/_apis/packaging/feeds/${ORT_FEED_ID}/nuget/packages/${ORT_PACKAGE_NAME}/versions/${ORT_VERSION}/content?api-version=6.0-preview.1")
+            message(STATUS "Downloading ${ORT_PACKAGE_NAME} ${ORT_VERSION} from ORT-Nightly feed")
+        else()
+            string(TOLOWER "${ORT_PACKAGE_NAME}" _ORT_PACKAGE_LOWER)
+            set(ORT_FETCH_URL "https://api.nuget.org/v3-flatcontainer/${_ORT_PACKAGE_LOWER}/${ORT_VERSION}/${_ORT_PACKAGE_LOWER}.${ORT_VERSION}.nupkg")
+            message(STATUS "Downloading ${ORT_PACKAGE_NAME} ${ORT_VERSION} from nuget.org")
+        endif()
     else()
         message(STATUS "Using pre-configured ORT_FETCH_URL: ${ORT_FETCH_URL}")
     endif()
