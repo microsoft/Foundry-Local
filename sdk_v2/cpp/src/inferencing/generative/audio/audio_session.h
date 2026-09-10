@@ -7,6 +7,7 @@
 #include "logger.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,9 +48,9 @@ class AudioSession : public Session {
   SessionType Type() const override;
 
  private:
-   friend class AudioSessionTestAccessor;
+  friend class AudioSessionTestAccessor;
 
-   void SetSessionOptionsImpl(const KeyValuePairs& options) override;
+  void SetSessionOptionsImpl(const KeyValuePairs& options) override;
   void ProcessRequestImpl(const Request& request, Response& response) override;
 
   /// Process a request whose first item is a TEXT item tagged OPENAI_JSON containing an
@@ -59,7 +60,7 @@ class AudioSession : public Session {
 
   bool IsNemotronSpeechModel() const;
 
-  void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req, 
+  void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req,
                                         const Request& original_request,
                                         Response& response);
 
@@ -104,8 +105,13 @@ class AudioSession : public Session {
                     const Request& request,
                     int& completion_tokens);
 
+  void RecordAdditionalModelUsage(const Response& response, const ModelUsageInfo& usage) override;
+  static int64_t AudioDurationMsFromSamples(int64_t samples);
+
   GenAIModelInstance& Model() { return model_; }
   const GenAIModelInstance& Model() const { return model_; }
+
+  std::string ExecutionProvider() const override;
 
   ILogger& logger_;
   GenAIModelInstance& model_;
@@ -113,6 +119,15 @@ class AudioSession : public Session {
   // moved-from instance so the refcount transfers cleanly across moves.
   bool owns_session_ = true;
   SearchOptions session_options_;
+
+  struct AudioTelemetryDetails {
+    std::string source;
+    std::string language;
+    int64_t duration_ms = -1;
+    int32_t sample_rate = 0;
+    int32_t channels = 0;
+  };
+  std::optional<AudioTelemetryDetails> audio_telemetry_details_;
 };
 
 }  // namespace fl

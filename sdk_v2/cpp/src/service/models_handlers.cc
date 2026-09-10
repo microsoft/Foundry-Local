@@ -24,7 +24,10 @@ class ListLoadedModelsHandler : public HttpRequestHandler {
  public:
   explicit ListLoadedModelsHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
-  std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>&) override {
+  std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
+    ActionTracker tracker(Action::kModelList, ctx_.telemetry,
+                          InvocationContext::Direct(GetUserAgent(request)));
+
     auto loaded = ctx_.catalog.GetLoadedModels();
     nlohmann::json names = nlohmann::json::array();
 
@@ -32,6 +35,7 @@ class ListLoadedModelsHandler : public HttpRequestHandler {
       names.push_back(model->Id());
     }
 
+    tracker.SetStatus(ActionStatus::kSuccess);
     return JsonResponse(Status::CODE_200, names);
   }
 
@@ -48,7 +52,8 @@ class LoadModelHandler : public HttpRequestHandler {
   explicit LoadModelHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
-    ActionTracker tracker(Action::kModelLoad, ctx_.telemetry);
+    ActionTracker tracker(Action::kModelLoad, ctx_.telemetry,
+                          InvocationContext::Direct(GetUserAgent(request)));
 
     auto name_raw = request->getPathVariable("name");
     if (!name_raw) {
@@ -104,7 +109,8 @@ class UnloadModelHandler : public HttpRequestHandler {
   explicit UnloadModelHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
-    ActionTracker tracker(Action::kModelUnload, ctx_.telemetry);
+    ActionTracker tracker(Action::kModelUnload, ctx_.telemetry,
+                          InvocationContext::Direct(GetUserAgent(request)));
 
     auto name_raw = request->getPathVariable("name");
     if (!name_raw) {
@@ -154,8 +160,9 @@ class OpenAIListModelsHandler : public HttpRequestHandler {
  public:
   explicit OpenAIListModelsHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
-  std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>&) override {
-    ActionTracker tracker(Action::kOpenAIModelList, ctx_.telemetry);
+  std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
+    ActionTracker tracker(Action::kOpenAIModelList, ctx_.telemetry,
+                          InvocationContext::Direct(GetUserAgent(request)));
 
     auto models = ctx_.catalog.ListModels();
     nlohmann::json data = nlohmann::json::array();
@@ -208,7 +215,8 @@ class OpenAIRetrieveModelHandler : public HttpRequestHandler {
   explicit OpenAIRetrieveModelHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>& request) override {
-    ActionTracker tracker(Action::kOpenAIModelRetrieve, ctx_.telemetry);
+    ActionTracker tracker(Action::kOpenAIModelRetrieve, ctx_.telemetry,
+                          InvocationContext::Direct(GetUserAgent(request)));
 
     auto name_raw = request->getPathVariable("name");
     if (!name_raw) {

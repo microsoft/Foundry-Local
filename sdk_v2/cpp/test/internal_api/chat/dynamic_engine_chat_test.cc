@@ -35,6 +35,7 @@ namespace fl {
 namespace {
 
 constexpr const char* kDynamicEngineModelPathVariable = "FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_MODEL_PATH";
+constexpr const char* kDynamicEngineTestRequiredVariable = "FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_REQUIRED";
 constexpr const char* kDynamicEngineModelId = "dynamic-engine-test-model";
 
 class DynamicEngineEpDetector final : public IEpDetector {
@@ -173,17 +174,18 @@ StreamTurnOutput FinishStream(OnnxEngineChatStream& stream) {
 class DynamicEngineChatTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
+    required_ = !test::SafeGetEnv(kDynamicEngineTestRequiredVariable).empty();
     const auto configured_path = test::SafeGetEnv(kDynamicEngineModelPathVariable);
     if (configured_path.empty()) {
-      skip_reason_ = std::string(kDynamicEngineModelPathVariable) +
-                     " is not set to a model with engine.dynamic_batching";
+      unavailable_reason_ = std::string(kDynamicEngineModelPathVariable) +
+                            " is not set to a model with engine.dynamic_batching";
       return;
     }
 
     const std::filesystem::path source(configured_path);
     if (!std::filesystem::exists(source / "genai_config.json")) {
-      skip_reason_ = std::string(kDynamicEngineModelPathVariable) +
-                     " must point to a directory containing genai_config.json";
+      unavailable_reason_ = std::string(kDynamicEngineModelPathVariable) +
+                            " must point to a directory containing genai_config.json";
       return;
     }
 
@@ -212,9 +214,15 @@ class DynamicEngineChatTest : public ::testing::Test {
   }
 
   void SetUp() override {
-    if (!skip_reason_.empty()) {
-      GTEST_SKIP() << skip_reason_;
+    if (unavailable_reason_.empty()) {
+      return;
     }
+
+    if (required_) {
+      FAIL() << unavailable_reason_;
+    }
+
+    GTEST_SKIP() << unavailable_reason_;
   }
 
   static GenAIModelInstance& ModelInstance() { return *model_; }
@@ -229,7 +237,8 @@ class DynamicEngineChatTest : public ::testing::Test {
     return model;
   }
 
-  static inline std::string skip_reason_;
+  static inline std::string unavailable_reason_;
+  static inline bool required_ = false;
   static inline std::unique_ptr<DynamicEngineModelStaging> staged_model_;
   static inline std::unique_ptr<StderrLogger> logger_;
   static inline std::unique_ptr<DynamicEngineEpDetector> ep_detector_;
@@ -238,20 +247,26 @@ class DynamicEngineChatTest : public ::testing::Test {
   TelemetryLogger telemetry_{"dynamic-engine-test", test::NullLog()};
 };
 
-TEST_F(DynamicEngineChatTest, GeneratesWithinOutputLimitAndRetainsContinuation) {
+TEST_F(DynamicEngineChatTest, RetainedContinuationReportsFreshPromptUsageParity) {
   ChatSession session(CatalogModel(), ModelInstance(), *logger_, telemetry_);
 
-  auto first = MakeRequest("Remember the word sapphire. Reply OK.");
+  constexpr const char* kFirstPrompt = "Remember the word sapphire. Reply OK.";
+  constexpr const char* kSecondPrompt = "What word did I ask you to remember?";
+  auto first = MakeRequest(kFirstPrompt);
   Response first_response;
   session.ProcessRequest(first, first_response);
   EXPECT_FALSE(AssistantText(first_response).empty());
   EXPECT_LE(first_response.usage.completion_tokens, 32);
+  EXPECT_EQ(first_response.usage.prompt_tokens,
+            static_cast<int>(EncodeMessages({{FOUNDRY_LOCAL_ROLE_USER, kFirstPrompt}}, ModelInstance()).size()));
+  EXPECT_EQ(first_response.usage.total_tokens,
+            first_response.usage.prompt_tokens + first_response.usage.completion_tokens);
 
   auto full_history = session.Transcript().Messages();
-  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, "What word did I ask you to remember?");
+  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, kSecondPrompt);
   const auto expected_second_prompt_tokens = EncodeMessages(full_history, ModelInstance()).size();
 
-  auto second = MakeRequest("What word did I ask you to remember?");
+  auto second = MakeRequest(kSecondPrompt);
   Response second_response;
   session.ProcessRequest(second, second_response);
 
@@ -260,6 +275,27 @@ TEST_F(DynamicEngineChatTest, GeneratesWithinOutputLimitAndRetainsContinuation) 
   EXPECT_EQ(second_response.usage.prompt_tokens, expected_second_prompt_tokens)
       << "resident suffix admission and fresh replay must report the same complete logical prompt";
   EXPECT_LE(second_response.usage.completion_tokens, 32);
+  EXPECT_EQ(second_response.usage.total_tokens,
+            second_response.usage.prompt_tokens + second_response.usage.completion_tokens);
+
+  ChatSession fresh_session(CatalogModel(), ModelInstance(), *logger_, telemetry_);
+  Request fresh_request;
+  fresh_request.AddOwnedItem(UserMessage(kFirstPrompt));
+  fresh_request.BeginItemSegment();
+  for (const auto& item : first_response.items) {
+    fresh_request.AddBorrowedItem(item.get());
+  }
+
+  fresh_request.BeginItemSegment();
+  fresh_request.AddOwnedItem(UserMessage(kSecondPrompt));
+  fresh_request.options.Add("max_output_tokens", "32");
+  fresh_request.options.Add("temperature", "0");
+  Response fresh_response;
+  fresh_session.ProcessRequest(fresh_request, fresh_response);
+
+  EXPECT_EQ(second_response.usage.prompt_tokens, fresh_response.usage.prompt_tokens);
+  EXPECT_EQ(fresh_response.usage.total_tokens,
+            fresh_response.usage.prompt_tokens + fresh_response.usage.completion_tokens);
 }
 
 TEST_F(DynamicEngineChatTest, MismatchedResidentPromptIsReplacedAndMatchesFreshReplay) {

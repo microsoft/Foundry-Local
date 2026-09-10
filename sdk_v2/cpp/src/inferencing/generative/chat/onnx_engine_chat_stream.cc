@@ -190,6 +190,7 @@ void OnnxEngineChatStream::ResetTurnDecoder() {
 std::optional<ChatTurnUsage> OnnxEngineChatStream::GetTurnUsage() const {
   const auto result = engine_.GetTurnResult(conversation_);
   return ChatTurnUsage{
+      // The independently rendered prompt length is stable across warm and fresh requests.
       prompt_token_count_,
       static_cast<int>(result.generated_tokens),
       MapFinishReason(result.finish_reason),
