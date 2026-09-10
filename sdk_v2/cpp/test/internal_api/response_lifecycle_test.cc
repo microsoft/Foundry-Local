@@ -9,7 +9,9 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <condition_variable>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -23,6 +25,9 @@ namespace {
 class RecordingAdmission final : public IResponseAdmission {
  public:
   void Admit(const std::string& response_id) override { admitted.push_back(response_id); }
+  void Rollback(const std::string& response_id) noexcept override {
+    admitted.erase(std::remove(admitted.begin(), admitted.end(), response_id), admitted.end());
+  }
 
   std::vector<std::string> admitted;
 };
@@ -33,6 +38,14 @@ class RecordingCache final : public IResponseCacheCoordinator {
   void Drop(const std::string& response_id) override { dropped.push_back(response_id); }
 
   std::vector<std::string> dropped;
+};
+
+class ThrowingAdmission final : public IResponseAdmission {
+ public:
+  void Admit(const std::string&) override { throw std::runtime_error("cache admission failed"); }
+  void Rollback(const std::string&) noexcept override { rollback_called = true; }
+
+  bool rollback_called = false;
 };
 
 /// A response object as the handler stores it: only `previous_response_id` and `output` matter to the store.
@@ -268,6 +281,26 @@ TEST(ResponseDeleteRaceTest, CommitAdmitsTheSessionExactlyOnceWhenNothingWasDele
   EXPECT_TRUE(store.Get("resp_1").has_value());
 }
 
+TEST(ResponseDeleteRaceTest, AdmissionFailureLeavesResponseUnpublishedAndPropagates) {
+  ResponseStore store;
+  ThrowingAdmission admission;
+  auto continuation = store.BeginResponse("", "model-a");
+
+  EXPECT_THROW(
+      store.Commit(
+          continuation.lease,
+          ResponseStore::StoredResponse{"resp_1", "model-a", ResponseJson("resp_1"), json::array()},
+          &admission),
+      std::runtime_error);
+
+  EXPECT_FALSE(store.Get("resp_1").has_value());
+  EXPECT_EQ(store.Size(), 0u);
+  EXPECT_EQ(store.InFlightResponses(), 0u);
+  EXPECT_FALSE(static_cast<bool>(continuation.lease));
+  EXPECT_FALSE(admission.rollback_called)
+      << "a throwing Admit must clean up its own partial work; rollback is only for later metadata failure";
+}
+
 TEST(ResponseDeleteRaceTest, DeletingTheParentMidFlightRejectsTheChildAndCachesNothing) {
   ResponseStore store;
   RecordingAdmission admission;
@@ -446,6 +479,11 @@ class ConcurrentCacheRecorder final : public IResponseAdmission, public IRespons
   void Drop(const std::string& response_id) override {
     std::lock_guard<std::mutex> lock(mutex_);
     dropped_.push_back(response_id);
+  }
+
+  void Rollback(const std::string& response_id) noexcept override {
+    std::lock_guard<std::mutex> lock(mutex_);
+    admitted_.erase(std::remove(admitted_.begin(), admitted_.end(), response_id), admitted_.end());
   }
 
   bool WasAdmitted(const std::string& response_id) const { return Contains(admitted_, response_id); }

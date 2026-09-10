@@ -30,7 +30,11 @@ class IResponseAdmission {
   virtual ~IResponseAdmission() = default;
 
   /// Publish the artifact under `response_id`. Called at most once, and never after the lease was invalidated.
+  /// If this throws, it must leave no artifact published.
   virtual void Admit(const std::string& response_id) = 0;
+
+  /// Undo a successful Admit when the metadata half of the transaction cannot be published. Must not throw.
+  virtual void Rollback(const std::string& response_id) noexcept = 0;
 };
 
 /// Eviction of live artifacts whose response metadata the store has removed. Called for every deleted response id,
@@ -136,7 +140,7 @@ class ResponseStore {
   [[nodiscard]] ContinuationResult BeginResponse(const std::string& previous_response_id,
                                                  const std::string& model_id);
 
-  /// Publish the result of a leased request: store its metadata and admit its live artifact in one critical section.
+  /// Publish the result of a leased request: admit its live artifact and store its metadata in one critical section.
   ///
   /// Returns false when an ancestor of the conversation was deleted while the request was running. Nothing is then
   /// stored and `admission` is never invoked, so no descendant of deleted content survives in either the store or

@@ -149,13 +149,23 @@ bool ResponseStore::Commit(ResponseLease& lease, StoredResponse response, IRespo
   }
 
   const std::string response_id = response.id;
-  StoreLocked(std::move(response));
 
-  // Admit under the same lock that published the metadata. A delete that arrives after this point sees the stored
-  // entry, so it removes the metadata and drops the cached session together; one that arrived earlier invalidated
-  // the lease and never reaches here. There is no ordering in between for a session to be resurrected in.
+  // Admission happens first so a throwing cache operation cannot leave retrievable metadata for a response whose
+  // handler reports failure. The store lock still excludes deletion from the interval between the two publications.
   if (admission != nullptr) {
     admission->Admit(response_id);
+  }
+
+  // Metadata allocation/compaction can also throw. Roll back an already-admitted artifact so either both halves
+  // become visible or neither does; never replace the original admission error with a rollback failure.
+  try {
+    StoreLocked(std::move(response));
+  } catch (...) {
+    if (admission != nullptr) {
+      admission->Rollback(response_id);
+    }
+
+    throw;
   }
 
   return true;
