@@ -24,9 +24,23 @@ The integration test suite must never pull a multi-GB model over the network dur
 Engine-capable builds compile `DynamicEngineChatTest`. Set `FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_MODEL_PATH` to a
 pre-staged model directory whose `genai_config.json` defines `engine.dynamic_batching` to run generation,
 continuation, concurrency, capacity, cancellation-recovery, and unload coverage. The fixture stages writable metadata
-without modifying the shared model and sets `max_batch_size` to two. Current GenAI 0.15.2 builds exclude these tests;
-any CI lane that enables the newer Engine API must stage the model and set this variable so skips do not hide a
-regression.
+without modifying the shared model and sets `max_batch_size` to two. Required lanes must also set
+`FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_REQUIRED=1` and configure with
+`FOUNDRY_LOCAL_REQUIRE_DYNAMIC_ENGINE_TESTS=ON`; the former converts a missing model fixture into a test failure, and
+the latter rejects a GenAI package that cannot compile the suite. Current GenAI 0.15.2 builds exclude these tests, so
+an Engine lane must use a newer package and a real pre-staged paged-KV model rather than relying on skips.
+
+The packaging pipeline includes the unconditional `cpp_test_engine` stage from
+`.pipelines/v2/templates/stages-test-engine.yml`. It uses the Linux A10 GPU pool, test-only CUDA NuGet packages,
+and the SHA-256-pinned paged Qwen fixture in `foundrylocalmodels/staging/paged-attention`. The existing
+`FoundryLocalCore-SP` service connection needs read access to those blobs, and the pipeline needs permission to use
+`onnxruntime-Linux-GPU-A10`. These are required resources: do not bypass failures with skips or `continueOnError`.
+The job runs directly on the GPU pool's existing image; it does not build or launch a custom container.
+The image must provide the compiler and CUDA libraries (CUDA 13 for GPU ORT, CUDA 12 for GenAI, driver 580 or newer).
+Missing runtime dependencies fail explicitly. Tests stage their own metadata without modifying the source model.
+Missing Engine capability, missing/changed model files, missing lifecycle tests, skipped tests, and test failures all
+fail the lane. Its binaries are not published as SDK artifacts and its GenAI pin is independent of the shipping/release
+dependency pins.
 
 ## Debugging skips in CI
 
