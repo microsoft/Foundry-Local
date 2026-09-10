@@ -3,6 +3,7 @@
 #include "inferencing/generative/chat/chat_template.h"
 #include "exception.h"
 #include "inferencing/generative/genai_model_instance.h"
+#include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
 #include "utils.h"
@@ -80,6 +81,12 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
   // turn prefix (add_generation_prompt=true).
   return model.GetPreprocessor().ApplyChatTemplateWithOptions(
       messages_str.c_str(), tools_ptr, template_kwargs_ptr, /*add_generation_prompt=*/true);
+}
+
+std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
+                            GenAIModelInstance& model,
+                            const ToolCallContext& tool_ctx) {
+  return BuildChatPrompt(messages, model, tool_ctx.tools_json, tool_ctx.template_kwargs_json);
 }
 
 std::unique_ptr<OgaSequences> EncodePrompt(const std::string& prompt,

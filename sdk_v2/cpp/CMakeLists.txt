@@ -50,6 +50,8 @@ option(FOUNDRY_LOCAL_BUILD_TESTS "Build unit tests" ON)
 option(FOUNDRY_LOCAL_BUILD_EXAMPLES "Build example programs" ON)
 option(FOUNDRY_LOCAL_BUILD_SERVICE "Build web service support (requires oat++)" ON)
 option(FOUNDRY_LOCAL_ENABLE_ASAN "Enable AddressSanitizer + UndefinedBehaviorSanitizer (Linux only)" OFF)
+option(FOUNDRY_LOCAL_REQUIRE_CHAT_TEMPLATE_KWARGS
+       "Fail configuration unless ORT GenAI supports chat template kwargs" OFF)
 
 # Optional 1DS ingestion token override. Override only via environment so it does
 # not appear in CMake cache files.
@@ -163,6 +165,11 @@ if(FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS)
     message(STATUS "ORT GenAI chat template kwargs: enabled")
 else()
     message(STATUS "ORT GenAI chat template kwargs: unavailable")
+endif()
+if(FOUNDRY_LOCAL_REQUIRE_CHAT_TEMPLATE_KWARGS AND
+   NOT FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS)
+    message(FATAL_ERROR
+        "The selected ORT GenAI package does not support required chat template kwargs")
 endif()
 find_package(OnnxRuntime REQUIRED)
 

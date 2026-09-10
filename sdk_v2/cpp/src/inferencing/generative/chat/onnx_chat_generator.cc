@@ -148,8 +148,7 @@ int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messag
 
   // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
   // produces the correct continuation tokens, including the next assistant generation prefix.
-  std::string prompt =
-      BuildChatPrompt(new_messages, model, tool_ctx.tools_json, tool_ctx.template_kwargs_json);
+  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx);
   auto sequences = EncodePrompt(prompt, model);
   int new_token_count = static_cast<int>(sequences->SequenceCount(0));
 
@@ -294,7 +293,7 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
     prompt = model.GetPreprocessor().ApplyChatTemplateWithOptions(
         messages_json.c_str(), tools_ptr, template_kwargs_ptr, /*add_generation_prompt=*/true);
   } else {
-    prompt = BuildChatPrompt(messages, model, tool_ctx.tools_json, tool_ctx.template_kwargs_json);
+    prompt = BuildChatPrompt(messages, model, tool_ctx);
   }
 
   // 2. Token budgeting.

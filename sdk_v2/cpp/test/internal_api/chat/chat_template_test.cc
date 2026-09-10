@@ -5,6 +5,7 @@
 
 #include "inferencing/generative/chat/chat_template.h"
 #include "exception.h"
+#include "inferencing/generative/toolcalling/tool_call_context.h"
 #include "inferencing/model_load_manager.h"
 #include "ep_detection/ep_detector.h"
 #include "logger.h"
@@ -167,16 +168,20 @@ TEST_F(ChatTemplateTest, PromptEndsWithAssistantPrefix) {
 #if FOUNDRY_LOCAL_OGA_HAS_CHAT_TEMPLATE_KWARGS
 TEST_F(ChatTemplateKwargsTest, TypedKwargsChangePromptAndOmissionClearsPriorState) {
   std::vector<MessageItem> messages = {{FOUNDRY_LOCAL_ROLE_USER, "Hello!"}};
+  ToolCallContext default_context;
+  ToolCallContext thinking_context;
+  thinking_context.template_kwargs_json = R"({"enable_thinking":true})";
+  ToolCallContext no_thinking_context;
+  no_thinking_context.template_kwargs_json = R"({"enable_thinking":false})";
 
-  std::string default_prompt = BuildChatPrompt(messages, GetModel());
-  std::string thinking_prompt =
-      BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":true})");
-  std::string no_thinking_prompt =
-      BuildChatPrompt(messages, GetModel(), "", R"({"enable_thinking":false})");
-  std::string default_prompt_after_kwargs = BuildChatPrompt(messages, GetModel());
+  std::string default_prompt = BuildChatPrompt(messages, GetModel(), default_context);
+  std::string thinking_prompt = BuildChatPrompt(messages, GetModel(), thinking_context);
+  std::string no_thinking_prompt = BuildChatPrompt(messages, GetModel(), no_thinking_context);
+  std::string default_prompt_after_kwargs =
+      BuildChatPrompt(messages, GetModel(), default_context);
 
   EXPECT_NE(thinking_prompt, no_thinking_prompt)
-      << "Typed boolean kwargs should affect a kwargs-sensitive chat template";
+      << "ToolCallContext kwargs should reach the prompt path shared by Generator and Engine backends";
   EXPECT_EQ(default_prompt_after_kwargs, default_prompt)
       << "Omitting kwargs must clear tokenizer state from the previous render";
 }

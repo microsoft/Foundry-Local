@@ -17,6 +17,7 @@ struct OgaSequences;
 namespace fl {
 
 class GenAIModelInstance;
+struct ToolCallContext;
 
 namespace chat_internal {
 
@@ -51,6 +52,11 @@ std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
                             GenAIModelInstance& model,
                             const std::string& tools_json = "",
                             const std::string& template_kwargs_json = "");
+
+/// Build a chat prompt from the complete retained tool/template context.
+std::string BuildChatPrompt(const std::vector<MessageItem>& messages,
+                            GenAIModelInstance& model,
+                            const ToolCallContext& tool_ctx);
 
 /// Encode a prompt string into token sequences using the model's shared tokenizer (thread-safe).
 /// Returns a unique_ptr to OgaSequences. Caller takes ownership.
