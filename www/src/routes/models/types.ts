@@ -35,7 +35,6 @@ export interface FoundryModel {
 	device?: string; // Device type (CPU, GPU, NPU)
 	fileSizeBytes?: number; // File size in bytes
 	vRamFootprintBytes?: number; // VRAM footprint
-	promptTemplate?: string; // Prompt template JSON
 	supportsToolCalling?: boolean; // Tool calling support
 	alias?: string; // Short model alias
 	isTestModel?: boolean; // Whether this is a test model

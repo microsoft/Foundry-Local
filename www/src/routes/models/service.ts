@@ -432,12 +432,7 @@ export class FoundryModelService {
 					return false;
 				}
 
-				// Prompt template validation: filter out models without prompt templates
-				// UNLESS they start with "gpt-oss-" OR have a task type of chat-completion
-				// Some models may not have promptTemplate but are still valid chat models
-				if (!this.isValidChatModel(model)) {
-					return false;
-				}				// Platform-specific filtering: ARM64 with INT8 quantization
+				// Platform-specific filtering: ARM64 with INT8 quantization
 				if (this.isArm64Platform()) {
 					// Extract model name without version
 					const baseName = model.name.split(':')[0];
@@ -448,39 +443,6 @@ export class FoundryModelService {
 
 				return true;
 			});
-	}
-
-	// Helper to validate if a model is a valid chat model for prompt template filtering
-	private isValidChatModel(model: FoundryModel): boolean {
-		const normalizedTaskType =
-			typeof model.taskType === 'string' ? model.taskType.toLowerCase() : '';
-		const normalizedName = model.name.toLowerCase();
-		
-		// Allow speech-to-text / whisper models (they don't have prompt templates but are valid)
-		if (normalizedTaskType.includes('automatic-speech-recognition') || 
-			normalizedTaskType.includes('speech-to-text') ||
-			normalizedName.includes('whisper')) {
-			return true;
-		}
-		
-		const validTaskTypeKeywords = [
-			'chat',
-			'completion',
-			'text-generation',
-			'text generation',
-			'instruct',
-			'instruction',
-			'reasoning'
-		];
-		const hasValidTaskType =
-			normalizedTaskType.length > 0 &&
-			validTaskTypeKeywords.some((keyword) => normalizedTaskType.includes(keyword));
-
-		return (
-			model.name.startsWith('gpt-oss-') ||
-			!!model.promptTemplate ||
-			hasValidTaskType
-		);
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -542,9 +504,6 @@ export class FoundryModelService {
 		if (entity.annotations?.labels && Array.isArray(entity.annotations.labels)) {
 			tags.push(...entity.annotations.labels.map((l: string) => `label:${l}`));
 		}
-
-		// Extract prompt template
-		const promptTemplate = entity.annotations?.tags?.promptTemplate || null;
 
 		// Extract tool calling support
 		const supportsToolCalling = entity.annotations?.tags?.supportsToolCalling === 'true';
@@ -635,7 +594,6 @@ export class FoundryModelService {
 			device: device,
 			fileSizeBytes: fileSizeBytes,
 			vRamFootprintBytes: vRamFootprintBytes,
-			promptTemplate: promptTemplate,
 			supportsToolCalling: supportsToolCalling,
 			alias: alias,
 			isTestModel: isTestModel,
