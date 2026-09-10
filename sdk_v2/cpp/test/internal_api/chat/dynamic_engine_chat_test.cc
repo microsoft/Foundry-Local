@@ -134,7 +134,7 @@ Request MakeRequest(std::string prompt, int max_output_tokens = 32) {
 }
 
 std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& model) {
-  std::vector<MessageItem> messages;
+  std::vector<TranscriptMessage> messages;
   messages.emplace_back(FOUNDRY_LOCAL_ROLE_USER, std::move(prompt));
   auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
   const auto count = sequences->SequenceCount(0);
@@ -142,7 +142,7 @@ std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& mo
   return {data, data + count};
 }
 
-std::vector<int32_t> EncodeMessages(const std::vector<MessageItem>& messages, GenAIModelInstance& model) {
+std::vector<int32_t> EncodeMessages(const std::vector<TranscriptMessage>& messages, GenAIModelInstance& model) {
   auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
   const auto count = sequences->SequenceCount(0);
   const auto* data = sequences->SequenceData(0);
@@ -253,12 +253,18 @@ TEST_F(DynamicEngineChatTest, GeneratesWithinOutputLimitAndRetainsContinuation) 
   EXPECT_FALSE(AssistantText(first_response).empty());
   EXPECT_LE(first_response.usage.completion_tokens, 32);
 
+  auto full_history = session.Transcript().Messages();
+  full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, "What word did I ask you to remember?");
+  const auto expected_second_prompt_tokens = EncodeMessages(full_history, ModelInstance()).size();
+
   auto second = MakeRequest("What word did I ask you to remember?");
   Response second_response;
   session.ProcessRequest(second, second_response);
 
   EXPECT_NE(test::ToLower(AssistantText(second_response)).find("sapphire"), std::string::npos);
   EXPECT_EQ(session.TurnCount(), 2u);
+  EXPECT_EQ(second_response.usage.prompt_tokens, expected_second_prompt_tokens)
+      << "resident suffix admission and fresh replay must report the same complete logical prompt";
   EXPECT_LE(second_response.usage.completion_tokens, 32);
 }
 
@@ -269,7 +275,7 @@ TEST_F(DynamicEngineChatTest, FullPromptPrefixContinuationMatchesFreshReplayAfte
   first_options.do_sample = false;
   ToolCallContext tool_context;
 
-  std::vector<MessageItem> first_messages = {
+  std::vector<TranscriptMessage> first_messages = {
       {FOUNDRY_LOCAL_ROLE_USER, "Write a detailed explanation of why the sky is blue."}};
   const auto first_prompt = EncodeMessages(first_messages, ModelInstance());
   auto warm = engine.CreateConversation(first_options, tool_context, static_cast<int>(first_prompt.size()));
@@ -283,7 +289,7 @@ TEST_F(DynamicEngineChatTest, FullPromptPrefixContinuationMatchesFreshReplayAfte
   expected_resident.insert(expected_resident.end(), first.tokens.begin(), first.tokens.end());
   EXPECT_EQ(engine.ResidentTokens(warm), expected_resident);
 
-  std::vector<MessageItem> full_history = first_messages;
+  std::vector<TranscriptMessage> full_history = first_messages;
   full_history.emplace_back(FOUNDRY_LOCAL_ROLE_ASSISTANT, first.text);
   full_history.emplace_back(FOUNDRY_LOCAL_ROLE_USER, "Summarize that in one sentence.");
   const auto full_prompt = EncodeMessages(full_history, ModelInstance());

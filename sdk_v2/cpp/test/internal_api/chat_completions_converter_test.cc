@@ -9,6 +9,7 @@
 #include "exception.h"
 #include "inferencing/generative/chat/chat_template.h"
 #include "inferencing/generative/chat/chat_transcript.h"
+#include "inferencing/generative/chat/stop_strings.h"
 #include "items/message_item.h"
 #include "items/text_item.h"
 #include "items/tool_call_item.h"
@@ -18,10 +19,26 @@
 #include <nlohmann/json.hpp>
 
 #include <string>
+#include <utility>
 
 using namespace fl;
 using namespace fl::chat_completions;
 using json = nlohmann::json;
+
+namespace {
+
+template <typename Fn>
+void ExpectInvalidArgument(Fn&& fn, const std::string& message_fragment) {
+  try {
+    fn();
+    FAIL() << "Expected fl::Exception";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+    EXPECT_NE(std::string(e.what()).find(message_fragment), std::string::npos) << e.what();
+  }
+}
+
+}  // namespace
 
 // ========================================================================
 // GenerateCompletionId
@@ -652,46 +669,94 @@ TEST(ChatCompletionsConverterTest, MapStopSequences_NoStop_NoOp) {
   MapStopSequences(req, session_request);
 
   EXPECT_EQ(session_request.options.Find("early_stopping"), nullptr);
+  EXPECT_EQ(session_request.options.Find(kInternalStopStringsOptionKey), nullptr);
 }
 
-TEST(ChatCompletionsConverterTest, MapStopSequences_StringStop) {
+TEST(ChatCompletionsConverterTest, MapStopSequences_StringStopStoresNormalizedPayload) {
   ChatCompletionRequest req;
   req.stop = json("END");
 
   Request session_request;
   MapStopSequences(req, session_request);
 
-  EXPECT_STREQ(session_request.options.Find("early_stopping"), "true");
+  EXPECT_EQ(session_request.options.Find("early_stopping"), nullptr);
+  EXPECT_EQ(LoadStopStringsOption(session_request.options), (std::vector<std::string>{"END"}));
 }
 
-TEST(ChatCompletionsConverterTest, MapStopSequences_ArrayStop) {
+TEST(ChatCompletionsConverterTest, MapStopSequences_ArrayStopStoresNormalizedPayload) {
   ChatCompletionRequest req;
   req.stop = json::parse(R"(["END", "STOP"])");
 
   Request session_request;
   MapStopSequences(req, session_request);
 
-  EXPECT_STREQ(session_request.options.Find("early_stopping"), "true");
-}
-
-TEST(ChatCompletionsConverterTest, MapStopSequences_EmptyString_NoEarlyStopping) {
-  ChatCompletionRequest req;
-  req.stop = json("");
-
-  Request session_request;
-  MapStopSequences(req, session_request);
-
   EXPECT_EQ(session_request.options.Find("early_stopping"), nullptr);
+  EXPECT_EQ(LoadStopStringsOption(session_request.options), (std::vector<std::string>{"END", "STOP"}));
 }
 
-TEST(ChatCompletionsConverterTest, MapStopSequences_EmptyArray_NoEarlyStopping) {
+TEST(ChatCompletionsConverterTest, MapStopSequences_TypeMustBeStringOrArray) {
+  ExpectInvalidArgument(
+      []() {
+        ChatCompletionRequest req;
+        req.stop = json(123);
+        Request session_request;
+        MapStopSequences(req, session_request);
+      },
+      "must be a string or array of strings");
+}
+
+TEST(ChatCompletionsConverterTest, MapStopSequences_ArrayMembersMustBeStrings) {
+  ExpectInvalidArgument(
+      []() {
+        ChatCompletionRequest req;
+        req.stop = json::array({"END", 42});
+        Request session_request;
+        MapStopSequences(req, session_request);
+      },
+      "stop[1] must be a string");
+}
+
+TEST(ChatCompletionsConverterTest, MapStopSequences_RejectsEmptyString) {
+  ExpectInvalidArgument(
+      []() {
+        ChatCompletionRequest req;
+        req.stop = json("");
+        Request session_request;
+        MapStopSequences(req, session_request);
+      },
+      "must not be empty");
+}
+
+TEST(ChatCompletionsConverterTest, MapStopSequences_EmptyArrayIsNoOp) {
   ChatCompletionRequest req;
   req.stop = json::array();
-
   Request session_request;
+
   MapStopSequences(req, session_request);
 
-  EXPECT_EQ(session_request.options.Find("early_stopping"), nullptr);
+  EXPECT_EQ(session_request.options.Find(kInternalStopStringsOptionKey), nullptr);
+}
+
+TEST(ChatCompletionsConverterTest, MapStopSequences_RejectsEmbeddedNul) {
+  ExpectInvalidArgument(
+      []() {
+        ChatCompletionRequest req;
+        req.stop = json(std::string("A\0B", 3));
+        Request session_request;
+        MapStopSequences(req, session_request);
+      },
+      "embedded NUL");
+}
+
+TEST(ChatCompletionsConverterTest, MapStopSequences_RejectsMoreThanFourStops) {
+  ExpectInvalidArgument(
+      []() {
+        ChatCompletionRequest req;
+        req.stop = json::array({"a", "b", "c", "d", "e"});
+        Request session_request;
+        MapStopSequences(req, session_request);
+      },
+      "at most 4 strings");
 }
 
 // ========================================================================

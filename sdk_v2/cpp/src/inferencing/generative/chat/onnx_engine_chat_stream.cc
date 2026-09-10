@@ -172,7 +172,9 @@ int OnnxEngineChatStream::AppendMessages(const std::vector<TranscriptMessage>& n
 
   ResetTurnDecoder();
 
-  prompt_token_count_ = submitted_tokens;
+  // Public chat usage describes the complete logical prompt, not only the suffix admitted to a resident Engine
+  // request. The suffix remains an internal KV-reuse optimization.
+  prompt_token_count_ = count;
   prompt_opens_reasoning_ = DetectPromptOpensReasoning(prompt, *sequences, tool_ctx, model);
   cancelled_ = false;
   return submitted_tokens;
@@ -188,7 +190,7 @@ void OnnxEngineChatStream::ResetTurnDecoder() {
 std::optional<ChatTurnUsage> OnnxEngineChatStream::GetTurnUsage() const {
   const auto result = engine_.GetTurnResult(conversation_);
   return ChatTurnUsage{
-      static_cast<int>(result.prompt_tokens + result.cached_prompt_tokens),
+      prompt_token_count_,
       static_cast<int>(result.generated_tokens),
       MapFinishReason(result.finish_reason),
   };
