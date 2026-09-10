@@ -86,7 +86,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveModel(
-  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
@@ -601,7 +601,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::HandleSt
       }
 
       route_tracker->SetStatus(req.canceled.load(std::memory_order_relaxed) ? ActionStatus::kCanceled
-                                                                         : ActionStatus::kSuccess);
+                                                                            : ActionStatus::kSuccess);
     } catch (const std::exception& ex) {
       route_tracker->RecordException(ex);
       logger.Log(LogLevel::Error, fmt::format("Response {} failed during streaming: {}", response_id, ex.what()));

@@ -879,8 +879,8 @@ TEST_P(WebServiceTelemetryTest, ClientErrorRetainsHttpResponseAndRecordsDirectAt
   const httplib::Headers headers{{"User-Agent", "telemetry-test-client"}};
   const auto response = std::string(scenario.method) == "POST"
                             ? client.Post(scenario.path, headers, scenario.body, "application/json")
-                            : std::string(scenario.method) == "DELETE" ? client.Delete(scenario.path, headers)
-                                                                      : client.Get(scenario.path, headers);
+                        : std::string(scenario.method) == "DELETE" ? client.Delete(scenario.path, headers)
+                                                                   : client.Get(scenario.path, headers);
   ASSERT_TRUE(response) << httplib::to_string(response.error());
   EXPECT_EQ(response->status, scenario.status);
   const auto body = json::parse(response->body);
@@ -934,9 +934,13 @@ TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOper
   const auto model_path = test::GetTestModelPath(test::kTestChatModelAlias);
   auto loaded = load_manager.LoadModel(model_path.string(), "telemetry-chat");
   ASSERT_EQ(loaded.status, ModelLoadManager::LoadStatus::kSuccess);
-  catalog.AddModel(Model::FromModelInfo(
-      ModelInfo{.model_id = "telemetry-chat", .name = "telemetry-chat", .task = "chat-completion"},
-      model_path.string(), bindings.download_manager, load_manager));
+
+  ModelInfo model_info;
+  model_info.model_id = "telemetry-chat";
+  model_info.name = "telemetry-chat";
+  model_info.task = "chat-completion";
+  catalog.AddModel(Model::FromModelInfo(std::move(model_info), model_path.string(),
+                                        bindings.download_manager, load_manager));
   auto cache = test::TempPath::CreateTempDir("fl_inference_telemetry_");
   WebService service(catalog, fl::test::NullLog(), cache.string(), load_manager, sessions, telemetry, []() {});
   const auto urls = service.Start({"http://127.0.0.1:0"});
@@ -981,7 +985,7 @@ TEST_P(WebServiceTelemetryInferenceTest, ChatRouteAndNestedInferenceShareOneOper
   }
 
   EXPECT_EQ(action_ids, (std::vector<Action>{Action::kSessionCreate, Action::kSessionProcessRequest,
-                                            Action::kOpenAIChatCompletions}));
+                                             Action::kOpenAIChatCompletions}));
 }
 
 INSTANTIATE_TEST_SUITE_P(StreamingAndNonStreaming, WebServiceTelemetryInferenceTest, ::testing::Bool());

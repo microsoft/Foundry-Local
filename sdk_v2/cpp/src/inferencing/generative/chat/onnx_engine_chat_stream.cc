@@ -163,7 +163,9 @@ int OnnxEngineChatStream::AppendMessages(const std::vector<MessageItem>& new_mes
 
   ResetTurnDecoder();
 
-  prompt_token_count_ = submitted_tokens;
+  // Usage describes the complete logical prompt, matching a fresh replay. OGA 0.16 reports only the submitted
+  // continuation here and currently reports zero cached prompt tokens even though the earlier KV state is resident.
+  prompt_token_count_ = count;
   cancelled_ = false;
   return submitted_tokens;
 }
@@ -178,7 +180,8 @@ void OnnxEngineChatStream::ResetTurnDecoder() {
 std::optional<ChatTurnUsage> OnnxEngineChatStream::GetTurnUsage() const {
   const auto result = engine_.GetTurnResult(conversation_);
   return ChatTurnUsage{
-      static_cast<int>(result.prompt_tokens + result.cached_prompt_tokens),
+      // The independently rendered prompt length is stable across warm and fresh requests.
+      prompt_token_count_,
       static_cast<int>(result.generated_tokens),
       MapFinishReason(result.finish_reason),
   };

@@ -48,9 +48,9 @@ class AudioSession : public Session {
   SessionType Type() const override;
 
  private:
-   friend class AudioSessionTestAccessor;
+  friend class AudioSessionTestAccessor;
 
-   void SetSessionOptionsImpl(const KeyValuePairs& options) override;
+  void SetSessionOptionsImpl(const KeyValuePairs& options) override;
   void ProcessRequestImpl(const Request& request, Response& response) override;
 
   /// Process a request whose first item is a TEXT item tagged OPENAI_JSON containing an
@@ -60,7 +60,7 @@ class AudioSession : public Session {
 
   bool IsNemotronSpeechModel() const;
 
-  void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req, 
+  void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req,
                                         const Request& original_request,
                                         Response& response);
 

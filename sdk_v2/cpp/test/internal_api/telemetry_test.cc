@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "telemetry/telemetry_action_tracker.h"
 #include "telemetry/device_id.h"
+#include "telemetry/telemetry_context.h"
 #include "telemetry/telemetry_event_properties_sanitizer.h"
 #include "telemetry/telemetry_environment.h"
 #include "telemetry/telemetry_logger.h"
@@ -378,6 +379,24 @@ TEST(TelemetryMetadataTest, HostAppVersionIsAlwaysPopulated) {
 
   EXPECT_FALSE(metadata.app_version.empty());
   EXPECT_FALSE(metadata.version.empty());
+}
+
+TEST(TelemetryContextTest, SuppressesUnneededCommonContextWithoutChangingExplicitIdentity) {
+  struct RecordingContext {
+    std::map<std::string, std::string> fields;
+    void SetCommonField(const std::string& name, const std::string& value) { fields[name] = value; }
+  } context;
+  context.fields["AppInfo.Id"] = "application-id";
+  context.fields["DeviceInfo.Id"] = "device-id";
+
+  TelemetryInternal::SuppressUnneededCommonContext(context);
+
+  ASSERT_EQ(context.fields.size(), 7u);
+  EXPECT_EQ(context.fields.at("AppInfo.Id"), "application-id");
+  EXPECT_EQ(context.fields.at("DeviceInfo.Id"), "device-id");
+  for (const auto* field : TelemetryInternal::kSuppressedCommonContextFields) {
+    EXPECT_TRUE(context.fields.at(field).empty()) << field;
+  }
 }
 
 TEST(TelemetryDeviceIdTest, ValidatesGuidShapeAndHashesForUpload) {

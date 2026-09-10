@@ -57,7 +57,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> AudioTranscriptionsHandler::ResolveModel(
-  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");

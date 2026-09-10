@@ -4,6 +4,7 @@
 #include "telemetry/one_ds_telemetry.h"
 
 #include "telemetry/device_id.h"
+#include "telemetry/telemetry_context.h"
 #include "telemetry/telemetry_event_properties_sanitizer.h"
 #include "telemetry/telemetry_environment.h"
 #include "telemetry/telemetry_redaction.h"
@@ -229,11 +230,13 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
                   "[Telemetry] ILogManager::GetLogger returned null; 1DS upload disabled");
       return;
     }
-    if (!disable_nonessential_telemetry && impl_->logger->GetSemanticContext() != nullptr) {
-      auto* semantic_context = impl_->logger->GetSemanticContext();
-      const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
-      if (!hashed_device_id.empty()) {
-        semantic_context->SetDeviceId(hashed_device_id);
+    if (auto* semantic_context = impl_->logger->GetSemanticContext(); semantic_context != nullptr) {
+      TelemetryInternal::SuppressUnneededCommonContext(*semantic_context);
+      if (!disable_nonessential_telemetry) {
+        const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
+        if (!hashed_device_id.empty()) {
+          semantic_context->SetDeviceId(hashed_device_id);
+        }
       }
     }
     SetCommonContext(impl_->logger, metadata_);

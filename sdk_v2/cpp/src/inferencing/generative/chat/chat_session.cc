@@ -223,7 +223,7 @@ SessionType ChatSession::Type() const {
 }
 
 std::string ChatSession::ExecutionProvider() const {
-  return std::string(EPUtils::EPtoRegistrationName(model_.EP()));
+  return std::string(EPUtils::EPtoTelemetryName(model_.EP(), model_.GetGenAIConfig().DefaultProvider()));
 }
 
 void ChatSession::SetSessionOptionsImpl(const KeyValuePairs& options) {

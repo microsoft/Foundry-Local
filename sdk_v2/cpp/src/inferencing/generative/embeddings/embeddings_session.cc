@@ -41,7 +41,7 @@ SessionType EmbeddingsSession::Type() const {
 }
 
 std::string EmbeddingsSession::ExecutionProvider() const {
-  return std::string(EPUtils::EPtoRegistrationName(model_.EP()));
+  return std::string(EPUtils::EPtoTelemetryName(model_.EP(), model_.GetGenAIConfig().DefaultProvider()));
 }
 
 void EmbeddingsSession::ProcessRequestImpl(const Request& request, Response& response) {

@@ -236,7 +236,7 @@ void Session::ProcessRequest(const Request& request, Response& response) {
     ProcessRequestImpl(request, response);
 
     tracker.SetStatus(request.canceled.load(std::memory_order_relaxed) ? ActionStatus::kCanceled
-                                                                    : ActionStatus::kSuccess);
+                                                                       : ActionStatus::kSuccess);
   } catch (const std::exception& ex) {
     tracker.RecordException(ex);
     throw;

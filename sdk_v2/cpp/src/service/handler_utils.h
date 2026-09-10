@@ -92,7 +92,7 @@ inline std::string GetUserAgent(const std::shared_ptr<HttpRequestHandler::Incomi
 /// Track construction separately from processing, with the route's indirect context for both.
 template <typename SessionType>
 std::unique_ptr<SessionType> CreateSessionWithTelemetry(const Model& model, GenAIModelInstance& loaded,
-                                                       ServiceContext& ctx, const InvocationContext& context) {
+                                                        ServiceContext& ctx, const InvocationContext& context) {
   ActionTracker tracker(Action::kSessionCreate, ctx.telemetry, context);
   tracker.SetModelId(model.Id());
   try {

@@ -4,6 +4,7 @@
 
 #include "inferencing/session/session_manager.h"
 #include "inferencing/session/session_registration.h"
+#include "inferencing/execution_provider.h"
 #include "inferencing/generative/chat/chat_session.h"
 #include "inferencing/model_load_manager.h"
 #include "ep_detection/ep_detector.h"
@@ -510,10 +511,16 @@ class UsageTestSession : public Session {
 
 class SessionTelemetryTest : public ::testing::Test {
  protected:
+  static ModelInfo MakeModelInfo() {
+    ModelInfo info;
+    info.model_id = "usage-model";
+    info.name = "usage-model";
+    info.execution_provider = "CPUExecutionProvider";
+    return info;
+  }
+
   fl::test::FakeServiceBindings svc;
-  Model model = Model::FromModelInfo(
-      ModelInfo{.model_id = "usage-model", .name = "usage-model", .execution_provider = "CPUExecutionProvider"},
-      "", svc.download_manager, svc.model_load_manager);
+  Model model = Model::FromModelInfo(MakeModelInfo(), "", svc.download_manager, svc.model_load_manager);
   SessionUsageTelemetry telemetry;
 };
 
@@ -679,4 +686,32 @@ TEST_F(SessionTelemetryTest, TelemetryTokenNarrowingDoesNotWrapOrChangeResponseA
   ASSERT_EQ(telemetry.usages.size(), 1u);
   EXPECT_EQ(telemetry.usages[0].total_tokens, std::numeric_limits<int32_t>::max());
   EXPECT_EQ(telemetry.usages[0].input_token_count, 0);
+}
+
+TEST(SessionTelemetryProviderTest, ImplicitCpuHasConcreteTelemetryNameWithoutChangingRuntimeSentinels) {
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, ""), "CPUExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoGenAI(ExecutionProvider::kDefault), "");
+  EXPECT_EQ(EPUtils::EPtoRegistrationName(ExecutionProvider::kDefault), "");
+  EXPECT_EQ(EPUtils::StringtoEP(""), ExecutionProvider::kUnknown);
+}
+
+TEST(SessionTelemetryProviderTest, DefaultSelectionUsesConfiguredProviderInsteadOfAssumingCpu) {
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "cpu"), "CPUExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "CPUExecutionProvider"), "CPUExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "cuda"), "CUDAExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "CUDAExecutionProvider"), "CUDAExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "WebGPU"), "WebGpuExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "OpenVINO"), "OpenVINOExecutionProvider");
+}
+
+TEST(SessionTelemetryProviderTest, ExplicitProviderOverridesConfigWithoutChangingGenAiNames) {
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kCPU, "cuda"), "CPUExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kCUDA, "OpenVINO"), "CUDAExecutionProvider");
+  EXPECT_EQ(EPUtils::EPtoGenAI(ExecutionProvider::kCPU), "");
+  EXPECT_EQ(EPUtils::EPtoGenAI(ExecutionProvider::kCUDA), "cuda");
+}
+
+TEST(SessionTelemetryProviderTest, UnknownProvidersAreNotReportedAsImplicitCpu) {
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kUnknown, ""), "");
+  EXPECT_EQ(EPUtils::EPtoTelemetryName(ExecutionProvider::kDefault, "unknown-provider"), "");
 }
