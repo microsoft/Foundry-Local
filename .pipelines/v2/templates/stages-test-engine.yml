@@ -22,6 +22,12 @@ stages:
     steps:
     - checkout: self
 
+    - task: UsePythonVersion@0
+      displayName: 'Use Python 3.12'
+      inputs:
+        versionSpec: '3.12'
+        architecture: x64
+
     - template: steps-prefetch-nuget.yml
       parameters:
         ortVersion: ${{ parameters.ortVersion }}
@@ -56,52 +62,49 @@ stages:
     - bash: |
         set -euo pipefail
         nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv
-        docker build \
-          --tag foundry-local-engine-ci \
-          "$(Build.SourcesDirectory)/.pipelines/v2/docker/cuda"
-        git clone https://github.com/microsoft/vcpkg.git "$(Build.BinariesDirectory)/engine-vcpkg"
-        mkdir -p "$(Build.BinariesDirectory)/engine-home"
-        docker run --rm --gpus all \
-          --user "$(id -u):$(id -g)" \
-          --volume "$(Build.SourcesDirectory):$(Build.SourcesDirectory)" \
-          --volume "$(Build.BinariesDirectory):$(Build.BinariesDirectory)" \
-          --volume "$(Build.BinariesDirectory)/engine-model:/models:ro" \
-          --env "HOME=$(Build.BinariesDirectory)/engine-home" \
-          --env "VCPKG_ROOT=$(Build.BinariesDirectory)/engine-vcpkg" \
-          --env "NUGET_CACHE=$(Build.BinariesDirectory)/nuget_packages" \
-          --env "ENGINE_GENAI_VERSION=${{ parameters.genaiVersion }}" \
-          --env "BUILD_CONFIG=${{ parameters.buildConfig }}" \
-          --env "FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_REQUIRED=1" \
-          --env "FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_MODEL_PATH=/models/paged-attention/qwen2.5-0.5b-instruct" \
-          --env "TF_BUILD=true" \
-          --workdir "$(Build.SourcesDirectory)/sdk_v2/cpp" \
-          foundry-local-engine-ci bash -c '
-            set -euo pipefail
-            python3 -m venv "$HOME/venv"
-            python="$HOME/venv/bin/python"
-            "$python" -m pip install "cmake==3.31.6"
-            "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
-            "$python" build.py --configure --build --skip_examples \
-              --config "$BUILD_CONFIG" \
-              --cmake_path "$HOME/venv/bin/cmake" \
-              --cmake_extra_defines \
-                "GENAI_FETCH_URL=$NUGET_CACHE/genai.zip" \
-                "ORT_GENAI_VERSION=$ENGINE_GENAI_VERSION" \
-                "ORT_FETCH_URL=$NUGET_CACHE/ort.zip" \
-                "FOUNDRY_LOCAL_REQUIRE_DYNAMIC_ENGINE_TESTS=ON"
-            build="$PWD/build/Linux/$BUILD_CONFIG"
-            bin="$build/bin"
-            cp "$build/_deps/genailib-src/runtimes/linux-x64/native/libonnxruntime-genai-cuda.so" "$bin/"
-            cp "$build/_deps/ortlib-src/runtimes/linux-x64/native/libonnxruntime_providers_cuda.so" "$bin/"
-            export LD_LIBRARY_PATH="$bin:${LD_LIBRARY_PATH:-}"
-            results="$build/TestResults"
-            mkdir -p "$results"
-            cd "$bin"
-            timeout --signal=TERM --kill-after=30s 10m ./foundry_local_tests \
-              --gtest_filter="DynamicEngineChatTest.*" \
-              --gtest_output="xml:$results/dynamic-engine.xml"
-          '
-      displayName: 'Build and run every dynamic Engine test on CUDA'
+        git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+        python -m venv "$ENGINE_VENV"
+        python="$ENGINE_VENV/bin/python"
+        "$python" -m pip install "cmake==3.31.6"
+        "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+        "$python" build.py --configure --build --skip_examples \
+          --config "$BUILD_CONFIG" \
+          --cmake_path "$ENGINE_VENV/bin/cmake" \
+          --cmake_extra_defines \
+            "GENAI_FETCH_URL=$NUGET_CACHE/genai.zip" \
+            "ORT_GENAI_VERSION=$ENGINE_GENAI_VERSION" \
+            "ORT_FETCH_URL=$NUGET_CACHE/ort.zip" \
+            "FOUNDRY_LOCAL_REQUIRE_DYNAMIC_ENGINE_TESTS=ON"
+        build="$PWD/build/Linux/$BUILD_CONFIG"
+        bin="$build/bin"
+        cp "$build/_deps/genailib-src/runtimes/linux-x64/native/libonnxruntime-genai-cuda.so" "$bin/"
+        cp "$build/_deps/ortlib-src/runtimes/linux-x64/native/libonnxruntime_providers_cuda.so" "$bin/"
+        export LD_LIBRARY_PATH="$bin:${LD_LIBRARY_PATH:-}"
+        for library in "$bin/libonnxruntime-genai-cuda.so" "$bin/libonnxruntime_providers_cuda.so"; do
+          dependencies=$(ldd "$library")
+          printf '%s\n' "$dependencies"
+          if [[ "$dependencies" == *"not found"* ]]; then
+            echo "GPU pool image is missing a dependency required by $library" >&2
+            exit 1
+          fi
+        done
+        results="$build/TestResults"
+        mkdir -p "$results"
+        cd "$bin"
+        timeout --signal=TERM --kill-after=30s 10m ./foundry_local_tests \
+          --gtest_filter="DynamicEngineChatTest.*" \
+          --gtest_output="xml:$results/dynamic-engine.xml"
+      displayName: 'Build and run Engine tests on the GPU pool image'
+      workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+      env:
+        VCPKG_ROOT: $(Build.BinariesDirectory)/engine-vcpkg
+        ENGINE_VENV: $(Build.BinariesDirectory)/engine-venv
+        NUGET_CACHE: $(Build.BinariesDirectory)/nuget_packages
+        ENGINE_GENAI_VERSION: ${{ parameters.genaiVersion }}
+        BUILD_CONFIG: ${{ parameters.buildConfig }}
+        FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_REQUIRED: '1'
+        FOUNDRY_LOCAL_DYNAMIC_ENGINE_TEST_MODEL_PATH: $(Build.BinariesDirectory)/engine-model/paged-attention/qwen2.5-0.5b-instruct
+        TF_BUILD: 'true'
 
     # GTest succeeds when a filter selects zero tests or every test skips.
     # Require every lifecycle regression as well as successful execution of any new tests.

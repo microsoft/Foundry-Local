@@ -35,10 +35,12 @@ The packaging pipeline includes the unconditional `cpp_test_engine` stage from
 and the SHA-256-pinned paged Qwen fixture in `foundrylocalmodels/staging/paged-attention`. The existing
 `FoundryLocalCore-SP` service connection needs read access to those blobs, and the pipeline needs permission to use
 `onnxruntime-Linux-GPU-A10`. These are required resources: do not bypass failures with skips or `continueOnError`.
-The GPU host must support CUDA 13 (driver 580 or newer); the test image also includes CUDA 12 libraries for GenAI.
-The model is mounted read-only; tests stage their own writable metadata. Missing Engine capability, missing/changed
-model files, missing lifecycle tests, skipped tests, and test failures all fail the lane. Its binaries are not published
-as SDK artifacts and its GenAI pin is independent of the shipping/release dependency pins.
+The job runs directly on the GPU pool's existing image; it does not build or launch a custom container.
+The image must provide the compiler and CUDA libraries (CUDA 13 for GPU ORT, CUDA 12 for GenAI, driver 580 or newer).
+Missing runtime dependencies fail explicitly. Tests stage their own metadata without modifying the source model.
+Missing Engine capability, missing/changed model files, missing lifecycle tests, skipped tests, and test failures all
+fail the lane. Its binaries are not published as SDK artifacts and its GenAI pin is independent of the shipping/release
+dependency pins.
 
 ## Debugging skips in CI
 
