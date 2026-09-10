@@ -98,6 +98,7 @@ bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind 
                                                                 bool reasoning_was_active,
                                                                 bool stop_sequence_matched,
                                                                 bool host_output_limit_reached);
+bool ShouldInvalidateRetainedGeneratorForUndo(bool undo_all, bool has_pre_turn_boundary, bool can_rewind);
 
 }  // namespace chat_session_internal
 

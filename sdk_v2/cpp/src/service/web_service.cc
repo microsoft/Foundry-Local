@@ -186,7 +186,7 @@ struct WebService::Impl {
    public:
     explicit SessionCacheCoordinator(SessionManager& manager) : manager_(manager) {}
 
-    void Drop(const std::string& response_id) override { manager_.EvictCached(response_id); }
+    void Drop(const std::string& response_id) noexcept override { manager_.EvictCached(response_id); }
 
    private:
     SessionManager& manager_;

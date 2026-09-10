@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -305,6 +306,43 @@ TEST(ChatTranscriptTest, AReplyThatWouldContinueAPrefilledCallIsRejected) {
   ChatTranscript transcript;
   EXPECT_THROW(transcript.CommitTurn({prefill}, reply, {}), fl::Exception);
   EXPECT_TRUE(transcript.Empty());
+}
+
+TEST(ChatTranscriptTest, CommitFailureBeforePublishPreservesEveryObservableState) {
+  bool fail_before_publish = false;
+  ChatTranscript transcript([&fail_before_publish](ChatTranscript::CommitPhase phase) {
+    if (fail_before_publish && phase == ChatTranscript::CommitPhase::kBeforePublish) {
+      throw std::runtime_error("injected commit failure");
+    }
+  });
+  transcript.CommitTurn({UserMessage("Weather?")},
+                        MakeAssistant("", {MakeCall("call_1", "get_weather", "{}")}), {3, 7});
+
+  const auto messages_before = BuildChatMessagesJson(transcript.Messages());
+  const auto turns_before = transcript.Turns();
+  const auto outstanding_before = transcript.OutstandingCallCount();
+  auto next_prompt_before = transcript.Messages();
+  next_prompt_before.push_back(TranscriptMessage::ToolResult("call_1", "sunny"));
+  const auto rendered_next_prompt_before = BuildChatMessagesJson(next_prompt_before);
+
+  fail_before_publish = true;
+  EXPECT_THROW(
+      transcript.CommitTurn({TranscriptMessage::ToolResult("call_1", "sunny")},
+                            MakeAssistant("It is sunny.", {MakeCall("call_2", "get_time", "{}")}), {7, 12}),
+      std::runtime_error);
+
+  EXPECT_EQ(BuildChatMessagesJson(transcript.Messages()), messages_before);
+  ASSERT_EQ(transcript.Turns().size(), turns_before.size());
+  EXPECT_EQ(transcript.Turns()[0].message_start, turns_before[0].message_start);
+  EXPECT_EQ(transcript.Turns()[0].tokens.pre_turn, turns_before[0].tokens.pre_turn);
+  EXPECT_EQ(transcript.Turns()[0].tokens.post_turn, turns_before[0].tokens.post_turn);
+  EXPECT_EQ(transcript.OutstandingCallCount(), outstanding_before);
+  EXPECT_TRUE(transcript.IsOutstanding("call_1"));
+  EXPECT_FALSE(transcript.IsOutstanding("call_2"));
+
+  auto next_prompt_after = transcript.Messages();
+  next_prompt_after.push_back(TranscriptMessage::ToolResult("call_1", "sunny"));
+  EXPECT_EQ(BuildChatMessagesJson(next_prompt_after), rendered_next_prompt_before);
 }
 
 // ===========================================================================

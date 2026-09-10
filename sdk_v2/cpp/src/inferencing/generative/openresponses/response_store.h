@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -32,9 +33,6 @@ class IResponseAdmission {
   /// Publish the artifact under `response_id`. Called at most once, and never after the lease was invalidated.
   /// If this throws, it must leave no artifact published.
   virtual void Admit(const std::string& response_id) = 0;
-
-  /// Undo a successful Admit when the metadata half of the transaction cannot be published. Must not throw.
-  virtual void Rollback(const std::string& response_id) noexcept = 0;
 };
 
 /// Eviction of live artifacts whose response metadata the store has removed. Called for every deleted response id,
@@ -43,8 +41,9 @@ class IResponseCacheCoordinator {
  public:
   virtual ~IResponseCacheCoordinator() = default;
 
-  /// Drop anything cached under `response_id`. Must not call back into the store — see ResponseStore's lock order.
-  virtual void Drop(const std::string& response_id) = 0;
+  /// Drop anything cached under `response_id`. Must not throw or call back into the store — see ResponseStore's lock
+  /// order. No-throw publication lets capacity eviction stay atomic with metadata replacement.
+  virtual void Drop(const std::string& response_id) noexcept = 0;
 };
 
 /// Why a response could not be started as a continuation of another.
@@ -101,9 +100,21 @@ class ResponseStore {
   static constexpr int kDefaultCapacity = 20;
   static constexpr int kMaxCapacity = 100;
 
+  /// Deterministic fault points for validating the metadata transaction's strong exception guarantee.
+  enum class StorePhase {
+    kAfterEntriesCloned,
+    kAfterIndexRebuilt,
+    kAfterEntryUpdated,
+    kAfterCompaction,
+  };
+  using StoreFaultInjector = std::function<void(StorePhase)>;
+
   /// @param capacity  Maximum number of retained response metadata entries.
   /// @param cache     Optional live-artifact cache kept in step with deletions. nullptr = the store owns no cache.
-  explicit ResponseStore(int capacity = kDefaultCapacity, IResponseCacheCoordinator* cache = nullptr);
+  /// @param fault_injector  Optional deterministic test seam invoked while preparing metadata.
+  explicit ResponseStore(int capacity = kDefaultCapacity,
+                         IResponseCacheCoordinator* cache = nullptr,
+                         StoreFaultInjector fault_injector = {});
 
   /// Everything a completed response contributes to the store.
   struct StoredResponse {
@@ -247,6 +258,17 @@ class ResponseStore {
     nlohmann::json response;
     nlohmann::json input_items;
     std::shared_ptr<const ReplayPrefix> replay_prefix;
+    uint64_t insertion_sequence = 0;
+  };
+
+  using EntryList = std::list<Entry>;
+  using EntryIndex = std::unordered_map<std::string, EntryList::iterator>;
+
+  struct MetadataState {
+    EntryList entries;
+    EntryIndex index;
+    std::vector<std::string> evicted_ids;
+    uint64_t next_insertion_sequence = 0;
   };
 
   /// One in-flight response registered by BeginResponse.
@@ -263,18 +285,24 @@ class ResponseStore {
 
   int capacity_;
   IResponseCacheCoordinator* cache_;
+  StoreFaultInjector fault_injector_;
 
   /// Guards every member below. Lock order: this mutex may be held while calling into IResponseCacheCoordinator or
   /// IResponseAdmission (which reach into the service's session cache), so neither may call back into the store.
   mutable std::mutex mutex_;
-  std::list<Entry> entries_;  // front = most recently used
-  std::unordered_map<std::string, std::list<Entry>::iterator> index_;
+  EntryList entries_;  // front = most recently used; List orders by Entry::insertion_sequence instead
+  EntryIndex index_;
   std::unordered_map<uint64_t, PendingResponse> pending_;
   uint64_t next_lease_id_ = 1;
+  uint64_t next_insertion_sequence_ = 0;
 
-  void Evict();
-  void CompactAndEraseLocked(std::list<Entry>::iterator root);
-  void StoreLocked(StoredResponse response);
+  MetadataState PrepareStoreLocked(StoredResponse response);
+  void CommitStoreLocked(MetadataState&& state) noexcept;
+  void DropEvictedArtifactsLocked(const MetadataState& state);
+  void StoreLocked(StoredResponse response, MetadataState& state);
+  void Evict(MetadataState& state);
+  void CompactAndEraseLocked(MetadataState& state, EntryList::iterator root);
+  void InjectStoreFault(StorePhase phase) const;
   void ReleaseLease(uint64_t lease_id) noexcept;
   static ResponseChainHop ToReplayHop(const Entry& entry);
   static bool PrefixContains(const std::shared_ptr<const ReplayPrefix>& prefix, const std::string& response_id);

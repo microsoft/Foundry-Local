@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -25,9 +26,6 @@ namespace {
 class RecordingAdmission final : public IResponseAdmission {
  public:
   void Admit(const std::string& response_id) override { admitted.push_back(response_id); }
-  void Rollback(const std::string& response_id) noexcept override {
-    admitted.erase(std::remove(admitted.begin(), admitted.end(), response_id), admitted.end());
-  }
 
   std::vector<std::string> admitted;
 };
@@ -35,7 +33,7 @@ class RecordingAdmission final : public IResponseAdmission {
 /// Records what the store drops, standing in for SessionManager::EvictCached.
 class RecordingCache final : public IResponseCacheCoordinator {
  public:
-  void Drop(const std::string& response_id) override { dropped.push_back(response_id); }
+  void Drop(const std::string& response_id) noexcept override { dropped.push_back(response_id); }
 
   std::vector<std::string> dropped;
 };
@@ -43,9 +41,6 @@ class RecordingCache final : public IResponseCacheCoordinator {
 class ThrowingAdmission final : public IResponseAdmission {
  public:
   void Admit(const std::string&) override { throw std::runtime_error("cache admission failed"); }
-  void Rollback(const std::string&) noexcept override { rollback_called = true; }
-
-  bool rollback_called = false;
 };
 
 /// A response object as the handler stores it: only `previous_response_id` and `output` matter to the store.
@@ -297,8 +292,113 @@ TEST(ResponseDeleteRaceTest, AdmissionFailureLeavesResponseUnpublishedAndPropaga
   EXPECT_EQ(store.Size(), 0u);
   EXPECT_EQ(store.InFlightResponses(), 0u);
   EXPECT_FALSE(static_cast<bool>(continuation.lease));
-  EXPECT_FALSE(admission.rollback_called)
-      << "a throwing Admit must clean up its own partial work; rollback is only for later metadata failure";
+}
+
+TEST(ResponseDeleteRaceTest, MetadataPreparationFailuresPreserveReplacementAndSkipAdmission) {
+  const std::vector<ResponseStore::StorePhase> phases = {
+      ResponseStore::StorePhase::kAfterEntriesCloned,
+      ResponseStore::StorePhase::kAfterIndexRebuilt,
+      ResponseStore::StorePhase::kAfterEntryUpdated,
+  };
+
+  for (const auto phase : phases) {
+    SCOPED_TRACE(static_cast<int>(phase));
+    std::optional<ResponseStore::StorePhase> fault;
+    ResponseStore store(ResponseStore::kDefaultCapacity, nullptr,
+                        [&fault](ResponseStore::StorePhase current) {
+                          if (fault == current) {
+                            throw std::runtime_error("injected metadata failure");
+                          }
+                        });
+    store.Store("resp_1", {{"id", "resp_1"}, {"version", "original"}}, json::array(), "model-a");
+    store.Store("resp_2", {{"id", "resp_2"}, {"version", "untouched"}}, json::array(), "model-a");
+    const auto order_before = store.List().data;
+
+    auto continuation = store.BeginResponse("", "model-a");
+    RecordingAdmission admission;
+    fault = phase;
+
+    EXPECT_THROW(
+        store.Commit(
+            continuation.lease,
+            ResponseStore::StoredResponse{
+                "resp_1", "model-a", {{"id", "resp_1"}, {"version", "replacement"}}, json::array()},
+            &admission),
+        std::runtime_error);
+
+    EXPECT_TRUE(admission.admitted.empty());
+    EXPECT_EQ(store.Size(), 2u);
+    EXPECT_EQ(store.List().data, order_before);
+    const auto original = store.Get("resp_1");
+    ASSERT_TRUE(original.has_value());
+    EXPECT_EQ((*original)["version"], "original");
+    EXPECT_EQ(store.InFlightResponses(), 0u);
+    EXPECT_FALSE(static_cast<bool>(continuation.lease));
+  }
+}
+
+TEST(ResponseDeleteRaceTest, CompactionFailurePreservesEveryMetadataEntryAndSkipsAdmission) {
+  std::optional<ResponseStore::StorePhase> fault;
+  ResponseStore store(2, nullptr, [&fault](ResponseStore::StorePhase current) {
+    if (fault == current) {
+      throw std::runtime_error("injected compaction failure");
+    }
+  });
+  store.Store("root", ResponseJson("root"), json::array({{{"content", "root"}}}), "model-a");
+  store.Store("child", ResponseJson("child", "root"), json::array({{{"content", "child"}}}), "model-a");
+  const auto order_before = store.List().data;
+  const auto chain_before = store.BuildChainContext("child");
+  ASSERT_TRUE(chain_before.has_value());
+
+  auto continuation = store.BeginResponse("", "model-a");
+  RecordingAdmission admission;
+  fault = ResponseStore::StorePhase::kAfterCompaction;
+
+  EXPECT_THROW(
+      store.Commit(
+          continuation.lease,
+          ResponseStore::StoredResponse{"other", "model-a", ResponseJson("other"), json::array()},
+          &admission),
+      std::runtime_error);
+
+  EXPECT_TRUE(admission.admitted.empty());
+  EXPECT_EQ(store.Size(), 2u);
+  EXPECT_EQ(store.List().data, order_before);
+  EXPECT_FALSE(store.Get("other").has_value());
+  EXPECT_TRUE(store.Get("root").has_value());
+  const auto chain_after = store.BuildChainContext("child");
+  ASSERT_TRUE(chain_after.has_value());
+  ASSERT_EQ(chain_after->size(), chain_before->size());
+  for (size_t i = 0; i < chain_before->size(); ++i) {
+    EXPECT_EQ((*chain_after)[i].input_items, (*chain_before)[i].input_items);
+    EXPECT_EQ((*chain_after)[i].output_items, (*chain_before)[i].output_items);
+  }
+  EXPECT_EQ(store.InFlightResponses(), 0u);
+}
+
+TEST(ResponseDeleteRaceTest, AdmissionFailurePreservesExistingMetadataExactly) {
+  ResponseStore store;
+  store.Store("resp_1", {{"id", "resp_1"}, {"version", "original"}}, json::array(), "model-a");
+  store.Store("resp_2", {{"id", "resp_2"}, {"version", "untouched"}}, json::array(), "model-a");
+  const auto order_before = store.List().data;
+
+  auto continuation = store.BeginResponse("", "model-a");
+  ThrowingAdmission admission;
+
+  EXPECT_THROW(
+      store.Commit(
+          continuation.lease,
+          ResponseStore::StoredResponse{
+              "resp_1", "model-a", {{"id", "resp_1"}, {"version", "replacement"}}, json::array()},
+          &admission),
+      std::runtime_error);
+
+  EXPECT_EQ(store.Size(), 2u);
+  EXPECT_EQ(store.List().data, order_before);
+  const auto original = store.Get("resp_1");
+  ASSERT_TRUE(original.has_value());
+  EXPECT_EQ((*original)["version"], "original");
+  EXPECT_EQ(store.InFlightResponses(), 0u);
 }
 
 TEST(ResponseDeleteRaceTest, DeletingTheParentMidFlightRejectsTheChildAndCachesNothing) {
@@ -457,6 +557,8 @@ TEST(ResponseDeleteRaceTest, DeletingACompactedAncestorDropsTheSessionCachedUnde
   store.Store("resp_2", ResponseJson("resp_2", "resp_1"), json::array(), "model-a");
   store.Store("resp_x", ResponseJson("resp_x"), json::array(), "model-a");
   ASSERT_FALSE(store.Get("resp_1").has_value());
+  ASSERT_EQ(cache.dropped, (std::vector<std::string>{"resp_1"}));
+  cache.dropped.clear();
 
   const auto deleted = store.DeleteWithDependents("resp_1");
 
@@ -476,14 +578,9 @@ class ConcurrentCacheRecorder final : public IResponseAdmission, public IRespons
     admitted_.push_back(response_id);
   }
 
-  void Drop(const std::string& response_id) override {
+  void Drop(const std::string& response_id) noexcept override {
     std::lock_guard<std::mutex> lock(mutex_);
     dropped_.push_back(response_id);
-  }
-
-  void Rollback(const std::string& response_id) noexcept override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    admitted_.erase(std::remove(admitted_.begin(), admitted_.end(), response_id), admitted_.end());
   }
 
   bool WasAdmitted(const std::string& response_id) const { return Contains(admitted_, response_id); }

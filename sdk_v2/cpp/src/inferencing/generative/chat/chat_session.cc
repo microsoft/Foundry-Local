@@ -236,6 +236,10 @@ bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind 
   return stop_sequence_matched || host_output_limit_reached || reasoning_was_active || grammar_was_active;
 }
 
+bool ShouldInvalidateRetainedGeneratorForUndo(bool undo_all, bool has_pre_turn_boundary, bool can_rewind) {
+  return undo_all || !has_pre_turn_boundary || !can_rewind;
+}
+
 }  // namespace chat_session_internal
 
 ChatSession::ChatSession(const fl::Model& catalog_model, GenAIModelInstance& model, ILogger& logger, ITelemetry& telemetry)
@@ -592,6 +596,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       cached_generator_->AppendMessages(inputs, all_messages, Model(), turn_tool_ctx, effective_options);
       prompt_tokens = cached_generator_->TokenCount();
       cached_tool_ctx_ = turn_tool_ctx;
+    } catch (const RetainedPromptMismatchError&) {
+      InvalidateCachedGenerator();
+      pre_turn_token_count.reset();
     } catch (const OnnxChatEngine::ConversationEvictedError&) {
       InvalidateCachedGenerator();
       pre_turn_token_count.reset();
@@ -766,16 +773,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
                          splitter.ReasoningTokenCount(), backend_finish_reason);
 
   if (request.canceled) {
-    // A cancelled turn commits nothing. Cancellation is a settled stop between tokens, so a turn that was appended to
-    // an existing generator can be rewound to the boundary it started from and the generator stays usable for a
-    // retry. A generator created or rebuilt for this turn has no such boundary — the turn's input is part of its
-    // prompt — so the guard drops it and the next turn rebuilds from the committed transcript. If the rewind itself
-    // fails, the guard has not been dismissed yet and still invalidates.
-    if (pre_turn_token_count.has_value() && cached_generator_->CanRewind()) {
-      cached_generator_->RewindTo(*pre_turn_token_count);
-      invalidate_uncommitted.Dismiss();
-    }
-
+    // Cancel is permanent for classic generators, and Engine cannot rewind. The scope guard therefore discards every
+    // canceled generator so the next request rebuilds from the committed transcript.
     return;
   }
 
@@ -1064,9 +1063,11 @@ void ChatSession::UndoTurns(size_t count) {
     return;
   }
 
-  if (undo_all || !tokens.pre_turn.has_value()) {
+  if (chat_session_internal::ShouldInvalidateRetainedGeneratorForUndo(
+          undo_all, tokens.pre_turn.has_value(), cached_generator_->CanRewind())) {
     // Undoing every turn, or undoing back to a turn whose generator was rebuilt — in both cases the current KV cache
-    // has no boundary matching the target state, so drop it and let the next turn rebuild.
+    // has no usable boundary matching the target state. A non-rewindable backend must likewise rebuild from the
+    // already-truncated transcript.
     InvalidateCachedGenerator();
     return;
   }

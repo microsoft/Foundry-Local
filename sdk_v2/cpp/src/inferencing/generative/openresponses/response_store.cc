@@ -40,8 +40,10 @@ void ResponseLease::Release() noexcept {
 
 // --- ResponseStore ---
 
-ResponseStore::ResponseStore(int capacity, IResponseCacheCoordinator* cache)
-    : capacity_(std::clamp(capacity, 1, kMaxCapacity)), cache_(cache) {
+ResponseStore::ResponseStore(int capacity, IResponseCacheCoordinator* cache, StoreFaultInjector fault_injector)
+    : capacity_(std::clamp(capacity, 1, kMaxCapacity)),
+      cache_(cache),
+      fault_injector_(std::move(fault_injector)) {
 }
 
 void ResponseStore::Store(const std::string& response_id,
@@ -49,15 +51,50 @@ void ResponseStore::Store(const std::string& response_id,
                           nlohmann::json input_items,
                           std::string model_id) {
   std::lock_guard<std::mutex> lock(mutex_);
-  StoreLocked(StoredResponse{response_id, std::move(model_id), std::move(response), std::move(input_items)});
+  auto state =
+      PrepareStoreLocked({response_id, std::move(model_id), std::move(response), std::move(input_items)});
+  DropEvictedArtifactsLocked(state);
+  CommitStoreLocked(std::move(state));
 }
 
-void ResponseStore::StoreLocked(StoredResponse response) {
+ResponseStore::MetadataState ResponseStore::PrepareStoreLocked(StoredResponse response) {
+  MetadataState state;
+  state.entries = entries_;
+  state.next_insertion_sequence = next_insertion_sequence_;
+  InjectStoreFault(StorePhase::kAfterEntriesCloned);
+
+  state.index.reserve(index_.size() + 1);
+  for (auto it = state.entries.begin(); it != state.entries.end(); ++it) {
+    state.index.emplace(it->id, it);
+  }
+  InjectStoreFault(StorePhase::kAfterIndexRebuilt);
+
+  StoreLocked(std::move(response), state);
+  return state;
+}
+
+void ResponseStore::CommitStoreLocked(MetadataState&& state) noexcept {
+  entries_.swap(state.entries);
+  index_.swap(state.index);
+  next_insertion_sequence_ = state.next_insertion_sequence;
+}
+
+void ResponseStore::DropEvictedArtifactsLocked(const MetadataState& state) {
+  if (cache_ == nullptr) {
+    return;
+  }
+
+  for (const auto& evicted_id : state.evicted_ids) {
+    cache_->Drop(evicted_id);
+  }
+}
+
+void ResponseStore::StoreLocked(StoredResponse response, MetadataState& state) {
   std::shared_ptr<const ReplayPrefix> replay_prefix;
 
   // If already exists, preserve its compacted ancestry when the replacement keeps the same parent.
-  auto it = index_.find(response.id);
-  if (it != index_.end()) {
+  auto it = state.index.find(response.id);
+  if (it != state.index.end()) {
     const auto old_previous = it->second->response.find("previous_response_id");
     const auto new_previous = response.response.find("previous_response_id");
     if (old_previous != it->second->response.end() && new_previous != response.response.end() &&
@@ -65,19 +102,21 @@ void ResponseStore::StoreLocked(StoredResponse response) {
       replay_prefix = it->second->replay_prefix;
     }
 
-    entries_.erase(it->second);
-    index_.erase(it);
+    state.entries.erase(it->second);
+    state.index.erase(it);
   }
 
   // Insert at front (most recently used)
-  entries_.push_front(Entry{.id = response.id,
-                            .model_id = std::move(response.model_id),
-                            .response = std::move(response.response),
-                            .input_items = std::move(response.input_items),
-                            .replay_prefix = std::move(replay_prefix)});
-  index_[response.id] = entries_.begin();
+  state.entries.push_front(Entry{.id = response.id,
+                                 .model_id = std::move(response.model_id),
+                                 .response = std::move(response.response),
+                                 .input_items = std::move(response.input_items),
+                                 .replay_prefix = std::move(replay_prefix),
+                                 .insertion_sequence = state.next_insertion_sequence++});
+  state.index[response.id] = state.entries.begin();
+  InjectStoreFault(StorePhase::kAfterEntryUpdated);
 
-  Evict();
+  Evict(state);
 }
 
 ResponseStore::ContinuationResult ResponseStore::BeginResponse(const std::string& previous_response_id,
@@ -148,25 +187,21 @@ bool ResponseStore::Commit(ResponseLease& lease, StoredResponse response, IRespo
     return false;
   }
 
-  const std::string response_id = response.id;
+  const auto response_id = response.id;
 
-  // Admission happens first so a throwing cache operation cannot leave retrievable metadata for a response whose
-  // handler reports failure. The store lock still excludes deletion from the interval between the two publications.
+  // Build the complete post-commit metadata state before publishing either half. Copying JSON, rebuilding the index,
+  // replacement, eviction, and replay-prefix compaction can all allocate; failures leave the live state untouched.
+  auto state = PrepareStoreLocked(std::move(response));
+
+  // Admission is the final throwing operation. Capacity drops and metadata publication are no-throw, so a failed
+  // admission preserves both the old metadata and its cached sessions exactly.
   if (admission != nullptr) {
     admission->Admit(response_id);
   }
 
-  // Metadata allocation/compaction can also throw. Roll back an already-admitted artifact so either both halves
-  // become visible or neither does; never replace the original admission error with a rollback failure.
-  try {
-    StoreLocked(std::move(response));
-  } catch (...) {
-    if (admission != nullptr) {
-      admission->Rollback(response_id);
-    }
-
-    throw;
-  }
+  // The store lock preserves the documented store -> session-manager lock order throughout.
+  DropEvictedArtifactsLocked(state);
+  CommitStoreLocked(std::move(state));
 
   return true;
 }
@@ -336,12 +371,16 @@ std::vector<std::string> ResponseStore::DeleteWithDependents(const std::string& 
 ResponseStore::Page ResponseStore::List(int limit, const std::string& after, const std::string& order) {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  // Collect all entries in insertion order (front = newest)
+  // LRU touches must never move a pagination cursor. Order by the immutable insertion sequence rather than by the
+  // recency list used for capacity eviction.
   std::vector<const Entry*> ordered;
   ordered.reserve(entries_.size());
   for (const auto& entry : entries_) {
     ordered.push_back(&entry);
   }
+  std::sort(ordered.begin(), ordered.end(), [](const Entry* left, const Entry* right) {
+    return left->insertion_sequence > right->insertion_sequence;
+  });
 
   // For ascending order, reverse so oldest is first
   if (order == "asc") {
@@ -378,12 +417,12 @@ size_t ResponseStore::Size() const {
   return entries_.size();
 }
 
-void ResponseStore::Evict() {
-  while (static_cast<int>(entries_.size()) > capacity_) {
+void ResponseStore::Evict(MetadataState& state) {
+  while (static_cast<int>(state.entries.size()) > capacity_) {
     // Evict within the least-recently-used conversation. Walk that entry toward its root so an internal hop is never
     // removed between a retained parent and child. A cycle is malformed; evict the LRU entry itself so malformed
     // conversations cannot become immortal and force every newer response back out of the store.
-    auto lru = std::prev(entries_.end());
+    auto lru = std::prev(state.entries.end());
     auto root = lru;
     std::unordered_set<std::string> visited;
     bool cycle = false;
@@ -399,8 +438,8 @@ void ResponseStore::Evict() {
         break;
       }
 
-      const auto parent = index_.find(previous->get<std::string>());
-      if (parent == index_.end()) {
+      const auto parent = state.index.find(previous->get<std::string>());
+      if (parent == state.index.end()) {
         break;
       }
 
@@ -411,11 +450,11 @@ void ResponseStore::Evict() {
       root = lru;
     }
 
-    CompactAndEraseLocked(root);
+    CompactAndEraseLocked(state, root);
   }
 }
 
-void ResponseStore::CompactAndEraseLocked(std::list<Entry>::iterator root) {
+void ResponseStore::CompactAndEraseLocked(MetadataState& state, EntryList::iterator root) {
   const auto previous = root->response.find("previous_response_id");
   const bool is_complete_root = previous == root->response.end() || !previous->is_string() ||
                                 previous->get<std::string>().empty() || root->replay_prefix != nullptr;
@@ -425,7 +464,7 @@ void ResponseStore::CompactAndEraseLocked(std::list<Entry>::iterator root) {
         ReplayPrefix{root->id, root->replay_prefix, ToReplayHop(*root)});
 
     // Branches share the immutable prefix rather than copying every earlier tool result into every child.
-    for (auto& entry : entries_) {
+    for (auto& entry : state.entries) {
       const auto entry_previous = entry.response.find("previous_response_id");
       if (entry_previous != entry.response.end() && entry_previous->is_string() &&
           entry_previous->get<std::string>() == root->id) {
@@ -434,8 +473,16 @@ void ResponseStore::CompactAndEraseLocked(std::list<Entry>::iterator root) {
     }
   }
 
-  index_.erase(root->id);
-  entries_.erase(root);
+  state.evicted_ids.push_back(root->id);
+  state.index.erase(root->id);
+  state.entries.erase(root);
+  InjectStoreFault(StorePhase::kAfterCompaction);
+}
+
+void ResponseStore::InjectStoreFault(StorePhase phase) const {
+  if (fault_injector_) {
+    fault_injector_(phase);
+  }
 }
 
 bool ResponseStore::PrefixContains(const std::shared_ptr<const ReplayPrefix>& prefix,

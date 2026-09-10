@@ -7,10 +7,12 @@
 #include <nlohmann/json.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace fl {
@@ -319,6 +321,14 @@ std::vector<TranscriptMessage> WithSystemPrompt(const std::string& system_prompt
 /// so a failed, cancelled, or rejected turn leaves no partial state behind, and undo restores the exact prior state.
 class ChatTranscript {
  public:
+  enum class CommitPhase {
+    kBeforePublish,
+  };
+  using CommitFaultInjector = std::function<void(CommitPhase)>;
+
+  explicit ChatTranscript(CommitFaultInjector fault_injector = {})
+      : fault_injector_(std::move(fault_injector)) {}
+
   /// Generator sequence lengths bracketing a turn. Used to rewind the cached generator on undo.
   struct TurnTokens {
     /// Sequence length before this turn's input was appended. Empty when the turn built a fresh generator: the
@@ -397,6 +407,7 @@ class ChatTranscript {
   // derived state: they exist so validation is O(1) and are rebuilt wholesale on undo.
   std::unordered_set<std::string> issued_;
   std::unordered_set<std::string> outstanding_;
+  CommitFaultInjector fault_injector_;
 };
 
 }  // namespace fl

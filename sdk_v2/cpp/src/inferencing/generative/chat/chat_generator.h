@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,11 @@ struct ChatTurnUsage {
   int prompt_tokens = 0;
   int generated_tokens = 0;
   std::optional<flFinishReason> finish_reason;
+};
+
+class RetainedPromptMismatchError : public std::runtime_error {
+ public:
+  RetainedPromptMismatchError() : std::runtime_error("retained tokens are not a prefix of the full prompt") {}
 };
 
 /// Abstract interface for token-by-token text generation.

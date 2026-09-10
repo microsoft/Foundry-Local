@@ -203,31 +203,47 @@ void OnnxChatGenerator::Cancel() {
 // ---------------------------------------------------------------------------
 
 int OnnxChatGenerator::AppendMessages(const std::vector<TranscriptMessage>& new_messages,
-                                      const std::vector<TranscriptMessage>& /*full_messages*/,
+                                      const std::vector<TranscriptMessage>& full_messages,
                                       GenAIModelInstance& model,
                                       const ToolCallContext& tool_ctx,
                                       const SearchOptions& /*options*/) {
-  if (new_messages.empty()) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
+  if (new_messages.empty() || full_messages.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages and full_messages must not be empty");
   }
 
-  // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
-  // produces the correct continuation tokens (e.g. <|im_end|>\n<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n)
-  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx.tools_json);
-  auto sequences = EncodePrompt(prompt, model);
-  int new_token_count = static_cast<int>(sequences->SequenceCount(0));
+  // Render and tokenize the authoritative full transcript once. Generated text is not guaranteed to round-trip
+  // through decode/encode to the same token IDs, so resident state is reusable only when it is an exact prefix.
+  std::string prompt = BuildChatPrompt(full_messages, model, tool_ctx.tools_json);
+  auto full_sequences = EncodePrompt(prompt, model);
+  const auto full_count = full_sequences->SequenceCount(0);
+  const auto* full_data = full_sequences->SequenceData(0);
+  const std::span<const int32_t> full_prompt(full_data, full_count);
+  const std::span<const int32_t> resident(generator_->GetSequenceData(0), generator_->GetSequenceCount(0));
+  const auto suffix_start = chat_internal::FindUnmatchedPromptSuffix(resident, full_prompt);
+  if (!suffix_start.has_value()) {
+    throw RetainedPromptMismatchError();
+  }
+
+  const auto suffix = full_prompt.subspan(*suffix_start);
+  if (suffix.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL,
+             "chat template produced no new tokens for a non-empty Generator continuation");
+  }
+
+  auto suffix_sequences = OgaSequences::Create();
+  suffix_sequences->Append(suffix.data(), suffix.size());
 
   try {
-    generator_->AppendTokenSequences(*sequences);
+    generator_->AppendTokenSequences(*suffix_sequences);
   } catch (const std::runtime_error& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to append token sequences: ") + e.what());
   }
 
   // Re-probe: the appended segment ends with this turn's assistant generation prefix, so it — not the original
   // prompt — determines whether generation resumes inside a template-opened reasoning block.
-  prompt_opens_reasoning_ = DetectPromptOpensReasoning(prompt, sequences.get(), reasoning_markers_);
+  prompt_opens_reasoning_ = DetectPromptOpensReasoning(prompt, full_sequences.get(), reasoning_markers_);
 
-  return new_token_count;
+  return static_cast<int>(suffix.size());
 }
 
 void OnnxChatGenerator::RewindTo(int token_count) {

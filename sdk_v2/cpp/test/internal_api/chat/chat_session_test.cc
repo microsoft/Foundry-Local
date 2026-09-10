@@ -243,6 +243,19 @@ TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSema
       /*host_output_limit_reached=*/true));
 }
 
+TEST(ChatSessionDecisionTest, UndoInvalidatesGeneratorsWithoutAUsableRewindBoundary) {
+  using chat_session_internal::ShouldInvalidateRetainedGeneratorForUndo;
+
+  EXPECT_TRUE(ShouldInvalidateRetainedGeneratorForUndo(
+      /*undo_all=*/true, /*has_pre_turn_boundary=*/true, /*can_rewind=*/true));
+  EXPECT_TRUE(ShouldInvalidateRetainedGeneratorForUndo(
+      /*undo_all=*/false, /*has_pre_turn_boundary=*/false, /*can_rewind=*/true));
+  EXPECT_TRUE(ShouldInvalidateRetainedGeneratorForUndo(
+      /*undo_all=*/false, /*has_pre_turn_boundary=*/true, /*can_rewind=*/false));
+  EXPECT_FALSE(ShouldInvalidateRetainedGeneratorForUndo(
+      /*undo_all=*/false, /*has_pre_turn_boundary=*/true, /*can_rewind=*/true));
+}
+
 // ===========================================================================
 // Integration test fixture: loads the shared test model once per suite
 // ===========================================================================
@@ -533,8 +546,19 @@ TEST_F(ChatSessionTest, RunMultiTurn) {
   EXPECT_EQ(session.MessageCount(), 4u);
 }
 
-TEST_F(ChatSessionTest, RunStreamingCancellation) {
+TEST_F(ChatSessionTest, AppendedClassicGeneratorIsDiscardedAfterStreamingCancellation) {
   ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  ASSERT_EQ(GetModel().GetGenAIConfig().GetChatBackendKind(), ChatBackendKind::kGenerator);
+
+  Request seed;
+  seed.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "Remember the word sapphire. Reply OK."));
+  seed.options.Add("max_output_tokens", "32");
+  seed.options.Add("temperature", "0");
+
+  Response seed_response;
+  session.ProcessRequest(seed, seed_response);
+  ASSERT_EQ(session.MessageCount(), 2u);
+  ASSERT_EQ(session.TurnCount(), 1u);
 
   Request request;
   request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, "Count from 1 to 100."));
@@ -568,9 +592,9 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   // so allow for a couple of extra tokens to come through after the cancellation condition is met
   EXPECT_LE(tokens_received, 6);
 
-  // Cancelled requests should not commit to history (delayed commit)
-  EXPECT_EQ(session.MessageCount(), 0u);
-  EXPECT_EQ(session.TurnCount(), 0u);
+  // The appended canceled turn commits nothing; only the seed turn remains.
+  EXPECT_EQ(session.MessageCount(), 2u);
+  EXPECT_EQ(session.TurnCount(), 1u);
 
   cancel_enabled = false;
   Request retry;
@@ -583,10 +607,10 @@ TEST_F(ChatSessionTest, RunStreamingCancellation) {
   const auto retry_text = GetAssistantText(retry_response);
 
   EXPECT_NE(retry_text.find("4"), std::string::npos)
-      << "The retained generator should recover after cancellation. Got: " << retry_text;
+      << "The generator rebuilt from committed history should recover after cancellation. Got: " << retry_text;
   EXPECT_EQ(retry_response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
-  EXPECT_EQ(session.MessageCount(), 2u);
-  EXPECT_EQ(session.TurnCount(), 1u);
+  EXPECT_EQ(session.MessageCount(), 4u);
+  EXPECT_EQ(session.TurnCount(), 2u);
 }
 
 TEST_F(ChatSessionTest, CancellationFromTheLastQueuedCallbackPreventsCommit) {
@@ -711,6 +735,44 @@ TEST_F(ChatSessionTest, UnchangedInstructionsKeepTheCachedGeneratorAndDoNotRepea
   for (const auto& message : session.Transcript().Messages()) {
     EXPECT_NE(message.role, FOUNDRY_LOCAL_ROLE_SYSTEM) << "the system prefix must not be committed to history";
   }
+}
+
+TEST_F(ChatSessionTest, OrdinaryWarmContinuationMatchesFreshFullTranscriptReplay) {
+  ChatSession warm_session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  const std::string first_user = "Reply with the single word blue.";
+  const std::string second_user = "Reply with the single word green.";
+
+  const auto first = RunTurnResponse(warm_session, first_user, "", /*disable_tools=*/true,
+                                     /*max_output_tokens=*/64);
+  auto full_messages = warm_session.Transcript().Messages();
+  full_messages.emplace_back(FOUNDRY_LOCAL_ROLE_USER, second_user);
+  const auto expected_prompt = BuildChatPrompt(full_messages, GetModel());
+
+  const auto warm = RunTurnResponse(warm_session, second_user, "", /*disable_tools=*/true,
+                                    /*max_output_tokens=*/64);
+  ASSERT_TRUE(warm_session.Transcript().Turns()[1].tokens.pre_turn.has_value())
+      << "the ordinary continuation must exercise the retained Generator path";
+
+  ChatSession fresh_session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  Request fresh_request;
+  fresh_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, first_user));
+  fresh_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_ASSISTANT, GetAssistantText(first)));
+  fresh_request.AddOwnedItem(MakeMessage(FOUNDRY_LOCAL_ROLE_USER, second_user));
+  fresh_request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "none");
+  fresh_request.options.Add("max_output_tokens", "64");
+  fresh_request.options.Add("temperature", "0");
+
+  const auto fresh_input = BuildTranscriptMessages(fresh_request.items);
+  EXPECT_EQ(BuildChatPrompt(fresh_input, GetModel()), expected_prompt)
+      << "the warm logical prompt and fresh rendered prompt must be identical";
+
+  Response fresh;
+  fresh_session.ProcessRequest(fresh_request, fresh);
+
+  EXPECT_EQ(warm.usage.prompt_tokens, fresh.usage.prompt_tokens);
+  EXPECT_EQ(GetAssistantText(warm), GetAssistantText(fresh));
+  EXPECT_EQ(warm.finish_reason, fresh.finish_reason);
+  EXPECT_EQ(warm.usage.completion_tokens, fresh.usage.completion_tokens);
 }
 
 TEST_F(ChatSessionTest, WarmTurnThatStopsBeforeItsLimitReportsStop) {

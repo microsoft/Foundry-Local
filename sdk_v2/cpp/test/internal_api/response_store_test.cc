@@ -411,7 +411,7 @@ TEST(ResponseStoreTest, ListRespectsLimit) {
   EXPECT_EQ(limited.data.size(), 2u);
 }
 
-TEST(ResponseStoreTest, ListDescOrderReturnsMostRecentFirst) {
+TEST(ResponseStoreTest, ListDescOrderReturnsNewestInsertionFirst) {
   ResponseStore store;
   FillStore(store, 3);
 
@@ -434,6 +434,44 @@ TEST(ResponseStoreTest, ListWithCursorPagination) {
   // In desc order (newest first: 3,2,1), after resp_2 should give resp_1.
   auto results = store.List(10, "resp_2", "desc");
   EXPECT_EQ(PageIds(results), (std::vector<std::string>{"resp_1"}));
+}
+
+TEST(ResponseStoreTest, CursorTraversalIsStableAcrossReadsAndContinuationTouches) {
+  ResponseStore store;
+  FillStore(store, 6);
+
+  const auto first = store.List(2, "", "desc");
+  ASSERT_EQ(PageIds(first), (std::vector<std::string>{"resp_6", "resp_5"}));
+  ASSERT_TRUE(first.has_more);
+
+  ASSERT_TRUE(store.Get("resp_1").has_value());
+  ASSERT_TRUE(store.GetInputItems("resp_4").has_value());
+  auto continuation = store.BeginResponse("resp_3", "");
+  ASSERT_EQ(continuation.status, ContinuationStatus::kOk);
+
+  const auto second = store.List(2, "resp_5", "desc");
+  ASSERT_EQ(PageIds(second), (std::vector<std::string>{"resp_4", "resp_3"}));
+  ASSERT_TRUE(second.has_more);
+
+  ASSERT_TRUE(store.BuildChainContext("resp_2").has_value());
+  continuation.lease.Release();
+
+  const auto third = store.List(2, "resp_3", "desc");
+  EXPECT_EQ(PageIds(third), (std::vector<std::string>{"resp_2", "resp_1"}));
+  EXPECT_FALSE(third.has_more);
+}
+
+TEST(ResponseStoreTest, ReadsChangeEvictionRecencyWithoutChangingListOrder) {
+  ResponseStore store(3);
+  FillStore(store, 3);
+
+  ASSERT_TRUE(store.Get("resp_1").has_value());
+  EXPECT_EQ(PageIds(store.List()), (std::vector<std::string>{"resp_3", "resp_2", "resp_1"}));
+
+  store.Store("resp_4", {{"id", "resp_4"}}, json::array());
+
+  EXPECT_FALSE(store.Get("resp_2").has_value()) << "the untouched LRU entry should be evicted";
+  EXPECT_EQ(PageIds(store.List()), (std::vector<std::string>{"resp_4", "resp_3", "resp_1"}));
 }
 
 // --- has_more: the page must report whether anything actually follows it -----------------------------------------
@@ -600,7 +638,7 @@ TEST(ResponseStoreChainTest, ReconstructsToolCallAndResultAcrossMultipleHops) {
   EXPECT_EQ((*context)[1].output_items[0]["role"], "assistant");
 }
 
-TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) {
+TEST(ResponseStoreChainTest, TouchingAChainChangesEvictionRecencyWithoutChangingListOrder) {
   ResponseStore store(3);
   StoreHop(store, "resp_root", "", json::array(), json::array());
   StoreHop(store, "resp_tip", "resp_root", json::array(), json::array());
@@ -610,7 +648,7 @@ TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) 
   // live session relies on.
   ASSERT_EQ(store.BeginResponse("resp_tip", "").status, ContinuationStatus::kOk);
   EXPECT_EQ(PageIds(store.List(3, "", "desc")),
-            (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
+            (std::vector<std::string>{"resp_other", "resp_tip", "resp_root"}));
 
   StoreHop(store, "resp_new", "", json::array(), json::array());
 
@@ -619,7 +657,7 @@ TEST(ResponseStoreChainTest, TouchingAChainKeepsTheRequestedEndpointMostRecent) 
   EXPECT_FALSE(store.Get("resp_other").has_value());
 }
 
-TEST(ResponseStoreChainTest, RebuildingAChainKeepsTheRequestedEndpointMostRecent) {
+TEST(ResponseStoreChainTest, RebuildingAChainChangesEvictionRecencyWithoutChangingListOrder) {
   ResponseStore store(3);
   StoreHop(store, "resp_root", "", json::array(), json::array());
   StoreHop(store, "resp_tip", "resp_root", json::array(), json::array());
@@ -627,7 +665,7 @@ TEST(ResponseStoreChainTest, RebuildingAChainKeepsTheRequestedEndpointMostRecent
 
   ASSERT_TRUE(store.BuildChainContext("resp_tip").has_value());
   EXPECT_EQ(PageIds(store.List(3, "", "desc")),
-            (std::vector<std::string>{"resp_tip", "resp_root", "resp_other"}));
+            (std::vector<std::string>{"resp_other", "resp_tip", "resp_root"}));
 }
 
 TEST(ResponseStoreChainTest, AConversationLongerThanCapacityStillReconstructsFromItsRetainedTip) {

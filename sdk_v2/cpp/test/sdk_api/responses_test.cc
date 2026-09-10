@@ -31,6 +31,22 @@ static const json* FindOutputByType(const json& output, const std::string& type)
   return nullptr;
 }
 
+static std::string MessageOutputText(const json& response) {
+  const auto* message = FindOutputByType(response.at("output"), "message");
+  if (message == nullptr) {
+    return {};
+  }
+
+  std::string text;
+  for (const auto& content : message->at("content")) {
+    if (content.value("type", "") == "output_text") {
+      text += content.value("text", "");
+    }
+  }
+
+  return text;
+}
+
 // Validate reasoning output item structure if present in the output array.
 // Returns true if a reasoning item was found (so the caller knows the model is a reasoning model).
 static bool ValidateReasoningOutput(const json& output, const char* context) {
@@ -418,6 +434,7 @@ TEST_F(WebServiceIntegrationTest, ResponsesCreateStreaming) {
   int event_count = 0;
   std::string assembled_text;
   bool got_completed = false;
+  json completed_response;
   std::vector<std::string> event_types;
 
   std::istringstream stream(body);
@@ -444,6 +461,7 @@ TEST_F(WebServiceIntegrationTest, ResponsesCreateStreaming) {
           auto& resp = event["response"];
           EXPECT_EQ(resp["status"], "completed");
           EXPECT_FALSE(resp["output"].empty());
+          completed_response = resp;
         }
       }
 
@@ -460,6 +478,9 @@ TEST_F(WebServiceIntegrationTest, ResponsesCreateStreaming) {
   EXPECT_TRUE(got_completed) << "Stream should contain response.completed event";
   EXPECT_GT(event_count, 0) << "Should have received at least one SSE event";
   EXPECT_FALSE(assembled_text.empty()) << "Assembled streaming text should not be empty";
+  ASSERT_FALSE(completed_response.is_null());
+  EXPECT_EQ(assembled_text, completed_response["output_text"].get<std::string>());
+  EXPECT_EQ(assembled_text, MessageOutputText(completed_response));
   std::string lower_text = ToLower(assembled_text);
   EXPECT_NE(lower_text.find("hello"), std::string::npos)
       << "Expected 'hello' (case-insensitive) in streaming output. Got: " << assembled_text;
@@ -614,6 +635,7 @@ TEST_F(WebServiceIntegrationTest, ResponsesNonStreamingThenChainStreaming) {
   std::string assembled_text;
   std::string second_status;
   bool got_completed = false;
+  json completed_response;
 
   std::istringstream stream2(second_result->body);
   std::string line2;
@@ -638,7 +660,8 @@ TEST_F(WebServiceIntegrationTest, ResponsesNonStreamingThenChainStreaming) {
       if (event_type == "response.completed") {
         got_completed = true;
         if (event.contains("response")) {
-          second_status = event["response"].value("status", "");
+          completed_response = event["response"];
+          second_status = completed_response.value("status", "");
         }
       }
     }
@@ -648,6 +671,9 @@ TEST_F(WebServiceIntegrationTest, ResponsesNonStreamingThenChainStreaming) {
   ASSERT_EQ(second_status, "completed")
       << "Turn 2 streaming response did not complete cleanly (likely 'incomplete' from max_output_tokens).";
   EXPECT_FALSE(assembled_text.empty()) << "Assembled streaming text should not be empty";
+  ASSERT_FALSE(completed_response.is_null());
+  EXPECT_EQ(assembled_text, completed_response["output_text"].get<std::string>());
+  EXPECT_EQ(assembled_text, MessageOutputText(completed_response));
   EXPECT_NE(assembled_text.find("cherry"), std::string::npos)
       << "Expected 'cherry' in streaming chained response. Got: " << assembled_text;
 }

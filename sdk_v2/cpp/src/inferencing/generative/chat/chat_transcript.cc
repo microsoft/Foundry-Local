@@ -473,8 +473,10 @@ void ChatTranscript::ValidateGeneratedOutput(const TranscriptMessage& output) co
 
 void ChatTranscript::CommitTurn(std::vector<TranscriptMessage> inputs, TranscriptMessage output, TurnTokens tokens,
                                 size_t reply_merge_floor) {
-  // Stage the whole turn against scratch copies first. Everything below this point is unconditional, so a rejected
-  // turn leaves the committed messages and call state exactly as they were.
+  // Build every part of the post-commit state separately. Validation, copying, vector growth, assistant merging, and
+  // call-state updates may all throw; none of them may partially publish a turn.
+  auto messages = messages_;
+  auto turns = turns_;
   auto issued = issued_;
   auto outstanding = outstanding_;
   StageTurn(inputs, &output, issued, outstanding);
@@ -491,22 +493,29 @@ void ChatTranscript::CommitTurn(std::vector<TranscriptMessage> inputs, Transcrip
   }
 
   Turn turn;
-  turn.message_start = messages_.size();
+  turn.message_start = messages.size();
   turn.tokens = tokens;
 
   // The floor is expressed against `inputs`; translate it to an index in the committed list. Inputs are appended
   // as ingestion produced them — it already applied the merge rule within each segment it knew about.
   const size_t floor = turn.message_start + std::min(reply_merge_floor, inputs.size());
 
-  messages_.reserve(messages_.size() + inputs.size() + 1);
+  messages.reserve(messages.size() + inputs.size() + 1);
   for (auto& message : inputs) {
-    messages_.push_back(std::move(message));
+    messages.push_back(std::move(message));
   }
 
-  AppendWithinSegment(messages_, std::move(output), floor);
-  turns_.push_back(turn);
-  issued_ = std::move(issued);
-  outstanding_ = std::move(outstanding);
+  AppendWithinSegment(messages, std::move(output), floor);
+  turns.push_back(turn);
+
+  if (fault_injector_) {
+    fault_injector_(CommitPhase::kBeforePublish);
+  }
+
+  messages_.swap(messages);
+  turns_.swap(turns);
+  issued_.swap(issued);
+  outstanding_.swap(outstanding);
 }
 
 ChatTranscript::TurnTokens ChatTranscript::UndoTurns(size_t count) {

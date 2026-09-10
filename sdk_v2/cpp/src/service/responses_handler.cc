@@ -38,22 +38,7 @@ class SessionCacheAdmission final : public IResponseAdmission {
       : manager_(manager), session_(std::move(session)) {}
 
   void Admit(const std::string& response_id) override {
-    try {
-      manager_.CheckIn(response_id, std::move(session_));
-    } catch (...) {
-      // CheckIn may have reached publication before a later allocation/logging failure. Honor the admission
-      // contract by ensuring a throwing Admit leaves no warm artifact behind.
-      manager_.EvictCached(response_id);
-      throw;
-    }
-  }
-
-  void Rollback(const std::string& response_id) noexcept override {
-    try {
-      manager_.EvictCached(response_id);
-    } catch (...) {
-      // Rollback is best-effort at a noexcept boundary; SessionManager::EvictCached normally does not throw.
-    }
+    manager_.CheckIn(response_id, std::move(session_));
   }
 
  private:
@@ -175,7 +160,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
 }
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ResolveModel(
-  const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
+    const std::string& model_name, Model*& model, GenAIModelInstance*& loaded) {
   model = ctx_.catalog.GetModelVariant(model_name);
   if (!model) {
     return ErrorResponse(Status::CODE_404, "Model not found", "No model matching '" + model_name + "'");
@@ -210,8 +195,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::BeginRes
                       fmt::format("Rejected continuation of {} with model {}: it was produced by model {}",
                                   previous_id, model_id, continuation.parent_model_id));
       return ErrorResponse(Status::CODE_400, "Model mismatch",
-                           "Previous response '" + previous_id + "' was produced by a different model; continue "
-                           "the conversation with that model or start a new one");
+                           "Previous response '" + previous_id +
+                               "' was produced by a different model; continue "
+                               "the conversation with that model or start a new one");
 
     case ContinuationStatus::kOk:
       break;
