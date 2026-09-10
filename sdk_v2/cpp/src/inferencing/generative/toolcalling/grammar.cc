@@ -55,7 +55,7 @@ std::string EscapeLarkLiteral(const std::string& text) {
 }
 
 std::string RenderLarkMarker(const std::string& marker_text, std::optional<int32_t> token_id) {
-  if (token_id.has_value()) {
+  if (token_id.has_value() && *token_id >= 0) {
     return "<[" + std::to_string(*token_id) + "]>";
   }
 

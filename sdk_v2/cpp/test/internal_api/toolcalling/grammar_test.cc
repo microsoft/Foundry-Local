@@ -212,6 +212,10 @@ TEST(RenderLarkMarkerTest, UnresolvedMarkerRendersEscapedLiteral) {
   EXPECT_EQ(RenderLarkMarker("<tool_call>", std::nullopt), "\"<tool_call>\"");
 }
 
+TEST(RenderLarkMarkerTest, NegativeTokenIdRendersEscapedLiteral) {
+  EXPECT_EQ(RenderLarkMarker("<tool_call>", -1), "\"<tool_call>\"");
+}
+
 TEST(BuildLarkGrammarTest, UnresolvedToolMarkersRenderAsEscapedLiterals) {
   ToolCallContext ctx;
   ctx.text_output = false;
@@ -247,6 +251,21 @@ TEST(BuildLarkGrammarTest, MultiTokenReasoningMarkersFallBackToLiterals) {
   std::string grammar = BuildLarkGrammar(ctx, "{}");
   EXPECT_NE(grammar.find(R"(cot: "<think>" THINK_TEXT "</think>" "\n")"), std::string::npos);
   EXPECT_EQ(grammar.find("cot: <think>"), std::string::npos);
+}
+
+TEST(BuildLarkGrammarTest, Phi4MiniReasoningWithoutPublishedIdsUsesLiteralMarkers) {
+  ToolCallContext ctx;
+  ctx.text_output = true;
+  ctx.tool_output = false;
+  ctx.supports_reasoning = true;
+  ctx.reasoning_start = "<think>";
+  ctx.reasoning_end = "</think>";
+
+  const std::string grammar = BuildLarkGrammar(ctx, "{}");
+
+  EXPECT_NE(grammar.find(R"(cot: "<think>" THINK_TEXT "</think>" "\n")"), std::string::npos);
+  EXPECT_NE(grammar.find("THINK_TEXT: /[^<]+/"), std::string::npos);
+  EXPECT_EQ(grammar.find("<["), std::string::npos);
 }
 
 TEST(BuildLarkGrammarTest, ToolAndReasoningMarkerIdsAreIndependent) {
