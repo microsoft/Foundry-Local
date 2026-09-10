@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,7 @@ class OnnxChatGenerator : public ChatGenerator {
   bool IsDone() const override;
   void GenerateNextToken() override;
   std::string Decode() override;
+  std::optional<int32_t> CurrentTokenId() const override;
   int TokenCount() const override;
   int PromptTokenCount() const override;
   void Cancel() override;
@@ -46,12 +48,15 @@ class OnnxChatGenerator : public ChatGenerator {
   /// Used for continuous decoding — only the new turn's messages are encoded and appended.
   /// Returns the number of new prompt tokens appended.
   int AppendMessages(const std::vector<MessageItem>& new_messages,
+                     const std::vector<MessageItem>& full_messages,
                      GenAIModelInstance& model,
-                     const std::string& tools_json);
+                     const ToolCallContext& tool_ctx,
+                     const SearchOptions& options) override;
 
   /// Rewind the generator to a previous token position.
   /// Used for error recovery — restores the KV cache to the state before the last turn.
-  void RewindTo(int token_count);
+  bool CanRewind() const override { return true; }
+  void RewindTo(int token_count) override;
 
   /// Factory: create a text-only chat generator.
   ///
@@ -94,7 +99,6 @@ class OnnxChatGenerator : public ChatGenerator {
   OnnxChatGenerator(std::unique_ptr<OgaGeneratorParams> gen_params,
                     std::unique_ptr<OgaGenerator> generator,
                     std::unique_ptr<OgaTokenizerStream> stream,
-                    std::unique_ptr<OgaTokenizerStream> stream_with_special,
                     GenAIModelInstance& model,
                     int prompt_token_count,
                     std::unique_ptr<OgaNamedTensors> named_tensors = nullptr);
@@ -114,7 +118,6 @@ class OnnxChatGenerator : public ChatGenerator {
   std::unique_ptr<OgaGeneratorParams> gen_params_;
   std::unique_ptr<OgaGenerator> generator_;
   std::unique_ptr<OgaTokenizerStream> stream_;
-  std::unique_ptr<OgaTokenizerStream> stream_with_special_;  // for tool call token detection
   // Holds the named tensors produced by OgaMultiModalProcessor media processing
   // for the lifetime of the generator. Generator retains shared_ptr<Tensor>
   // copies internally, but we keep the wrapper alive for symmetry with
@@ -122,6 +125,7 @@ class OnnxChatGenerator : public ChatGenerator {
   std::unique_ptr<OgaNamedTensors> named_tensors_;
   GenAIModelInstance& model_;  // non-owning reference — model outlives generator
   int prompt_token_count_ = 0;
+  std::optional<int32_t> current_token_;
   std::atomic<bool> cancelled_{false};
 };
 

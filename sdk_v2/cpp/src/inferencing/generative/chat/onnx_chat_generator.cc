@@ -12,8 +12,6 @@
 #include <nlohmann/json.hpp>
 #include <ort_genai.h>
 
-#include <algorithm>
-
 namespace fl {
 
 OnnxChatGenerator::~OnnxChatGenerator() = default;
@@ -25,14 +23,12 @@ OnnxChatGenerator::~OnnxChatGenerator() = default;
 OnnxChatGenerator::OnnxChatGenerator(std::unique_ptr<OgaGeneratorParams> gen_params,
                                      std::unique_ptr<OgaGenerator> generator,
                                      std::unique_ptr<OgaTokenizerStream> stream,
-                                     std::unique_ptr<OgaTokenizerStream> stream_with_special,
                                      GenAIModelInstance& model,
                                      int prompt_token_count,
                                      std::unique_ptr<OgaNamedTensors> named_tensors)
     : gen_params_(std::move(gen_params)),
       generator_(std::move(generator)),
       stream_(std::move(stream)),
-      stream_with_special_(std::move(stream_with_special)),
       named_tensors_(std::move(named_tensors)),
       model_(model),
       prompt_token_count_(prompt_token_count) {}
@@ -54,11 +50,20 @@ bool OnnxChatGenerator::IsDone() const {
 
 void OnnxChatGenerator::GenerateNextToken() {
   if (cancelled_) {
+    current_token_.reset();
     return;
   }
 
+  current_token_.reset();
+
   try {
     generator_->GenerateNextToken();
+
+    // GetNextTokens returns the batch of next tokens; chat generation always uses batch size 1.
+    const auto next_tokens = generator_->GetNextTokens();
+    if (!next_tokens.empty()) {
+      current_token_ = next_tokens[0];
+    }
   } catch (const std::runtime_error& e) {
     // If cancelled while generating, the OGA engine throws when the session is terminated.
     // This is expected — not an error.
@@ -71,45 +76,41 @@ void OnnxChatGenerator::GenerateNextToken() {
 }
 
 std::string OnnxChatGenerator::Decode() {
-  if (cancelled_) {
+  if (cancelled_ || !current_token_.has_value()) {
     return "";
   }
 
-  // Get the most recently generated token ID.
-  // GetNextTokens returns the batch of next tokens; we use index 0 (batch size = 1).
-  auto next_tokens = generator_->GetNextTokens();
+  const auto token_id = *current_token_;
+  current_token_.reset();
 
-  if (next_tokens.empty()) {
-    return "";
+  // Fast path: if this token matches a known tag ID, return the pre-decoded string.
+  // Decode is always single-stream for normal tokens.
+  const auto& tag_info = model_.GetTagInfo();
+
+  if (tag_info.bot_id.has_value() && token_id == *tag_info.bot_id) {
+    stream_->Decode(token_id);
+    return tag_info.bot_str;
+  }
+  if (tag_info.eot_id.has_value() && token_id == *tag_info.eot_id) {
+    stream_->Decode(token_id);
+    return tag_info.eot_str;
+  }
+  if (tag_info.bor_id.has_value() && token_id == *tag_info.bor_id) {
+    stream_->Decode(token_id);
+    return tag_info.bor_str;
+  }
+  if (tag_info.eor_id.has_value() && token_id == *tag_info.eor_id) {
+    stream_->Decode(token_id);
+    return tag_info.eor_str;
   }
 
-  int32_t token_id = next_tokens[0];
-
-  // Decode through the normal tokenizer stream
+  // Single decode for all non-tag tokens.
   const char* token_text = stream_->Decode(token_id);
+  return token_text ? std::string(token_text) : "";
+}
 
-  // Also decode through the special-token stream to detect tool call and think tokens.
-  // If the special stream gives a different result and it's a known special token type
-  // that isn't an EOS token, surface the special representation instead.
-  // Matches C# OnnxChatGenerator.Decode behavior.
-  const char* special_text = stream_with_special_->Decode(token_id);
-
-  std::string token_str = token_text ? std::string(token_text) : "";
-
-  if (special_text != nullptr && token_text != nullptr && std::string(special_text) != token_str) {
-    std::string special_str(special_text);
-    bool is_tool_call_token = special_str.find("tool_call") != std::string::npos;
-    bool is_think_token = special_str.find("think") != std::string::npos;
-
-    const auto& eos_ids = model_.GetPreprocessor().GetEosTokenIds();
-    bool is_eos = std::find(eos_ids.begin(), eos_ids.end(), token_id) != eos_ids.end();
-
-    if (!is_eos && (is_tool_call_token || is_think_token)) {
-      return special_str;
-    }
-  }
-
-  return token_str;
+std::optional<int32_t> OnnxChatGenerator::CurrentTokenId() const {
+  return current_token_;
 }
 
 int OnnxChatGenerator::TokenCount() const {
@@ -137,15 +138,17 @@ void OnnxChatGenerator::Cancel() {
 // ---------------------------------------------------------------------------
 
 int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messages,
+                                      const std::vector<MessageItem>& /*full_messages*/,
                                       GenAIModelInstance& model,
-                                      const std::string& tools_json) {
+                                      const ToolCallContext& tool_ctx,
+                                      const SearchOptions& /*options*/) {
   if (new_messages.empty()) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "new_messages must not be empty");
   }
 
   // Build prompt from only the new messages. ApplyChatTemplate with add_generation_prompt=true
-  // produces the correct continuation tokens (e.g. <|im_end|>\n<|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n)
-  std::string prompt = BuildChatPrompt(new_messages, model, tools_json);
+  // produces the correct continuation tokens, including the next assistant generation prefix.
+  std::string prompt = BuildChatPrompt(new_messages, model, tool_ctx.tools_json);
   auto sequences = EncodePrompt(prompt, model);
   int new_token_count = static_cast<int>(sequences->SequenceCount(0));
 
@@ -160,7 +163,13 @@ int OnnxChatGenerator::AppendMessages(const std::vector<MessageItem>& new_messag
 
 void OnnxChatGenerator::RewindTo(int token_count) {
   try {
+    if (cancelled_) {
+      generator_->SetRuntimeOption("terminate_session", "0");
+    }
+
     generator_->RewindTo(token_count);
+    current_token_.reset();
+    cancelled_ = false;
   } catch (const std::runtime_error& e) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to rewind generator: ") + e.what());
   }
@@ -271,13 +280,6 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
       FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
                "model has no multimodal processor available for media input");
     }
-
-    // Match upstream's single-image limit. Easy to relax once the wider
-    // pipeline (and ORT GenAI templates) reliably handle multi-image inputs.
-    if (images.size() > 1) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
-               "only one image per request is supported");
-    }
   }
 
   // 1. Build the chat prompt using the model's template.
@@ -360,48 +362,11 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
 
   // 4. Apply search options (temperature, top_p, max_length, etc.) and validate token budget.
   //    Media inputs use a larger default because preprocessing expands them into tokens.
-  int default_max_output = media_branch ? 3072 : 2048;
   ApplySearchOptions(options, input_token_count, model.GetGenAIConfig(), *gen_params, model.EP(),
-                     use_full_context, default_max_output);
+                     use_full_context, GetDefaultMaxOutputTokens(media_branch));
 
-  // 5. Compute guidance for constrained decoding.
-  // Priority: user-specified guidance (from response_format) > auto-generated LARK grammar.
-  // Matches C# GetGuidance() — always compute, then guard application.
-  std::string guidance_type;
-  std::string guidance_data;
-
-  if (!tool_ctx.guidance_type.empty() && !tool_ctx.guidance_data.empty()) {
-    // User specified guidance via response_format
-    guidance_type = tool_ctx.guidance_type;
-    guidance_data = tool_ctx.guidance_data;
-  } else {
-    // Auto-generate LARK grammar from tool definitions and reasoning state
-    std::string json_schema;
-    if (tool_ctx.HasTools()) {
-      json_schema = BuildToolJsonSchema(tool_ctx);
-    }
-
-    guidance_data = BuildLarkGrammar(tool_ctx, json_schema);
-    if (!guidance_data.empty()) {
-      guidance_type = "lark_grammar";
-    }
-  }
-
-  // Guard: Apply guidance only for tool-call-only mode (tool output requested, no text output). Text-only reasoning
-  // (cot_text_only) cannot use grammar guidance because a completed grammar signals EOS to the ORT GenAI generator —
-  // making IsDone() return true immediately on the next turn, breaking multi-turn continuous decoding. For
-  // tool-call-only mode the generator is typically invalidated after a successful call anyway, so this is acceptable.
-  // Reasoning content for text-only mode is handled via StripReasoningContent post-processing.
-  bool tool_call_only = tool_ctx.tool_output && !tool_ctx.text_output;
-
-  if (!guidance_type.empty() && !guidance_data.empty() && tool_call_only) {
-    try {
-      gen_params->SetGuidance(guidance_type.c_str(), guidance_data.c_str());
-    } catch (const std::runtime_error& e) {
-      // SetGuidance may not be supported by all models; continue without guidance
-      (void)e;
-    }
-  }
+  // 5. Apply constrained decoding for tool-only output when supported.
+  ApplyGuidanceOptions(tool_ctx, *gen_params);
 
   // 6. Create the Generator and feed it the prompt.
   //    Text path: append the encoded token sequences.
@@ -421,19 +386,14 @@ std::unique_ptr<OnnxChatGenerator> OnnxChatGenerator::CreateImpl(const std::vect
     FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, std::string("failed to create generator: ") + e.what());
   }
 
-  // 7. Create two tokenizer streams:
-  //    - Normal stream: standard decoding (special tokens filtered)
-  //    - Special stream: includes special tokens (for tool call detection)
-
+  // 7. Create tokenizer stream (single-decode path).
   auto stream = model.GetPreprocessor().CreateTokenizerStream();
-  auto stream_with_special = model.GetPreprocessor().CreateSpecialTokenizerStream();
 
   // `std::make_unique` constructs inside the library helper, which does not have
   // access to this class's private constructor.
   return std::unique_ptr<OnnxChatGenerator>(new OnnxChatGenerator(std::move(gen_params),
                                                                   std::move(generator),
                                                                   std::move(stream),
-                                                                  std::move(stream_with_special),
                                                                   model,
                                                                   input_token_count,
                                                                   std::move(named_tensors)));
