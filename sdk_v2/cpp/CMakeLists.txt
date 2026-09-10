@@ -133,7 +133,6 @@ int main() {
     turn_options->SetTemperature(1.0f);
     turn_options->SetTopP(1.0f);
     turn_options->SetTopK(1);
-    turn_options->SetRepetitionPenalty(1.0f);
     turn_options->SetSeed(static_cast<uint64_t>(1));
     const char* values[] = {\"stop\"};
     auto stop_strings = OgaStringArray::Create(values, 1);
