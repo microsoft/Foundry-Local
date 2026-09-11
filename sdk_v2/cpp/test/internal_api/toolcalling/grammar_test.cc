@@ -189,11 +189,11 @@ TEST(EscapeLarkLiteralTest, WrapsPlainTextInQuotes) {
 }
 
 TEST(EscapeLarkLiteralTest, EscapesBackslashAndQuote) {
-  EXPECT_EQ(EscapeLarkLiteral(R"(a\b"c)"), R"("a\\b\"c")");
+  EXPECT_EQ(EscapeLarkLiteral("a\\b\"c"), "\"a\\\\b\\\"c\"");
 }
 
 TEST(EscapeLarkLiteralTest, EscapesNewlineCarriageReturnAndTab) {
-  EXPECT_EQ(EscapeLarkLiteral("a\nb\rc\td"), R"("a\nb\rc\td")");
+  EXPECT_EQ(EscapeLarkLiteral("a\nb\rc\td"), "\"a\\nb\\rc\\td\"");
 }
 
 TEST(EscapeLarkLiteralTest, EscapesRemainingControlCharacters) {
