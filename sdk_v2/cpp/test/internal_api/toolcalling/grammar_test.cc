@@ -197,7 +197,8 @@ TEST(EscapeLarkLiteralTest, EscapesNewlineCarriageReturnAndTab) {
 }
 
 TEST(EscapeLarkLiteralTest, EscapesRemainingControlCharacters) {
-  EXPECT_EQ(EscapeLarkLiteral(std::string("a\b\f") + static_cast<char>(0x01) + "b"), R"("a\b\f\u0001b")");
+  EXPECT_EQ(EscapeLarkLiteral(std::string("a\b\f") + static_cast<char>(0x01) + "b"),
+            "\"a\\b\\f\\u0001b\"");
 }
 
 TEST(EscapeLarkLiteralTest, EmptyTextProducesEmptyLiteral) {
