@@ -8,6 +8,7 @@
 #include "inferencing/model_load_manager.h"
 #include "internal_api/test_helpers.h"
 #include "items/text_item.h"
+#include "items/tool_call_item.h"
 #include "model.h"
 #include "telemetry/telemetry_logger.h"
 #include "utils/safe_getenv.h"
@@ -229,6 +230,19 @@ class DynamicEngineChatTest : public ::testing::Test {
     return model;
   }
 
+  static const Model& ToolCallingCatalogModel() {
+    static test::FakeServiceBindings services;
+    static Model model = [] {
+      ModelInfo info;
+      info.task = "chat-completion";
+      info.SetPropertyInt(FOUNDRY_LOCAL_MODEL_PROP_SUPPORTS_TOOL_CALLING_INT, 1);
+      info.SetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_START_STR, "<tool_call>");
+      info.SetPropertyStr(FOUNDRY_LOCAL_MODEL_PROP_TOOL_CALL_END_STR, "</tool_call>");
+      return Model::FromModelInfo(std::move(info), "", services.download_manager, services.model_load_manager);
+    }();
+    return model;
+  }
+
   static inline std::string skip_reason_;
   static inline std::unique_ptr<DynamicEngineModelStaging> staged_model_;
   static inline std::unique_ptr<StderrLogger> logger_;
@@ -260,6 +274,37 @@ TEST_F(DynamicEngineChatTest, GeneratesWithinOutputLimitAndRetainsContinuation) 
   EXPECT_EQ(second_response.usage.prompt_tokens, expected_second_prompt_tokens)
       << "resident suffix admission and fresh replay must report the same complete logical prompt";
   EXPECT_LE(second_response.usage.completion_tokens, 32);
+}
+
+TEST_F(DynamicEngineChatTest, ForcedCustomToolCallReturnsRawInput) {
+  ChatSession session(ToolCallingCatalogModel(), ModelInstance(), *logger_, telemetry_);
+  session.AddToolDefinition(ToolDefinition{"apply_patch", "Apply a text patch.", "", ToolKind::kCustom});
+
+  auto request = MakeRequest("Use apply_patch to add the line hello to a.txt.", 256);
+  request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, "required");
+
+  Response response;
+  session.ProcessRequest(request, response);
+
+  EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_TOOL_CALLS) << AssistantText(response);
+
+  const ToolCallItem* call = nullptr;
+  for (const auto& item : response.items) {
+    if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+      call = static_cast<const ToolCallItem*>(item.get());
+      break;
+    }
+  }
+
+  ASSERT_NE(call, nullptr) << AssistantText(response);
+  EXPECT_EQ(call->name, "apply_patch");
+  EXPECT_FALSE(call->call_id.empty());
+  EXPECT_FALSE(call->arguments.empty());
+  EXPECT_NE(call->arguments.find("a.txt"), std::string::npos);
+  EXPECT_NE(call->arguments.find("hello"), std::string::npos);
+  const auto parsed = nlohmann::json::parse(call->arguments, nullptr, /*allow_exceptions=*/false);
+  EXPECT_FALSE(parsed.is_object() && parsed.contains("input"))
+      << "custom tool output must expose raw input rather than its model-facing wrapper";
 }
 
 TEST_F(DynamicEngineChatTest, MismatchedResidentPromptIsReplacedAndMatchesFreshReplay) {

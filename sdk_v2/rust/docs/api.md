@@ -38,6 +38,7 @@
   - [RequestOptions](#requestoptions)
   - [Response](#response)
   - [FinishReason](#finishreason)
+  - [ToolKind](#toolkind)
   - [ToolDefinition](#tooldefinition)
 - [Types](#types)
   - [ModelInfo](#modelinfo)
@@ -542,7 +543,7 @@ pub enum Item {
 | `float_tensor` | `fn float_tensor(shape: impl Into<Vec<i64>>, data: &[f32]) -> Item` | A `Float`-typed tensor from `f32` values. |
 | `image_data` / `image_uri` | `fn(…, format: Option<impl Into<String>>) -> Item` | An inline or URI-referenced image. |
 | `audio_data` / `audio_uri` | `fn(…) -> Item` | An inline or URI-referenced audio clip. |
-| `tool_call` | `fn tool_call(call_id: impl Into<String>, name: impl Into<String>, arguments: impl Into<String>) -> Item` | A model-issued tool call. |
+| `tool_call` | `fn tool_call(call_id: impl Into<String>, name: impl Into<String>, arguments: impl Into<String>) -> Item` | A model-issued tool call whose arguments are JSON object text for a function tool or raw NUL-free UTF-8 text for a custom tool. |
 | `tool_result` | `fn tool_result(call_id: impl Into<String>, result: impl Into<String>) -> Item` | The result of executing a tool call. |
 
 **Accessors:**
@@ -677,6 +678,22 @@ re-exported as [`ChatFinishReason`](#re-exported-openai-types).)
 pub enum FinishReason { None, Error, Stop, Length, ToolCalls }
 ```
 
+### ToolKind
+
+How a tool's arguments are shaped.
+
+```rust
+pub enum ToolKind {
+    Function,
+    Custom,
+}
+```
+
+`Function` tools require a JSON schema and produce arguments as a JSON object
+conforming to that schema. `Custom` tools carry no schema; their schema is
+synthesized natively, and generated calls contain the model's raw text payload.
+`Function` is the default.
+
 ### ToolDefinition
 
 A tool the model may call, registered on a [`ChatSession`](#chatsession).
@@ -686,12 +703,14 @@ pub struct ToolDefinition {
     pub name: String,
     pub description: Option<String>,
     pub json_schema: String,
+    pub kind: ToolKind,
 }
 ```
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `new` | `fn new(name: impl Into<String>, json_schema: impl Into<String>) -> ToolDefinition` | A tool with a name and JSON-schema parameters. |
+| `new` | `fn new(name: impl Into<String>, json_schema: impl Into<String>) -> ToolDefinition` | A function tool with a name and JSON-schema parameters. |
+| `custom` | `fn custom(name: impl Into<String>) -> ToolDefinition` | A custom tool with no schema whose generated calls carry raw text arguments. |
 | `with_description` | `fn with_description(mut self, description: impl Into<String>) -> ToolDefinition` | Attach a description (builder-style). |
 
 ---
