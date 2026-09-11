@@ -330,9 +330,9 @@ TEST_F(DynamicEngineChatTest, CapacityTimeoutFailsOnlyNewestWaitingConversation)
   auto first = engine.CreateConversation(options, tool_context, static_cast<int>(tokens.size()));
   auto second = engine.CreateConversation(options, tool_context, static_cast<int>(tokens.size()));
   auto waiting = engine.CreateConversation(options, tool_context, static_cast<int>(tokens.size()));
-  engine.BeginTurn(first, tokens, options, tool_context);
-  engine.BeginTurn(second, tokens, options, tool_context);
-  engine.BeginTurn(waiting, tokens, options, tool_context);
+  engine.BeginTurn(first, tokens, options, tool_context, false);
+  engine.BeginTurn(second, tokens, options, tool_context, false);
+  engine.BeginTurn(waiting, tokens, options, tool_context, false);
 
   auto wait_result = std::async(std::launch::async, [&]() {
     try {
@@ -363,7 +363,7 @@ TEST_F(DynamicEngineChatTest, LateCancelAfterCompletedConversationRemovalIsNoOp)
   const auto tokens = EncodeUserPrompt("Reply OK.", ModelInstance());
 
   auto completed = engine.CreateConversation(options, tool_context, static_cast<int>(tokens.size()));
-  engine.BeginTurn(completed, tokens, options, tool_context);
+  engine.BeginTurn(completed, tokens, options, tool_context, false);
   while (!engine.IsTurnFinished(completed)) {
     (void)engine.WaitForToken(completed);
   }
