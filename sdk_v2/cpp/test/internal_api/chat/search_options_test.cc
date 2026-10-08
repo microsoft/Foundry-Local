@@ -385,6 +385,45 @@ TEST(EngineTurnOptionsPlanTest, UserGuidanceAppliesWithoutToolOnlyMode) {
   EXPECT_TRUE(plan.guidance->user_specified);
 }
 
+TEST(EngineTurnOptionsPlanTest, RegionGuidanceDoesNotBecomeWholeTurnGuidance) {
+  ToolCallContext tool_ctx;
+  tool_ctx.tool_output = true;
+  tool_ctx.tools_json = R"([{"type":"function","function":{"name":"grep",)"
+                        R"("parameters":{"type":"object","properties":{"paths":{"type":"string"}}}}}])";
+  tool_ctx.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
+
+  const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
+  EXPECT_FALSE(plan.guidance.has_value());
+
+  tool_ctx.guidance_type = "json_schema";
+  tool_ctx.guidance_data = R"({"type":"object"})";
+  const auto explicit_plan = BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
+  ASSERT_TRUE(explicit_plan.guidance.has_value());
+  EXPECT_TRUE(explicit_plan.guidance->user_specified);
+}
+
+TEST(EngineTurnOptionsPlanTest, GuidedRetryReplacesRegionGuidanceWithWholeTurnJsonGuidance) {
+  ToolCallContext tool_ctx;
+  tool_ctx.tool_output = true;
+  tool_ctx.tools_json = R"([{"type":"function","function":{"name":"grep",)"
+                        R"("parameters":{"type":"object","properties":{"paths":{"type":"string"}}}}}])";
+  tool_ctx.tool_call_start = "<tool_call>";
+  tool_ctx.tool_call_end = "</tool_call>";
+  tool_ctx.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
+  EXPECT_FALSE(BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false).guidance);
+
+  tool_ctx.ConfigureForGuidedToolRetry();
+  EXPECT_FALSE(tool_ctx.text_output);
+  EXPECT_TRUE(tool_ctx.tool_output);
+  EXPECT_FALSE(tool_ctx.qwen_xml_tool_body_grammar);
+
+  const auto retry = BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
+  ASSERT_TRUE(retry.guidance);
+  EXPECT_EQ(retry.guidance->type, "lark_grammar");
+  EXPECT_NE(retry.guidance->data.find("functioncall"), std::string::npos);
+  EXPECT_FALSE(retry.guidance->user_specified);
+}
+
 TEST(EngineTurnOptionsPlanTest, ForcedRawToolWithoutCompatibleGrammarDisablesStructuredGuidance) {
   ToolCallContext tool_ctx;
   tool_ctx.text_output = false;

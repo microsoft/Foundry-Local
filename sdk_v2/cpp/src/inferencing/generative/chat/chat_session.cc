@@ -678,12 +678,15 @@ bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
 }
 
 bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
-                                                                bool grammar_was_active,
+                                                                const ToolCallContext& tool_ctx,
+                                                                bool prompt_opens_reasoning,
+                                                                bool recovered_tool_output,
                                                                 bool reasoning_was_active,
                                                                 bool stop_sequence_matched,
                                                                 bool host_output_limit_reached) {
   (void)backend_kind;
-  return stop_sequence_matched || host_output_limit_reached || reasoning_was_active || grammar_was_active;
+  return stop_sequence_matched || host_output_limit_reached || reasoning_was_active ||
+         recovered_tool_output || ResolveTurnGuidanceOptions(tool_ctx, prompt_opens_reasoning).has_value();
 }
 
 bool ShouldInvalidateRetainedGeneratorForUndo(bool undo_all, bool has_pre_turn_boundary, bool can_rewind) {
@@ -735,8 +738,7 @@ GuidedEngineRetryResult RunGuidedEngineToolRetry(
     const Request& request,
     bool use_full_context,
     const TextChatGeneratorFactory& factory) {
-  tool_ctx.text_output = false;
-  tool_ctx.tool_output = true;
+  tool_ctx.ConfigureForGuidedToolRetry();
 
   auto generator =
       CreateTextChatGenerator(messages, options, model, tool_ctx, use_full_context, factory);
@@ -1052,9 +1054,23 @@ ToolCallContext BuildToolCallContextForRequest(const Request& request,
   if (tool_ctx.HasTools()) {
     ApplyToolChoiceToContext(tool_choice, tool_ctx);
 
+    if (tool_ctx.tool_output && tool_ctx.text_output && !tool_ctx.HasAnyExplicitGuidance() &&
+        model.HasNativeQwenXmlToolCalls()) {
+      const auto backend_kind = model.GetGenAIConfig().GetChatBackendKind();
+      tool_ctx.qwen_xml_tool_body_grammar = PlanQwenXmlToolBodyGuidance(tool_ctx, true, backend_kind);
+      if (tool_ctx.qwen_xml_tool_body_grammar) {
+        logger.Log(LogLevel::Debug, "Qwen XML region guidance eligible for this request");
+      } else if (backend_kind == ChatBackendKind::kEngine &&
+                 !tool_ctx.forced_tool && !tool_ctx.ActiveRawEnvelope()) {
+        logger.Log(LogLevel::Warning,
+                   "Qwen XML region guidance unavailable: tool schemas or marker configuration are ineligible");
+      }
+    }
+
     // Preserve legacy serialized definitions in the prompt, but never let malformed schema data reach generated
-    // guidance. Decoder-specific eligibility is checked only when selecting that decoder.
-    if (tool_ctx.tool_output && BuildToolJsonSchema(tool_ctx) == "{}") {
+    // guidance. Native XML guidance has its own whole-set eligibility check and does not use this JSON schema.
+    if (tool_ctx.tool_output && !tool_ctx.qwen_xml_tool_body_grammar &&
+        BuildToolJsonSchema(tool_ctx) == "{}") {
       if (!tool_ctx.text_output || tool_ctx.forced_tool.has_value()) {
         FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT,
                  "tool-only output requires valid tool definitions");
@@ -1793,9 +1809,9 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
                          stop_sequence_matched, host_output_limit_reached, response, prompt_tokens, total_tokens,
                          accepted_reasoning_tokens, cached_prompt_tokens, backend_finish_reason, backend_termination);
 
-  // LARK grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar was
-  // active, the parser is in an unrecoverable state. Additionally, a completed grammar signals EOS — IsDone() would
-  // return true on the next turn. Invalidate after any grammar-guided generation so the next turn rebuilds.
+  // Whole-turn grammar (tool-call-only mode) is a single-shot finite parse. If generation was truncated while grammar
+  // was active, the parser is in an unrecoverable state. A completed grammar signals EOS on the next turn. Delimited
+  // tool guidance is installed anew on each Engine turn and does not require invalidation after ordinary text.
   //
   // Reasoning models (qwen3, etc.) also need invalidation: continuous decoding leaves prior <think> tokens in the KV
   // cache and the model fails to close subsequent reasoning blocks. The template projection does not replay reasoning
@@ -1807,15 +1823,12 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   //
   // A turn stopped at a tool call because the model kept talking afterwards is truncated mid-sequence with no turn
   // terminator, so its KV cache is no basis for the next turn either.
-  const bool grammar_was_active =
-      recovered_tool_output ||
-      ResolveTurnGuidanceOptions(cached_tool_ctx_, cached_generator_->PromptOpensReasoning()).has_value();
   const bool reasoning_was_active = output_tool_ctx.supports_reasoning;
   const bool discard_after_success =
-      recovered_tool_output ||
       chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-          backend_kind, grammar_was_active, reasoning_was_active, stop_sequence_matched,
-          host_output_limit_reached);
+          backend_kind, cached_tool_ctx_,
+          !recovered_tool_output && cached_generator_->PromptOpensReasoning(), recovered_tool_output,
+          reasoning_was_active, stop_sequence_matched, host_output_limit_reached);
 
   // Claim successful completion before committing the turn so cancellation cannot win after the transcript changes.
   if (!request.TryComplete()) {
