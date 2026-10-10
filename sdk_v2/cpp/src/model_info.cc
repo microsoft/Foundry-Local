@@ -334,9 +334,7 @@ nlohmann::json ModelInfoToJson(const ModelInfo& info) {
   // runtime — nested object with deviceType + executionProvider
   if (info.device_type != DeviceType::kNotSet || !info.execution_provider.empty()) {
     nlohmann::json rt;
-    if (info.device_type != DeviceType::kNotSet) {
-      rt["deviceType"] = DeviceTypeToString(info.device_type);
-    }
+    rt["deviceType"] = DeviceTypeToString(info.device_type);
     if (!info.execution_provider.empty()) {
       rt["executionProvider"] = info.execution_provider;
     }

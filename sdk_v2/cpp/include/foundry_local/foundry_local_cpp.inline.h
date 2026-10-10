@@ -364,11 +364,10 @@ inline std::optional<std::string_view> ModelInfo::ExecutionProvider() const noex
 
 inline std::optional<Runtime> ModelInfo::GetRuntime() const noexcept {
   flDeviceType dt = DeviceType();
-  auto execution_provider = ExecutionProvider();
-  if (dt == FOUNDRY_LOCAL_DEVICE_NOTSET && !execution_provider) {
+  if (dt == FOUNDRY_LOCAL_DEVICE_NOTSET) {
     return std::nullopt;
   }
-  return Runtime{dt, execution_provider};
+  return Runtime{dt, ExecutionProvider()};
 }
 
 inline std::optional<std::string_view> ModelInfo::GetPromptTemplate(const char* key) const noexcept {

@@ -206,10 +206,9 @@ impl Catalog {
 
     /// Register existing model assets without transferring ownership of those assets.
     ///
-    /// `task` is required. Display name, publisher, validated runtime metadata, modalities, and custom properties are
-    /// preserved and may receive authoritative defaults. Identity, alias, type, timestamps, context length, and prompt
-    /// templates are SDK-derived; caller location and internal metadata are ignored. A caller-supplied provider becomes
-    /// the default load override; an SDK-derived artifact provider leaves `genai_config.json` options intact.
+    /// `task` is required and metadata is copied. Missing display name and modalities receive defaults, while context
+    /// length comes from `model.context_length`, then `search.max_length`, when positive. A caller-supplied provider
+    /// remains the default load override; when omitted, runtime metadata stays unset and `genai_config.json` selects it.
     pub async fn register_model(
         &self,
         model_path: &str,
