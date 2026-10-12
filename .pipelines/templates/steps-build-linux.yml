@@ -59,6 +59,8 @@ steps:
     winmlVersion: ''
     includeWinml: false
 
+- template: steps-prefetch-vcpkg.yml
+
 - ${{ if eq(parameters.runTests, true) }}:
   - template: fetch-models-from-artifacts-feed.yml
     parameters:
@@ -79,6 +81,7 @@ steps:
       --volume "$(Build.BinariesDirectory):$(Build.BinariesDirectory)" \
       --env "HOME=$home_dir" \
       --env "VCPKG_ROOT=$(Build.BinariesDirectory)/vcpkg" \
+      --env "VCPKG_DOWNLOADS=$(Build.BinariesDirectory)/vcpkg-downloads" \
       --env "NUGET_CACHE=$(Build.BinariesDirectory)/nuget_packages" \
       --env "SDK_VERSION=$version" \
       --env PIP_INDEX_URL \

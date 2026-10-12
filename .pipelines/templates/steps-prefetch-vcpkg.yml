@@ -1,0 +1,17 @@
+# The advanced vcpkg baseline needs Automake even for Linux's empty libiconv
+# package. Its GNU mirrors are unreachable from these agents; seed the exact
+# archive from kernel.org, retaining the registry's SHA512 verification.
+steps:
+- bash: |
+    set -euo pipefail
+    downloads="$(Build.BinariesDirectory)/vcpkg-downloads"
+    mkdir -p "$downloads"
+    archive="$downloads/automake-1.17.tar.gz"
+    curl --fail --location --retry 3 \
+      --output "$archive.partial" \
+      https://mirrors.kernel.org/gnu/automake/automake-1.17.tar.gz
+    printf '%s  %s\n' \
+      '11357dfab8cbf4b5d94d9d06e475732ca01df82bef1284888a34bd558afc37b1a239bed1b5eb18a9dbcc326344fb7b1b301f77bb8385131eb8e1e118b677883a' \
+      "$archive.partial" | sha512sum --check -
+    mv "$archive.partial" "$archive"
+  displayName: 'Prefetch hash-verified vcpkg Automake archive'

@@ -92,3 +92,15 @@ Run `python sdk_v2/cpp/tools/test_telemetry_port.py` from the repository root
 to check feature mapping, platform policy, and manifest consistency without
 downloading dependencies. These checks do not replace native package builds
 and installed-package consumer tests.
+
+## Baseline compatibility
+
+The advanced baseline's Azure Storage dependency uses nanoarrow IPC. Foundry's
+nanoarrow overlay repairs its installed package's bare `flatccrt` link dependency
+with a configuration-specific imported runtime target. This avoids missing
+library errors on Unix and selects the matching Debug library on Windows.
+
+Linux CI also prefetches Automake 1.17 from kernel.org because the registry's
+GNU mirrors are unreachable from the agents. The pipeline verifies the exact
+registry SHA512 and shares that archive with vcpkg through `VCPKG_DOWNLOADS`;
+no dependency version or integrity check is weakened.
