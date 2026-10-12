@@ -71,10 +71,6 @@
       "version": "3.10.281.1"
     },
     {
-      "name": "libiconv",
-      "version": "1.18#3"
-    },
-    {
       "name": "nlohmann-json",
       "version": "3.11.3"
     },

@@ -23,6 +23,8 @@ stages:
     steps:
     - checkout: self
 
+    - template: steps-prefetch-vcpkg.yml
+
     - task: UsePythonVersion@0
       displayName: 'Use Python 3.12'
       inputs:
@@ -61,6 +63,7 @@ stages:
       workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
       env:
         VCPKG_ROOT: $(Build.BinariesDirectory)/engine-vcpkg
+        VCPKG_DOWNLOADS: $(Build.BinariesDirectory)/vcpkg-downloads
         ENGINE_VENV: $(Build.BinariesDirectory)/engine-venv
         NUGET_CACHE: $(Build.BinariesDirectory)/nuget_packages
         ENGINE_GENAI_VERSION: ${{ parameters.genaiVersion }}

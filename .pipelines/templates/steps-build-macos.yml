@@ -21,6 +21,8 @@ steps:
     "$(Build.BinariesDirectory)/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
   displayName: 'Bootstrap vcpkg'
 
+- template: steps-prefetch-vcpkg.yml
+
 - bash: |
     set -euo pipefail
     # Most macOS images include cmake/ninja; install via brew if missing.
@@ -63,6 +65,7 @@ steps:
   workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
   env:
     VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
+    VCPKG_DOWNLOADS: $(Build.BinariesDirectory)/vcpkg-downloads
 
 - bash: |
     set -euo pipefail

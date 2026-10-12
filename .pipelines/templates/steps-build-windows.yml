@@ -55,6 +55,8 @@ steps:
     echo @exit /b 0 > $(Build.BinariesDirectory)\tools\pkg-config.bat
   displayName: 'Bootstrap vcpkg'
 
+- template: steps-prefetch-vcpkg.yml
+
 - template: steps-prefetch-nuget.yml
   parameters:
     ortVersion: ${{ parameters.ortVersion }}
@@ -94,6 +96,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
+      VCPKG_DOWNLOADS: $(Build.BinariesDirectory)\vcpkg-downloads
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
 
 - ${{ if eq(parameters.arch, 'arm64') }}:
@@ -108,6 +111,7 @@ steps:
     workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
     env:
       VCPKG_ROOT: $(Build.BinariesDirectory)\vcpkg
+      VCPKG_DOWNLOADS: $(Build.BinariesDirectory)\vcpkg-downloads
       PKG_CONFIG: $(Build.BinariesDirectory)\tools\pkg-config.bat
 
 - ${{ if eq(parameters.runTests, true) }}:
