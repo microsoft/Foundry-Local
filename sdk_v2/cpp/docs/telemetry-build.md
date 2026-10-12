@@ -13,6 +13,14 @@ are therefore compiled out, while telemetry event collection remains available.
 Features are additive: another dependency selecting `device-id` would re-enable
 native collection and must not be added to Foundry's dependency graph.
 
+The `vcpkg_check_features` call in the overlay's `portfile.cmake` maps
+`device-id` to `MATSDK_ENABLE_DEVICE_ID`. That helper emits an explicit `OFF`
+for an absent feature, not just an `ON` for a selected feature. Consequently,
+`${FEATURE_OPTIONS}` passed to `vcpkg_cmake_configure` contains
+`-DMATSDK_ENABLE_DEVICE_ID=OFF` and `-DMATSDK_DISABLE_LOGGING=ON` on every
+Foundry platform. The SDK turns the former into the private compile definition
+`MATSDK_DISABLE_DEVICE_ID`; these settings do not propagate to consumer code.
+
 | Platform | HTTP transport | SQLite | zlib |
 | --- | --- | --- | --- |
 | Windows | OS WinHTTP | Private minimal SQLite | vcpkg |
@@ -28,6 +36,19 @@ exports use OS `sqlite3` and `z`, without undeclared vcpkg dependencies.
 Both macOS and iOS provide these libraries; iOS uses a deployment target of 13.0,
 matching the release registry recipe.
 
+This patch is provider selection, not a functionality-disabling feature:
+vcpkg's additive-feature policy does not prohibit it. However, applying it
+upstream unconditionally would change the current vcpkg provider choice.
+An explicit Apple OS-library provider would preserve that choice while making
+the size-oriented policy available without a downstream patch.
+
+ONNX Runtime already supplies Apple `SQLite3::SQLite3` and `ZLIB::ZLIB`
+targets before adding telemetry, so it does not need this patch. GenAI's
+normal non-vcpkg source build also uses the existing Apple helpers; a
+caller-supplied telemetry package carries its own provider policy.
+GenAI's Apple source fallback under a vcpkg toolchain would need the same
+explicit OS targets or an upstream provider fix if they are not already defined.
+
 Windows does not provide the required public SQLite/zlib development libraries.
 Android's private platform SQLite is not a public NDK dependency. Linux has
 distro SQLite/zlib packages, but Foundry deliberately keeps private minimal
@@ -42,6 +63,30 @@ Intentional differences are OpenSSL-backed vcpkg curl instead of fetched
 mbedTLS curl on Linux, native curl instead of Java/JNI HTTP on Android, reuse
 of vcpkg zlib instead of a second vendored copy on non-Apple platforms, and
 disabled native device-ID collection on mobile as well as desktop.
+
+## Whole-SDK size considerations
+
+Apple's SDKs provide SQLite/zlib headers and link stubs, and the OS supplies
+the runtime libraries. No Homebrew or separately shipped SQLite/zlib package
+is needed for telemetry. This does not remove those packages from Foundry's
+entire dependency graph: the root manifest requests zlib, and the registry
+libarchive and curl ports also depend on it. Removing only the root dependency
+would not eliminate bundled zlib.
+
+Azure Core 1.16.4 provides curl and Windows WinHTTP transports, not an
+Apple-native transport. Its non-Windows hashing implementation also requires
+OpenSSL independently of curl; Azure Storage Common additionally depends on
+OpenSSL. Switching curl's TLS backend alone would therefore not remove
+OpenSSL and could add a second TLS implementation. Removing these Apple
+dependencies requires a native custom HTTP transport and changes to the
+Azure hashing providers, not just a different manifest feature.
+
+Using OS zlib across the Apple dependency graph is a separate size
+optimization. Linux system libraries can reduce the shipped binary too,
+but introduce distro ABI/runtime requirements. Keep the existing reproducible
+Linux OpenSSL policy unless that distribution trade-off is explicitly chosen.
+Provider changes require native size and throughput measurements; smaller
+packaged binaries do not by themselves establish faster execution.
 
 Run `python sdk_v2/cpp/tools/test_telemetry_port.py` from the repository root
 to check feature mapping, platform policy, and manifest consistency without
