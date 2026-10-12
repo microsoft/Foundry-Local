@@ -16,10 +16,6 @@ Foundry Local uses the cross-platform 1DS SDK (cpp_client_telemetry) to send tra
 
 Prompts, model outputs, audio contents, raw device identifiers, and secrets are not collected.
 
-The C++ telemetry overlay compiles out internal SDK diagnostics and native
-device-ID collection. See [Telemetry dependency policy](telemetry-build.md)
-for the release pin, platform libraries, and build options.
-
 Non-essential telemetry can be disabled as follows.
 
 - **Disable via manager config.** Set the disable-nonessential-telemetry option before creating the manager:
