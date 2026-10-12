@@ -97,10 +97,15 @@ and installed-package consumer tests.
 
 The advanced baseline's Azure Storage dependency uses nanoarrow IPC. Foundry's
 nanoarrow overlay repairs its installed package's bare `flatccrt` link dependency
-with a configuration-specific imported runtime target. This avoids missing
-library errors on Unix and selects the matching Debug library on Windows.
+with the configuration-specific `nanoarrow::flatcc_runtime` imported target.
+This avoids missing library errors on Unix, selects the matching Debug library
+on Windows, and does not collide with Azure Storage's own `flatccrt` target.
 
-Linux CI also prefetches Automake 1.17 from kernel.org because the registry's
-GNU mirrors are unreachable from the agents. The pipeline verifies the exact
-registry SHA512 and shares that archive with vcpkg through `VCPKG_DOWNLOADS`;
-no dependency version or integrity check is weakened.
+The manifest retains the previous `libiconv` port, **1.18#3**. Port 1.19 adds
+an unconditional `vcpkg-make` host dependency, whose Automake download is
+unreachable from the CI agents. That dependency is resolved even on Linux
+and macOS, where both libiconv ports use OS iconv and build no GNU library.
+The compatibility pin avoids the unnecessary build-tool download without
+changing those platforms' runtime provider; platforms that build GNU libiconv
+retain the previously used version. The new baseline and telemetry 3.10.281.1
+pin remain unchanged.

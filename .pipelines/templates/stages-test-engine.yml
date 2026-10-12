@@ -34,8 +34,6 @@ stages:
         ortVersion: ${{ parameters.ortVersion }}
         genaiVersion: ${{ parameters.genaiVersion }}
 
-    - template: steps-prefetch-vcpkg.yml
-
     - bash: |
         set -euo pipefail
         git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
@@ -63,7 +61,6 @@ stages:
       workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
       env:
         VCPKG_ROOT: $(Build.BinariesDirectory)/engine-vcpkg
-        VCPKG_DOWNLOADS: $(Build.BinariesDirectory)/vcpkg-downloads
         ENGINE_VENV: $(Build.BinariesDirectory)/engine-venv
         NUGET_CACHE: $(Build.BinariesDirectory)/nuget_packages
         ENGINE_GENAI_VERSION: ${{ parameters.genaiVersion }}
