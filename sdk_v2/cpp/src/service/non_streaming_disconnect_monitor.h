@@ -30,17 +30,17 @@ namespace fl {
 // No response is written until non-streaming inference finishes, so oatpp cannot notice a closed peer on its own.
 class NonStreamingDisconnectMonitor {
  public:
-  NonStreamingDisconnectMonitor(std::shared_ptr<oatpp::data::stream::IOStream> connection, Request& request) {
-    auto tcp = std::dynamic_pointer_cast<oatpp::network::tcp::Connection>(std::move(connection));
-    if (!tcp) {
+  NonStreamingDisconnectMonitor(std::shared_ptr<oatpp::data::stream::IOStream> connection, Request& request)
+      : tcp_(std::dynamic_pointer_cast<oatpp::network::tcp::Connection>(std::move(connection))), request_(request) {
+    if (!tcp_) {
       throw std::invalid_argument("Non-streaming disconnect monitoring requires a TCP connection");
     }
 
-    thread_ = std::jthread([this, tcp = std::move(tcp), &request](std::stop_token stop) {
+    thread_ = std::jthread([this](std::stop_token stop) {
       while (!stop.stop_requested()) {
-        if (PeerDisconnected(tcp->getHandle())) {
+        if (PeerDisconnected(tcp_->getHandle())) {
           if (!stop.stop_requested()) {
-            request.CancelCurrentOrNext();
+            request_.CancelCurrentOrNext();
             disconnected_.store(true);
           }
           return;
@@ -62,6 +62,10 @@ class NonStreamingDisconnectMonitor {
       thread_.request_stop();
       cv_.notify_one();
       thread_.join();
+      if (!disconnected_.load() && PeerDisconnected(tcp_->getHandle())) {
+        request_.CancelCurrentOrNext();
+        disconnected_.store(true);
+      }
     }
 
     return disconnected_.load();
@@ -131,6 +135,8 @@ class NonStreamingDisconnectMonitor {
 #endif
   }
 
+  std::shared_ptr<oatpp::network::tcp::Connection> tcp_;
+  Request& request_;
   std::atomic_bool disconnected_{false};
   std::mutex mutex_;
   std::condition_variable cv_;

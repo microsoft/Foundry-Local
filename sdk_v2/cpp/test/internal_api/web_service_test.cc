@@ -174,6 +174,20 @@ TEST(NonStreamingDisconnectMonitorTest, CompletingRequestDoesNotCancelIt) {
   ::close(sockets[1]);
   EXPECT_FALSE(request.IsCancellationRequested());
 }
+
+TEST(NonStreamingDisconnectMonitorTest, StopDetectsDisconnectAfterLastWorkerPoll) {
+  int sockets[2];
+  ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
+  auto connection = std::make_shared<oatpp::network::tcp::Connection>(sockets[0]);
+  Request request;
+  ASSERT_TRUE(request.TryBegin());
+  NonStreamingDisconnectMonitor monitor(connection, request);
+
+  ASSERT_EQ(::shutdown(sockets[1], SHUT_WR), 0);
+  EXPECT_TRUE(monitor.Stop());
+  EXPECT_TRUE(request.IsCancellationRequested());
+  ::close(sockets[1]);
+}
 #else
 TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithUnreadBufferedInput) {
   WSADATA winsock{};
@@ -203,12 +217,8 @@ TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithUnreadBuffere
     EXPECT_FALSE(request.IsCancellationRequested());
 
     ASSERT_EQ(::shutdown(client, SD_SEND), 0);
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (!request.IsCancellationRequested() && std::chrono::steady_clock::now() < deadline) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-
     EXPECT_TRUE(monitor.Stop());
+    EXPECT_TRUE(request.IsCancellationRequested());
     char byte = 0;
     ASSERT_EQ(::recv(server, &byte, 1, MSG_PEEK), 1);
     EXPECT_EQ(byte, 'x');
