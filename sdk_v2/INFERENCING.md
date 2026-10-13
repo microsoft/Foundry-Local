@@ -413,8 +413,8 @@ If a model/runtime provides `Partial` speech hypotheses, their text is cumulativ
 the current segment: replace that hypothesis rather than append it. Use the final
 speech result as the complete transcript.
 
-At the C API level, each callback receives an event with an **output `ItemQueue`**;
-one item is added per callback. The consumer pops it and owns the popped item.
+At the C API level, each callback receives an event with an **output `ItemQueue`**.
+The queue will hold one or more items. The consumer takes ownership of an item as it is popped from the queue. The consumer is free to process one or more items per-callback, and the callback will continue to be triggered while the queue is not empty.
 The C++ item callback and the other bindings' iterators handle this queue plumbing for
 you. You normally create your own queue only for **streamed input**.
 
