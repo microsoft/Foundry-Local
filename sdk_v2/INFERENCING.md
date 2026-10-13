@@ -446,8 +446,9 @@ An empty queue means "nothing available yet"; a finished, drained queue means "e
 input." Without the finish signal, inference may keep waiting.
 
 This Python example assumes `audio_model` is a loaded streaming-ASR model and
-`pcm_chunks` yields signed PCM16 little-endian audio at 16 kHz, mono. The streaming
-request starts a background inference worker before the producer begins pushing.
+`pcm_chunks` is a finite sequence of signed PCM16 little-endian audio at 16 kHz, mono.
+The streaming request starts a background inference worker before input is added.
+For live microphone input, read output concurrently and stop capture if inference fails.
 
 ```python
 from foundry_local_sdk import (
