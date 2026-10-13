@@ -1,5 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/telemetry-shutdown-tests.cmake")
+
 if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 endif()
