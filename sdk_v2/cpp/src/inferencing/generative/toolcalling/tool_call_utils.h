@@ -45,7 +45,7 @@ size_t FindMarkerOutsideJsonString(std::string_view text,
 /// @param text            The full generated text (may contain mixed text and tool calls)
 /// @param tool_call_start The start marker token string
 /// @param tool_call_end   The end marker token string
-/// @param tools_json      Advertised OpenAI-format tools used to validate repaired calls
+/// @param tools_json      Advertised OpenAI-format tools used to validate parsed calls when provided
 /// @return                Parsed tool calls, empty if none found
 std::vector<ParsedToolCall> ParseToolCalls(const std::string& text,
                                            const std::string& tool_call_start,

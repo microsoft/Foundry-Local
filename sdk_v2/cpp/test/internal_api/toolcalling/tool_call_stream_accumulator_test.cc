@@ -2323,6 +2323,30 @@ TEST(ToolCallStreamAccumulatorTest, UnadvertisedParametersCallBecomesVisible) {
   EXPECT_TRUE(CollectCalls(outs).empty());
 }
 
+TEST(ToolCallStreamAccumulatorTest, UnadvertisedCanonicalCallBecomesVisible) {
+  const std::string tools =
+      R"([{"type":"function","name":"advertised","parameters":{"type":"object"}}])";
+  ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
+  const std::string generated =
+      R"(<tool_call>{"name":"unadvertised","arguments":{"value":1}}</tool_call>)";
+  auto outs = RunChunks(acc, {generated});
+
+  EXPECT_EQ(CollectVisible(outs), generated);
+  EXPECT_TRUE(CollectCalls(outs).empty());
+}
+
+TEST(ToolCallStreamAccumulatorTest, UnadvertisedCanonicalSiblingRejectsEntireBatch) {
+  const std::string tools =
+      R"([{"type":"function","name":"advertised","parameters":{"type":"object"}}])";
+  ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
+  const std::string generated =
+      R"(<tool_call>[{"name":"advertised","arguments":{}},{"name":"unadvertised","arguments":{}}]</tool_call>)";
+  auto outs = RunChunks(acc, {generated});
+
+  EXPECT_EQ(CollectVisible(outs), generated);
+  EXPECT_TRUE(CollectCalls(outs).empty());
+}
+
 TEST(ToolCallStreamAccumulatorTest, CompletedToolCallWithoutNameBecomesVisible) {
   ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>");
   const std::string generated = R"(<tool_call>{"arguments":{"value":1}}</tool_call>)";
