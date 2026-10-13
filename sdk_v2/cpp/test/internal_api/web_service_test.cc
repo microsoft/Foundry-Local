@@ -174,6 +174,49 @@ TEST(NonStreamingDisconnectMonitorTest, CompletingRequestDoesNotCancelIt) {
   ::close(sockets[1]);
   EXPECT_FALSE(request.IsCancellationRequested());
 }
+#else
+TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithUnreadBufferedInput) {
+  WSADATA winsock{};
+  ASSERT_EQ(::WSAStartup(MAKEWORD(2, 2), &winsock), 0);
+  const SOCKET listener = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  ASSERT_NE(listener, INVALID_SOCKET);
+  sockaddr_in address{};
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  ASSERT_EQ(::bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
+  ASSERT_EQ(::listen(listener, 1), 0);
+  int address_length = sizeof(address);
+  ASSERT_EQ(::getsockname(listener, reinterpret_cast<sockaddr*>(&address), &address_length), 0);
+
+  const SOCKET client = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  ASSERT_NE(client, INVALID_SOCKET);
+  ASSERT_EQ(::connect(client, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
+  const SOCKET server = ::accept(listener, nullptr, nullptr);
+  ASSERT_NE(server, INVALID_SOCKET);
+  {
+    auto connection = std::make_shared<oatpp::network::tcp::Connection>(server);
+    Request request;
+    ASSERT_TRUE(request.TryBegin());
+    NonStreamingDisconnectMonitor monitor(connection, request);
+    ASSERT_EQ(::send(client, "x", 1, 0), 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    EXPECT_FALSE(request.IsCancellationRequested());
+
+    ASSERT_EQ(::shutdown(client, SD_SEND), 0);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!request.IsCancellationRequested() && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    EXPECT_TRUE(monitor.Stop());
+    char byte = 0;
+    ASSERT_EQ(::recv(server, &byte, 1, MSG_PEEK), 1);
+    EXPECT_EQ(byte, 'x');
+  }
+  ::closesocket(client);
+  ::closesocket(listener);
+  ::WSACleanup();
+}
 #endif
 
 // ========================================================================
@@ -1139,10 +1182,17 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   EXPECT_EQ(session_manager_->ActiveCount(), 0u) << "Disconnected inference did not stop";
-  const auto actions = telemetry_->Events().actions;
+
   bool canceled = false;
-  for (size_t i = prior_action_count; i < actions.size(); ++i) {
-    canceled |= actions[i].action == Action::kOpenAIChatCompletions && actions[i].status == ActionStatus::kCanceled;
+  const auto telemetry_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (!canceled && std::chrono::steady_clock::now() < telemetry_deadline) {
+    const auto actions = telemetry_->Events().actions;
+    for (size_t i = prior_action_count; i < actions.size(); ++i) {
+      canceled |= actions[i].action == Action::kOpenAIChatCompletions && actions[i].status == ActionStatus::kCanceled;
+    }
+    if (!canceled) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
   }
   EXPECT_TRUE(canceled) << "The disconnected request completed instead of being canceled";
 

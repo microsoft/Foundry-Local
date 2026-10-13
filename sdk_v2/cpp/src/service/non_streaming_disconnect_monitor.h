@@ -18,6 +18,7 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <mstcpip.h>
 #else
 #include <cerrno>
 #include <poll.h>
@@ -84,8 +85,22 @@ class NonStreamingDisconnectMonitor {
 
     char byte;
     const int received = ::recv(socket, &byte, 1, MSG_PEEK);
-    return received == 0 || (received == SOCKET_ERROR &&
-                            ::WSAGetLastError() != WSAEWOULDBLOCK && ::WSAGetLastError() != WSAEINTR);
+    if (received == 0) {
+      return true;
+    }
+    if (received == SOCKET_ERROR) {
+      return ::WSAGetLastError() != WSAEWOULDBLOCK && ::WSAGetLastError() != WSAEINTR;
+    }
+
+    // An unread pipelined byte masks EOF from recv(MSG_PEEK); TCP state still reports the peer's FIN.
+    DWORD version = 0;
+    DWORD bytes_returned = 0;
+    TCP_INFO_v0 info{};
+    if (::WSAIoctl(socket, SIO_TCP_INFO, &version, sizeof(version), &info, sizeof(info),
+                   &bytes_returned, nullptr, nullptr) == SOCKET_ERROR) {
+      return ::WSAGetLastError() != WSAEINTR;
+    }
+    return info.State != TCPSTATE_ESTABLISHED;
 #else
     pollfd descriptor{static_cast<int>(handle), POLLIN, 0};
 #ifdef POLLRDHUP
