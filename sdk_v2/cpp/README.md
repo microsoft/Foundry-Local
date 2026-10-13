@@ -124,6 +124,11 @@ initialization and native worker joins, with a lifetime observer making the orde
 deterministic on GCC/MSVC. Collector events are consumed before queuing, and caches are isolated.
 No application exit callback shuts telemetry down on behalf of the manager.
 
+The native CPU lifecycle CI lane provisions the pinned, overlay-patched 1DS source and requires
+all nine shutdown cases to be discovered and executed. `TelemetryPortPolicy` also runs through
+CTest on native desktop builds to check the overlay's platform and feature policy without downloads.
+Instrumented SDK objects use the overlay's private no-logging and no-device-ID definitions.
+
 ## Quick Start
 
 Include the C++ wrapper and link the `foundry_local` shared library. The example below

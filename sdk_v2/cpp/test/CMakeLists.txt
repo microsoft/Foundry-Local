@@ -2,8 +2,10 @@
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/telemetry-shutdown-tests.cmake")
 
-if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(NOT CMAKE_CROSSCOMPILING AND NOT ANDROID AND NOT IOS)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME TelemetryPortPolicy
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_telemetry_port.py)
 endif()
 
 if(APPLE)

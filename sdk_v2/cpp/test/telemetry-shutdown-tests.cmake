@@ -65,6 +65,7 @@ endforeach()
 add_library(telemetry_shutdown_sdk OBJECT
     "${shutdown_sdk_dir}/DebugSource.cpp" "${shutdown_sdk_dir}/WorkerThread.cpp" "${shutdown_sdk_dir}/Logger.cpp")
 target_link_libraries(telemetry_shutdown_sdk PRIVATE MSTelemetry::mat)
+target_compile_definitions(telemetry_shutdown_sdk PRIVATE MATSDK_DISABLE_LOGGING MATSDK_DISABLE_DEVICE_ID)
 target_include_directories(telemetry_shutdown_sdk PRIVATE
     "${TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR}/lib" "${TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR}/lib/api"
     "${TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR}/lib/include"

@@ -10,7 +10,7 @@ parameters:
 
 stages:
 - stage: cpp_test_engine
-  displayName: 'C++ Engine: CPU paged-attention lifecycle tests'
+  displayName: 'C++ CPU lifecycle and telemetry regression tests'
   dependsOn: []
   jobs:
   - job: test
@@ -41,20 +41,42 @@ stages:
         git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
         python -m venv "$ENGINE_VENV"
         python="$ENGINE_VENV/bin/python"
+        export PATH="$ENGINE_VENV/bin:$PATH"
         "$python" -m pip install "cmake==3.31.6"
         "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+        git clone --depth 1 --branch v3.10.281.1 \
+          https://github.com/microsoft/cpp_client_telemetry.git "$TELEMETRY_SOURCE"
+        test "$(git -C "$TELEMETRY_SOURCE" rev-parse HEAD)" = 29d0083644f6450fec037f8afc1ad8d8a3b3c830
+        git -C "$TELEMETRY_SOURCE" apply "$PWD/ports/cpp-client-telemetry/apple-system-libraries.patch"
         "$python" build.py --configure --build --skip_examples \
           --config "$BUILD_CONFIG" \
           --cmake_path "$ENGINE_VENV/bin/cmake" \
           --cmake_extra_defines \
             "GENAI_FETCH_URL=$NUGET_CACHE/genai.zip" \
             "ORT_GENAI_VERSION=$ENGINE_GENAI_VERSION" \
-            "ORT_FETCH_URL=$NUGET_CACHE/ort.zip"
+            "ORT_FETCH_URL=$NUGET_CACHE/ort.zip" \
+            "TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR=$TELEMETRY_SOURCE"
         build="$PWD/build/Linux/$BUILD_CONFIG"
         bin="$build/bin"
         export LD_LIBRARY_PATH="$bin:${LD_LIBRARY_PATH:-}"
         results="$build/TestResults"
         mkdir -p "$results"
+        ctest="$ENGINE_VENV/bin/ctest"
+        "$ctest" --test-dir "$build" -R '^(TelemetryShutdown-|TelemetryPortPolicy$)' \
+          --show-only=json-v1 > "$results/telemetry-tests.json"
+        "$python" - "$results/telemetry-tests.json" <<'PY'
+        import json
+        import sys
+        with open(sys.argv[1]) as report:
+            actual = {test["name"] for test in json.load(report)["tests"]}
+        modes = ("retained", "threaded", "recreated", "explicit", "prime-only", "optout",
+                 "ci-disabled", "enabled-after-ci", "late-create")
+        expected = {"TelemetryPortPolicy", *(f"TelemetryShutdown-{mode}" for mode in modes)}
+        if actual != expected:
+            raise SystemExit(f"Telemetry regression discovery mismatch: {actual ^ expected}")
+        PY
+        "$ctest" --test-dir "$build" -R '^(TelemetryShutdown-|TelemetryPortPolicy$)' \
+          --no-tests=error --output-on-failure --output-junit "$results/telemetry.xml"
         cd "$bin"
         timeout --signal=TERM --kill-after=30s 10m ./foundry_local_tests \
           --gtest_filter="DynamicEngineChatTest.*" \
@@ -67,6 +89,7 @@ stages:
         ENGINE_VENV: $(Build.BinariesDirectory)/engine-venv
         NUGET_CACHE: $(Build.BinariesDirectory)/nuget_packages
         ENGINE_GENAI_VERSION: ${{ parameters.genaiVersion }}
+        TELEMETRY_SOURCE: $(Build.BinariesDirectory)/telemetry-source
         BUILD_CONFIG: ${{ parameters.buildConfig }}
         TF_BUILD: 'true'
 
@@ -107,6 +130,16 @@ stages:
             }
           }
           Write-Host "All $($cases.Count) dynamic Engine tests executed and passed; none skipped."
+
+    - task: PublishTestResults@2
+      displayName: 'Publish telemetry regression results'
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: JUnit
+        testResultsFiles: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/TestResults/telemetry.xml'
+        testRunTitle: 'C++ telemetry lifetime and overlay policy'
+        failTaskOnFailedTests: true
+        failTaskOnMissingResultsFile: true
 
     - task: PublishTestResults@2
       displayName: 'Publish Engine lifecycle results'
