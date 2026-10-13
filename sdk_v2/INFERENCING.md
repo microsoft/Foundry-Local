@@ -110,6 +110,9 @@ a complete response; the second streams incremental output on the **same session
 They are inference fragments, not standalone programs: `model` is your loaded chat
 model, and async fragments run in an async context.
 
+These examples display only `DEFAULT` text, skipping reasoning output. Apply the subtype
+check to both completed message parts and streamed text items.
+
 The typed inference API is available in C++, C#, Python, JavaScript/TypeScript, and
 Rust. The [Java preview](#java-preview-stream-audio) currently exposes a specialized
 audio API instead of these generic request/item types.
@@ -138,7 +141,10 @@ void Chat(IModel& model) {
     if (item.GetType() == FOUNDRY_LOCAL_ITEM_MESSAGE) {
       for (const Item& part : item.GetMessage().parts) {
         if (part.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
-          std::cout << part.GetText().text;
+          auto text = part.GetText();
+          if (text.type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
+            std::cout << text.text;
+          }
         }
       }
     }
@@ -147,7 +153,10 @@ void Chat(IModel& model) {
 
   session.SetStreamingCallback([](Item item) -> int {
     if (item.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
-      std::cout << item.GetText().text << std::flush;
+      auto text = item.GetText();
+      if (text.type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
+        std::cout << text.text << std::flush;
+      }
     }
     return 0;
   });
@@ -190,7 +199,7 @@ async Task ChatAsync(IModel model)
             {
                 foreach (var part in message.Parts)
                 {
-                    if (part is TextItem text)
+                    if (part is TextItem text && text.Type == TextItemType.Default)
                         Console.Write(text.Text);
                 }
             }
@@ -207,7 +216,7 @@ async Task ChatAsync(IModel model)
     {
         using (item)
         {
-            if (item is TextItem text)
+            if (item is TextItem text && text.Type == TextItemType.Default)
                 Console.Write(text.Text);
         }
     }
@@ -228,7 +237,7 @@ Python exposes a synchronous iterator over streamed items, with inference runnin
 a background worker. Use context managers for requests, responses, and streams.
 
 ```python
-from foundry_local_sdk import ChatSession, MessageItem, Request, TextItem
+from foundry_local_sdk import ChatSession, MessageItem, Request, TextItem, TextItemType
 
 def chat(model):
     with ChatSession(model) as session:
@@ -239,7 +248,7 @@ def chat(model):
                 for item in response:
                     if isinstance(item, MessageItem):
                         for part in item.parts:
-                            if isinstance(part, TextItem):
+                            if isinstance(part, TextItem) and part.type == TextItemType.DEFAULT:
                                 print(part.text, end="")
                 print()
 
@@ -250,7 +259,7 @@ def chat(model):
             with session.process_streaming_request(follow_up) as stream:
                 for item in stream:
                     with item:
-                        if isinstance(item, TextItem):
+                        if isinstance(item, TextItem) and item.type == TextItemType.DEFAULT:
                             print(item.text, end="", flush=True)
                 with stream.final_response as final:
                     print(f"\nFinished: {final.finish_reason}")
@@ -280,7 +289,9 @@ async function chat(model) {
       if (item.type === "message") {
         if (item.parts !== undefined) {
           for (const part of item.parts) {
-            if (part.type === "text") process.stdout.write(part.text);
+            if (part.type === "text" && (part.textType ?? "default") === "default") {
+              process.stdout.write(part.text);
+            }
           }
         } else if (typeof item.content === "string") {
           process.stdout.write(item.content);
@@ -293,7 +304,9 @@ async function chat(model) {
       .addItem(Item.userMessage("And what country is it in?"));
     const stream = session.processStreamingRequest(followUp);
     for await (const item of stream) {
-      if (item.type === "text") process.stdout.write(item.text);
+      if (item.type === "text" && (item.textType ?? "default") === "default") {
+        process.stdout.write(item.text);
+      }
     }
     const final = await stream.response;
     console.log(`\nFinished: ${final.finishReason}`);
@@ -311,7 +324,7 @@ Use the typed `ChatSession` with Tokio, and `tokio_stream::StreamExt` to consume
 incremental items. Requests are passed by value; responses contain owned data.
 
 ```rust
-use foundry_local_sdk::{ChatSession, Item, Model, Request};
+use foundry_local_sdk::{ChatSession, Item, Model, Request, TextKind};
 use std::io::{self, Write};
 use tokio_stream::StreamExt;
 
@@ -321,7 +334,16 @@ async fn chat(model: &Model) -> Result<(), Box<dyn std::error::Error>> {
         Item::text("What is the capital of France?"),
     ])]);
     let response = session.process_request(first).await?;
-    println!("{}", response.text());
+    for item in &response.items {
+        if let Item::Message(message) = item {
+            for part in &message.content {
+                if let Item::Text { text, kind: TextKind::Default } = part {
+                    print!("{text}");
+                }
+            }
+        }
+    }
+    println!();
 
     let follow_up = Request::from_items(vec![Item::user_message(vec![
         Item::text("And what country is it in?"),
@@ -329,7 +351,7 @@ async fn chat(model: &Model) -> Result<(), Box<dyn std::error::Error>> {
     let mut stream = session.process_streaming_request(follow_up);
     while let Some(item) = stream.next().await {
         let item = item?;
-        if let Some(text) = item.as_text() {
+        if let Item::Text { text, kind: TextKind::Default } = item {
             print!("{text}");
             io::stdout().flush()?;
         }
