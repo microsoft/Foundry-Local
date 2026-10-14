@@ -333,6 +333,10 @@ Windows x64 explicitly passes `--cmake_generator "Visual Studio 17 2022"`.
 Windows ARM64 adds `--arm64`. macOS expects `cmake`/`ninja`/`pkg-config` and
 falls back to Homebrew if any are missing.
 
+All jobs set `TMPDIR` to `$(Agent.TempDirectory)`. This avoids the .NET 10.0.13
+`NuGet-Migrations` named-mutex failure on macOS agents that export an empty
+`TMPDIR` (`lstat("", ...)`), and covers both direct and npm-triggered restores.
+
 Linux x64 and ARM64 run the same `build.py` command inside architecture-specific
 containers: `quay.io/pypa/manylinux_2_28_x86_64` (glibc 2.28) and
 `quay.io/pypa/manylinux_2_34_aarch64` (glibc 2.34). The ARM64 baseline matches
