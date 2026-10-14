@@ -69,7 +69,8 @@ foundry-local-install
 ## Requirements
 
 - Python 3.11 or newer (single `cp311-abi3` wheel works on every CPython ≥ 3.11)
-- Windows (x64), Linux (x64), or macOS (arm64)
+- Windows (x64), Linux (x64 or ARM64), or macOS (arm64)
+- Linux: glibc 2.28 or newer on x64; glibc 2.34 or newer on ARM64, including CPU-only usage
 
 ## Quick start
 

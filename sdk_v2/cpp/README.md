@@ -33,6 +33,10 @@ wrapper need only C++17 or newer.
 The build resolves its C++ dependencies from the manifest in `vcpkg.json`, and obtains
 the pinned ONNX Runtime and ONNX Runtime GenAI dependencies during CMake configuration.
 
+Linux runtime requirements are architecture-specific: glibc 2.28 or newer on x64,
+and glibc 2.34 or newer on ARM64. The ARM64 minimum also applies to CPU-only usage
+because the pinned GenAI runtime requires it.
+
 Chat completions accept a typed `chat_template_kwargs` JSON object, such as
 `{"enable_thinking": false}`, for model-specific template controls. The pinned stable
 GenAI package supports this feature; a nightly package is not required. Session-level
