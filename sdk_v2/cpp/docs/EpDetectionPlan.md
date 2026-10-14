@@ -23,7 +23,7 @@ C ABI (foundry_local_c.h)
   └── IEpDetector interface (expanded)
         ├── EpDetector (orchestrator — replaces stub)
         │     ├── WinMLEpBootstrapper (Windows 10 19H1+ reg-free, WinML 2.x package present)
-        │     ├── CudaEpBootstrapper (Windows x64 + NVIDIA, Linux x64)
+        │     ├── CudaEpBootstrapper (Windows/Linux x64 and ARM64 + NVIDIA)
         │     └── [future bootstrappers as needed]
         └── StubEpDetector (fallback — CPU only, used in tests)
 ```
