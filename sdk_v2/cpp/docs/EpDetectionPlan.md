@@ -266,14 +266,17 @@ available in retail builds yet.
 **Port of:** `CudaEpBootstrapper.cs`
 
 **Design:**
-- Downloads CUDA EP provider DLLs from Azure CDN.
+- Downloads only CUDA EP and ORT GenAI CUDA libraries from Azure CDN.
+- CUDA toolkit and cuDNN runtimes are externally installed prerequisites, not distributed by Foundry Local.
 - Cross-process file-based lock (`cuda-ep.lock`) to prevent concurrent installs.
 - SHA256 verification of downloaded binaries.
 - `SetDllDirectory()` + ORT `RegisterExecutionProviderLibrary()` for registration.
 
 **Platform behavior:**
-- **Windows x64 + NVIDIA GPU:** Download from CDN, verify, register.
-- **Linux x64:** Register from co-located `.so` in app package (no download).
+- **Windows x64/ARM64 + NVIDIA GPU:** Download from CDN, verify, register; resolve external
+  runtime DLLs through `PATH` or application-configured `AddDllDirectory` and `SetDefaultDllDirectories`.
+- **Linux x64/ARM64 + NVIDIA GPU:** Download from CDN, verify, register; resolve external
+  runtime libraries through the system loader configuration or `LD_LIBRARY_PATH`.
 - **Other platforms:** Not applicable — bootstrapper not created.
 
 **Download flow (from C#):**

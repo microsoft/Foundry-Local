@@ -45,6 +45,21 @@ clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
 
+### CUDA acceleration
+
+On Windows and Linux (x64 and ARM64), Foundry Local downloads and verifies only the
+CUDA execution provider and ORT GenAI CUDA libraries. It does not distribute the
+CUDA toolkit or cuDNN runtime libraries. Install compatible CUDA and cuDNN runtimes
+separately before registering the CUDA execution provider.
+
+On Windows, make the runtime DLL directories available through `PATH`. Applications
+that manage DLL search directories themselves can instead call `AddDllDirectory`
+for each runtime directory and enable these directories with
+`SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` before CUDA registration.
+This process-wide setting replaces the standard PATH-based DLL search; register all
+required runtime directories when using it. Foundry Local leaves runtime dependency
+loading to ORT and GenAI. On Linux, use the system loader configuration or `LD_LIBRARY_PATH`.
+
 ## Native Export Isolation
 
 The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.
