@@ -100,35 +100,6 @@ example, the default library and examples are under
 The build places `foundry_local` alongside its ONNX Runtime and ONNX Runtime GenAI
 dependencies. Keep these files together when copying a build to another location.
 
-## Telemetry Lifetime Regression
-
-The owning singleton is constructed after `Manager` and its static dependencies, so process exit
-destroys the retained manager before those dependencies. Normal `Create`/`Destroy` and recreation
-remain supported; creation after final singleton destruction is rejected.
-
-For the deterministic native desktop regression, configure with
-`TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR` pointing to the exact 1DS source tree used to build the installed
-static `MSTelemetry` package, then build through `build.py`. Private SDK instrumentation must match
-the linked archive. For example:
-
-```pwsh
-python build.py --configure --build --config RelWithDebInfo --cmake_extra_defines TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR=C:\src\cpp_client_telemetry
-ctest --test-dir build/Windows/RelWithDebInfo -C RelWithDebInfo -R '^TelemetryShutdown-' --output-on-failure --repeat until-fail:50
-```
-
-The cases retain the actual manager until exit, initialize it on an application thread, explicitly
-destroy it, destroy/recreate it, enable telemetry after a CI-suppressed first creation, reject
-recreation after final owner destruction, leave it uncreated, suppress all uploads in CI, and preserve
-ProcessInfo-only uploads under runtime opt-out. Test-only SDK objects observe actual diagnostic-mutex
-initialization and native worker joins, with a lifetime observer making the ordering defect
-deterministic on GCC/MSVC. Collector events are consumed before queuing, and caches are isolated.
-No application exit callback shuts telemetry down on behalf of the manager.
-
-The native CPU lifecycle CI lane provisions the pinned, overlay-patched 1DS source and requires
-all nine shutdown cases to be discovered and executed. `TelemetryPortPolicy` also runs through
-CTest on native desktop builds to check the overlay's platform and feature policy without downloads.
-Instrumented SDK objects use the overlay's private no-logging and no-device-ID definitions.
-
 ## Quick Start
 
 Include the C++ wrapper and link the `foundry_local` shared library. The example below
