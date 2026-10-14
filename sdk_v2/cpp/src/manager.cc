@@ -290,8 +290,8 @@ Manager::Manager(const Configuration& config) : config_(config) {
   const bool telemetry_hard_disabled = TelemetryEnvironment::IsCiEnvironment();
   telemetry_ = std::make_unique<OneDsTelemetry>(config_.app_name, *logger_, disable_nonessential_telemetry);
   try {
-    telemetry_->RecordProcessInfo(BuildProcessInfo(BuildTelemetryMetadata(config_.app_name),
-                                                   !disable_nonessential_telemetry && !telemetry_hard_disabled));
+    telemetry_->RecordProcessInfo(BuildProcessInfo(BuildTelemetryMetadata(config_.app_name), config_,
+                                                   !telemetry_hard_disabled));
   } catch (const std::exception& ex) {
     logger_->Log(LogLevel::Warning,
                  fmt::format("telemetry ProcessInfo failed during Manager initialization: {}",

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #pragma once
 
+#include "log_level.h"
 #include "telemetry/invocation_context.h"
 
 #include <cstdint>
@@ -204,6 +205,12 @@ struct ProcessInfo {
   std::string device_id_scope = "installation";
   int32_t cpu_count = 0;
   int64_t total_memory_mb = -1;
+  std::string app_data_dir;
+  std::string model_cache_dir;
+  std::string logs_dir;
+  LogLevel log_level = LogLevel::Warning;
+  int64_t web_service_url_count = 0;
+  int64_t external_url_count = 0;
 };
 
 /// Abstract telemetry interface.

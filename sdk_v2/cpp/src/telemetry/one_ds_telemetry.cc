@@ -130,8 +130,8 @@ std::string GetCertificateAuthorityBundlePath() {
 }
 #endif
 
-void SetCommonContext(MatILogger* mat_logger, const TelemetryMetadata& m) {
-  mat_logger->SetContext("AppName", TelemetryInternal::SanitizeCommonContextValue(m.app_name));
+void SetCommonContext(MatILogger* mat_logger, const TelemetryMetadata& m, std::string_view hashed_device_id) {
+  TelemetryInternal::SetCommonEventIdentity(*mat_logger, m.app_name, hashed_device_id);
   mat_logger->SetContext("AppVersion", TelemetryInternal::SanitizeCommonContextValue(m.app_version));
   mat_logger->SetContext("FoundryLocalVersion", TelemetryInternal::SanitizeCommonContextValue(m.version));
   mat_logger->SetContext("AppSessionGuid", TelemetryInternal::SanitizeCommonContextValue(m.app_session_guid));
@@ -284,20 +284,18 @@ OneDsTelemetry::OneDsTelemetry(const std::string& app_name,
                   "[Telemetry] ILogManager::GetLogger returned null; 1DS upload disabled");
       return;
     }
+    const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
     if (auto* semantic_context = impl_->logger->GetSemanticContext(); semantic_context != nullptr) {
       TelemetryInternal::SuppressUnneededCommonContext(*semantic_context);
       TelemetryInternal::SetApplicationNameFromProcessName(
           *semantic_context,
           TelemetryInternal::SanitizeCommonContextValue(
               BuildProcessInfo(metadata_, /*include_device_id_status=*/false).process_name));
-      if (!disable_nonessential_telemetry) {
-        const auto hashed_device_id = TelemetryDeviceId::HashForTelemetry(TelemetryDeviceId::Instance().GetValue());
-        if (!hashed_device_id.empty()) {
-          semantic_context->SetDeviceId(hashed_device_id);
-        }
+      if (!hashed_device_id.empty()) {
+        semantic_context->SetDeviceId(hashed_device_id);
       }
     }
-    SetCommonContext(impl_->logger, metadata_);
+    SetCommonContext(impl_->logger, metadata_, hashed_device_id);
     logger_.Log(LogLevel::Information,
                 fmt::format("[Telemetry] 1DS initialized; AppName={} AppVersion={} Version={} Os={} {} Arch={}",
                             TelemetryInternal::SanitizeCommonContextValue(metadata_.app_name),
@@ -534,7 +532,6 @@ void OneDsTelemetry::RecordProcessInfo(const ProcessInfo& info) {
   }
   auto ev = MakeEvent("ProcessInfo");
   ev.SetProperty("appVersion", info.app_version);
-  ev.SetProperty("appName", info.app_name);
   ev.SetProperty("osName", info.os_name);
   ev.SetProperty("osVersion", info.os_version);
   ev.SetProperty("architecture", info.cpu_arch);
@@ -550,6 +547,12 @@ void OneDsTelemetry::RecordProcessInfo(const ProcessInfo& info) {
   ev.SetProperty("deviceIdScope", info.device_id_scope);
   ev.SetProperty("cpuCount", static_cast<int64_t>(info.cpu_count));
   ev.SetProperty("totalMemoryMB", info.total_memory_mb);
+  ev.SetProperty("appDataDir", info.app_data_dir);
+  ev.SetProperty("modelCacheDir", info.model_cache_dir);
+  ev.SetProperty("logsDir", info.logs_dir);
+  ev.SetProperty("logLevel", static_cast<int64_t>(info.log_level));
+  ev.SetProperty("webServiceUrlCount", info.web_service_url_count);
+  ev.SetProperty("externalUrlCount", info.external_url_count);
   SafeLog(impl_->logger, ev);
 }
 

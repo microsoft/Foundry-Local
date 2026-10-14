@@ -11,6 +11,8 @@
 
 namespace fl {
 
+struct Configuration;
+
 /// Process-wide metadata stamped onto every 1DS event as common context.
 /// Computed once at startup and cached. Cheap to copy.
 struct TelemetryMetadata {
@@ -42,6 +44,10 @@ TelemetryMetadata BuildTelemetryMetadata(std::string_view app_name);
 
 /// Build the one-shot ProcessInfo event payload from metadata and system APIs.
 ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, bool include_device_id_status = true);
+
+/// Includes resolved configuration diagnostics; directory values are redacted before being retained.
+ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, const Configuration& configuration,
+                             bool include_device_id_status = true);
 
 inline constexpr size_t kMaxTelemetryInventoryEntries = 64;
 

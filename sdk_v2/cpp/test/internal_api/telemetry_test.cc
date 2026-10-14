@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 #include "exception.h"
+#include "configuration.h"
 #include "logger.h"
 #include "platform/telemetry_device_id.h"
 #include "telemetry/telemetry_action_tracker.h"
@@ -450,6 +451,12 @@ TEST(TelemetryLoggerTest, RecordProcessInfoIncludesStartupMetadata) {
   info.device_id_scope = "container";
   info.cpu_count = 8;
   info.total_memory_mb = 32768;
+  info.app_data_dir = "private-app-data";
+  info.model_cache_dir = "../private-model-cache";
+  info.logs_dir = "C:\\Users\\sample-user\\private-logs";
+  info.log_level = LogLevel::Debug;
+  info.web_service_url_count = 2;
+  info.external_url_count = 1;
 
   telemetry.RecordProcessInfo(info);
 
@@ -465,6 +472,9 @@ TEST(TelemetryLoggerTest, RecordProcessInfoIncludesStartupMetadata) {
   EXPECT_NE(logger.entries[0].message.find("DeviceIdScope=container"), std::string::npos);
   EXPECT_NE(logger.entries[0].message.find("CpuCount=8"), std::string::npos);
   EXPECT_NE(logger.entries[0].message.find("TotalMemoryMB=32768"), std::string::npos);
+  EXPECT_NE(logger.entries[0].message.find("AppDataDir=[path] ModelCacheDir=[path] LogsDir=[path]"), std::string::npos);
+  EXPECT_NE(logger.entries[0].message.find("LogLevel=1 WebServiceUrlCount=2 ExternalUrlCount=1"), std::string::npos);
+  EXPECT_EQ(logger.entries[0].message.find("private-"), std::string::npos);
 }
 
 TEST(TelemetryLoggerTest, RecordExceptionRedactsPaths) {
@@ -692,6 +702,125 @@ TEST(TelemetryContextTest, SuppressesUnneededCommonContextWithoutChangingExplici
   EXPECT_EQ(context.fields.at("DeviceInfo.Id"), "device-id");
   for (const auto* field : TelemetryInternal::kSuppressedCommonContextFields) {
     EXPECT_TRUE(context.fields.at(field).empty()) << field;
+  }
+}
+
+TEST(TelemetryContextTest, CommonEventIdentityIncludesConfiguredAppNameAndHashedDeviceId) {
+  struct RecordingContext {
+    std::map<std::string, std::string> fields;
+    void SetContext(const char* name, const std::string& value) { fields[name] = value; }
+  } context;
+  const auto hashed = TelemetryDeviceId::HashForTelemetry("01234567-89ab-4def-8123-456789abcdef");
+
+  TelemetryInternal::SetCommonEventIdentity(context, "configured-app", hashed);
+
+  EXPECT_EQ(context.fields.at("AppName"), "configured-app");
+  EXPECT_EQ(context.fields.at("appName"), "configured-app");
+  EXPECT_EQ(context.fields.at("deviceId"), hashed);
+  EXPECT_NE(context.fields.at("deviceId"), "01234567-89ab-4def-8123-456789abcdef");
+
+  TelemetryInternal::SetCommonEventIdentity(context, "app /private", {});
+  EXPECT_EQ(context.fields.at("AppName"), "app [path]");
+  EXPECT_EQ(context.fields.at("appName"), "app [path]");
+  EXPECT_EQ(context.fields.at("deviceId"), "Unavailable");
+}
+
+TEST(TelemetryMetadataTest, ProcessInfoIncludesResolvedRedactedConfiguration) {
+  Configuration configuration;
+  configuration.app_name = "configured-app";
+  configuration.app_data_dir = "private-app-data";
+  configuration.model_cache_dir = "{appdata}/private-models";
+  configuration.logs_dir = "{appdata}/private-logs";
+  configuration.log_level = LogLevel::Debug;
+  configuration.web_service_endpoints = {"http://127.0.0.1:0", "http://localhost:0"};
+  configuration.external_service_url = "https://private.example.invalid?token=secret";
+  configuration.Validate();
+  const auto original = configuration;
+  const auto info = BuildProcessInfo(BuildTelemetryMetadata(configuration.app_name), configuration, false);
+
+  EXPECT_EQ(info.app_name, "configured-app");
+  EXPECT_EQ(info.app_data_dir, "[path]");
+  EXPECT_EQ(info.model_cache_dir, "[path]");
+  EXPECT_EQ(info.logs_dir, "[path]");
+  EXPECT_EQ(info.log_level, LogLevel::Debug);
+  EXPECT_EQ(info.web_service_url_count, 2);
+  EXPECT_EQ(info.external_url_count, 1);
+  EXPECT_EQ(configuration.app_data_dir, original.app_data_dir);
+  EXPECT_EQ(configuration.model_cache_dir, original.model_cache_dir);
+  EXPECT_EQ(configuration.logs_dir, original.logs_dir);
+  EXPECT_EQ(configuration.web_service_endpoints, original.web_service_endpoints);
+  EXPECT_EQ(configuration.external_service_url, original.external_service_url);
+}
+
+TEST(TelemetryMetadataTest, ProcessInfoConfigurationDefaultsAndEmptyPaths) {
+  Configuration configuration;
+  configuration.app_name = "configured-app";
+  const auto metadata = BuildTelemetryMetadata(configuration.app_name);
+  const auto unset = BuildProcessInfo(metadata, configuration, false);
+  EXPECT_TRUE(unset.app_data_dir.empty());
+  EXPECT_TRUE(unset.model_cache_dir.empty());
+  EXPECT_TRUE(unset.logs_dir.empty());
+  EXPECT_EQ(unset.log_level, LogLevel::Warning);
+  EXPECT_EQ(unset.web_service_url_count, 0);
+  EXPECT_EQ(unset.external_url_count, 0);
+
+  configuration.app_data_dir = "private-app-data";
+  configuration.Validate();
+  const auto resolved = BuildProcessInfo(metadata, configuration, false);
+  EXPECT_EQ(resolved.app_data_dir, "[path]");
+  EXPECT_EQ(resolved.model_cache_dir, "[path]");
+  EXPECT_EQ(resolved.logs_dir, "[path]");
+
+  configuration.app_data_dir = "";
+  configuration.model_cache_dir = "";
+  configuration.logs_dir = "";
+  const auto empty = BuildProcessInfo(metadata, configuration, false);
+  EXPECT_TRUE(empty.app_data_dir.empty());
+  EXPECT_TRUE(empty.model_cache_dir.empty());
+  EXPECT_TRUE(empty.logs_dir.empty());
+}
+
+TEST(TelemetryMetadataTest, ProcessInfoPreservesEveryLogLevelAndCountsConfiguredUrls) {
+  Configuration configuration;
+  configuration.app_name = "configured-app";
+  const auto metadata = BuildTelemetryMetadata(configuration.app_name);
+  for (const auto level : {LogLevel::Verbose, LogLevel::Debug, LogLevel::Information,
+                           LogLevel::Warning, LogLevel::Error, LogLevel::Fatal}) {
+    configuration.log_level = level;
+    EXPECT_EQ(BuildProcessInfo(metadata, configuration, false).log_level, level);
+  }
+
+  configuration.web_service_endpoints = {"http://127.0.0.1:0"};
+  EXPECT_EQ(BuildProcessInfo(metadata, configuration, false).web_service_url_count, 1);
+  configuration.external_service_url = "https://private.example.invalid";
+  const auto external = BuildProcessInfo(metadata, configuration, false);
+  EXPECT_EQ(external.web_service_url_count, 1);
+  EXPECT_EQ(external.external_url_count, 1);
+  configuration.web_service_endpoints.clear();
+  const auto external_only = BuildProcessInfo(metadata, configuration, false);
+  EXPECT_EQ(external_only.web_service_url_count, 0);
+  EXPECT_EQ(external_only.external_url_count, 1);
+}
+
+TEST(OneDsTelemetryTest, ConfigurationPathsAreAlwaysRedactedBeforeCopiesAndAtFinalBoundary) {
+  using namespace ::Microsoft::Applications::Events;
+  const std::string paths[] = {"C:\\Users\\sample-user\\data", "/home/sample-user/data", "../data", "private-data",
+                               ".", "\\\\server\\private-share", std::string(1024 * 1024, 'x')};
+  for (const char* name : {"appDataDir", "modelCacheDir", "logsDir"}) {
+    for (const auto& path : paths) {
+      TelemetryInternal::BoundedEventProperties bounded("ProcessInfo");
+      bounded.SetProperty(name, path);
+      EXPECT_STREQ(bounded.GetProperties(DataCategory_PartC).at(name).as_string, "[path]") << name;
+
+      EventProperties event("ProcessInfo");
+      event.SetProperty(name, path);
+      TelemetryInternal::SanitizeEventProperties(event);
+      EXPECT_STREQ(event.GetProperties(DataCategory_PartC).at(name).as_string, "[path]") << name;
+    }
+
+    TelemetryInternal::BoundedEventProperties empty("ProcessInfo");
+    empty.SetProperty(name, "");
+    EXPECT_STREQ(empty.GetProperties(DataCategory_PartC).at(name).as_string, "");
   }
 }
 

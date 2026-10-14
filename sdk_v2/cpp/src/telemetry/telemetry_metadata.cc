@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 #include "telemetry/telemetry_metadata.h"
 
+#include "configuration.h"
 #include "telemetry/device_id.h"
 #include "telemetry/invocation_context.h"
 #include "telemetry/telemetry_environment.h"
@@ -527,6 +528,22 @@ ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, bool include_dev
   info.device_id_scope = host_environment.device_id_scope;
   info.cpu_count = static_cast<int32_t>(std::thread::hardware_concurrency());
   info.total_memory_mb = GetTotalMemoryMB();
+  return info;
+}
+
+ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, const Configuration& configuration,
+                             bool include_device_id_status) {
+  auto info = BuildProcessInfo(metadata, include_device_id_status);
+  info.app_data_dir = configuration.app_data_dir
+                          ? TelemetryInternal::SanitizeTelemetryPath(*configuration.app_data_dir)
+                          : "";
+  info.model_cache_dir = configuration.model_cache_dir
+                             ? TelemetryInternal::SanitizeTelemetryPath(*configuration.model_cache_dir)
+                             : "";
+  info.logs_dir = configuration.logs_dir ? TelemetryInternal::SanitizeTelemetryPath(*configuration.logs_dir) : "";
+  info.log_level = configuration.log_level;
+  info.web_service_url_count = static_cast<int64_t>(configuration.web_service_endpoints.size());
+  info.external_url_count = configuration.external_service_url.has_value() ? 1 : 0;
   return info;
 }
 

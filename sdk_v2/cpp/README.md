@@ -41,6 +41,25 @@ clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
 
+## Telemetry
+
+All uploaded events, including session events, carry the configured `appName` and a
+SHA-256-hashed `deviceId` in common context. The legacy `AppName` property remains
+available. The raw device GUID is never uploaded; `deviceId` is `Unavailable` if
+the platform does not supply a usable GUID.
+
+After configuration defaults and path placeholders are resolved, the startup
+`ProcessInfo` event includes `appDataDir`, `modelCacheDir`, `logsDir`, `logLevel`,
+`webServiceUrlCount`, and `externalUrlCount`. Nonempty directory values are fully
+redacted to `[path]`, including relative and single-component paths; empty values
+remain empty. `logLevel` uses the configuration enum values (Verbose=0 through
+Fatal=5). Web counts reflect configured bind URLs and whether the single optional
+external URL is present (0 or 1); URL values are not collected.
+
+Runtime telemetry opt-out suppresses nonessential events but still uploads
+`ProcessInfo`, including hashed device identity and these redacted configuration
+diagnostics. CI suppresses all uploads.
+
 ## Native Export Isolation
 
 The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.
