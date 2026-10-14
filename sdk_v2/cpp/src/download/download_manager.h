@@ -76,6 +76,11 @@ class DownloadManager {
   /// Get the local cache path for a model. Returns empty string if not determinable.
   std::string GetModelCachePath(const ModelInfo& info) const;
 
+  /// Remove completed or incomplete model assets and download state.
+  /// local_path is the scanner-discovered inference directory, if available.
+  /// Rejects removal while a download owns the model's cross-process lock.
+  void RemoveModelFromCache(const ModelInfo& info, const std::string& local_path);
+
   /// Get the cache directory.
   const std::string& GetCacheDirectory() const { return cache_directory_; }
 

@@ -539,12 +539,14 @@ void Model::RemoveFromCache() {
              "local registrations are not cache entries; call Catalog::UnregisterModel instead");
   }
 
+  std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
+  if (!active_) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is no longer registered");
+  }
+
   std::string path;
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (!cached_ || local_path_.empty()) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is not cached locally");
-    }
     path = local_path_;
   }
 
@@ -552,9 +554,7 @@ void Model::RemoveFromCache() {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "cannot remove a loaded model from cache; unload it first");
   }
 
-  if (!Utils::RemoveDirectoryRecursive(path)) {
-    FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to remove model cache directory: " + path);
-  }
+  download_manager_->RemoveModelFromCache(Info(), path);
 
   // Turn off the published state before tearing down the backing string (mirror of Download's ordering).
   cached_.store(false);

@@ -1104,6 +1104,7 @@ struct flModelApi {
 
   /* Model handle operations. Catalog owns Model instances. */
   FL_API_STATUS(IsCached, _In_ const flModel* model, _Out_ int* out_cached);
+  /// Returns the inference directory, which may be a revision subdirectory, not the complete cache root.
   /// Returned path string is owned by the model and valid until the owning manager is destroyed or the model's cache
   /// state changes via Download or RemoveFromCache.
   FL_API_STATUS(GetPath, _In_ const flModel* model, _Out_ const char** out_path);
@@ -1113,6 +1114,9 @@ struct flModelApi {
   FL_API_STATUS(IsLoaded, _In_ const flModel* model, _Out_ int* out_loaded);
   FL_API_STATUS(Load, _In_ flModel* model);
   FL_API_STATUS(Unload, _In_ flModel* model);
+  /// Removes completed or incomplete cached assets and download state for the selected model variant.
+  /// Does not require IsCached to be true. Unload the model and stop downloads before removal.
+  /// Externally registered models must be unregistered instead; their files are never deleted.
   FL_API_STATUS(RemoveFromCache, _In_ flModel* model);
 
   /* Variant support. A model may have multiple device-optimized variants.

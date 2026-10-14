@@ -449,4 +449,38 @@ std::string DownloadManager::GetModelCachePath(const ModelInfo& info) const {
   return {};
 }
 
+void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::string& local_path) {
+  auto model_path = std::filesystem::path(ComputeModelPath(info));
+  // Downloads can return a revision subdirectory. Remove their computed root, but preserve support for models
+  // discovered by the scanner at a different location within the configured cache.
+  if (!local_path.empty() && !IsPathWithinDirectory(local_path, model_path)) {
+    model_path = local_path;
+  }
+
+  const auto cache_root = std::filesystem::path(cache_directory_);
+  if (!IsPathWithinDirectory(model_path, cache_root) || IsPathWithinDirectory(cache_root, model_path)) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "model removal path is not inside the cache: " + model_path.string());
+  }
+
+  if (!std::filesystem::exists(model_path)) {
+    if (local_path.empty()) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model is not cached locally");
+    }
+    return;
+  }
+
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(model_path, logger_);
+  if (!lock) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "cannot remove model cache while a download is in progress");
+  }
+
+  // Keep the root and its live lock intact: unlinking the lock during protected work would let another downloader
+  // acquire a different lock file. The lock removes itself on release; an empty root is not a cache hit.
+  for (const auto& entry : std::filesystem::directory_iterator(model_path)) {
+    if (entry.path() != lock->path()) {
+      std::filesystem::remove_all(entry.path());
+    }
+  }
+}
+
 }  // namespace fl

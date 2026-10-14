@@ -41,6 +41,21 @@ clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
 
+## Clearing a Model Cache
+
+Use `Model::RemoveFromCache()` to clear a completed, interrupted, or corrupted download.
+It does not require `IsCached()` to return true. Unload the model first and stop any active
+downloads; removal rejects loaded models and conflicting downloads. After successful
+removal, the model handle reports `IsCached() == false` and its path is cleared.
+Externally registered models must be unregistered instead; their files are not deleted.
+
+`GetPath()` returns the inference directory, which may be a revision subdirectory.
+Do not delete that directory manually: download markers and other revisions can live
+above it. Removal clears the model's cache root, including payloads, inference metadata,
+`download.tmp`, blob resume sidecars, and legacy progress markers. An empty root may
+remain for download-lock safety; it is not considered cached. Shared catalog metadata
+and other models are retained.
+
 ## Native Export Isolation
 
 The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.

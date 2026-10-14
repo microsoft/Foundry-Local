@@ -8,6 +8,7 @@
 // - DownloadManager (full flow orchestration)
 #include "catalog/azure_catalog_client.h"
 #include "catalog/azure_catalog_models.h"
+#include "catalog/local_model_scanner.h"
 #include "download/blob_download_state.h"
 #include "download/blob_downloader.h"
 #include "platform/cross_process_file_lock.h"
@@ -17,6 +18,7 @@
 #include "ep_detection/ep_detector.h"
 #include "exception.h"
 #include "logger.h"
+#include "model.h"
 #include "model_info.h"
 #include "test_helpers.h"
 #include "util/path_safety.h"
@@ -883,6 +885,176 @@ TEST(VariantFixupTest, PreservesRootFileWhenNoSubdirs) {
 // ========================================================================
 // DownloadManager tests
 // ========================================================================
+
+class ModelCacheRemovalTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    services_.download_manager.SetCacheDirectory(cache_.string());
+    info_.model_id = "test-model:1";
+    info_.string_properties[FOUNDRY_LOCAL_MODEL_PROP_PUBLISHER_STR] = "TestPublisher";
+    root_ = fs::path(cache_.string()) / "TestPublisher" / "test-model-1";
+  }
+
+  Model MakeModel(const std::string& path = "") {
+    return Model::FromModelInfo(info_, path, services_.download_manager, services_.model_load_manager);
+  }
+
+  TempPath cache_ = TempPath::CreateTempDir();
+  fl::test::FakeServiceBindings services_;
+  ModelInfo info_;
+  fs::path root_;
+};
+
+TEST_F(ModelCacheRemovalTest, RemovesIncompleteDownloadWithoutCachedPath) {
+  fs::create_directories(root_ / "v3");
+  std::ofstream(root_ / "download.tmp") << "";
+  std::ofstream(root_ / ".download.progress") << "42";
+  std::ofstream(root_ / "v3" / "weights.onnx") << "partial payload";
+  std::ofstream(root_ / "v3" / "weights.onnx.dlstate") << "partial state";
+  auto model = MakeModel();
+  ASSERT_FALSE(model.IsCached());
+
+  ASSERT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_FALSE(model.IsCached());
+  EXPECT_TRUE(model.GetPath().empty());
+  EXPECT_FALSE(services_.download_manager.IsModelCached(info_));
+  EXPECT_TRUE(fs::is_empty(root_));
+}
+
+TEST_F(ModelCacheRemovalTest, RemovesWholeRootForRevisionPathAndPreservesOtherModels) {
+  fs::create_directories(root_ / "v3");
+  fs::create_directories(root_ / "v2");
+  std::ofstream(root_ / "v3" / "genai_config.json") << "{}";
+  std::ofstream(root_ / "v3" / "inference_model.json") << "{}";
+  std::ofstream(root_ / ".download.progress") << "100";
+  auto sibling = root_.parent_path() / "other-model-1";
+  fs::create_directories(sibling);
+  std::ofstream(sibling / "weights.onnx") << "other model";
+  auto catalog_metadata = fs::path(cache_.string()) / "foundry.modelinfo.json";
+  std::ofstream(catalog_metadata) << "shared metadata";
+  auto model = MakeModel((root_ / "v3").string());
+  ASSERT_TRUE(model.IsCached());
+  ASSERT_TRUE(services_.download_manager.IsModelCached(info_));
+
+  ASSERT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_FALSE(model.IsCached());
+  EXPECT_TRUE(model.GetPath().empty());
+  EXPECT_FALSE(services_.download_manager.IsModelCached(info_));
+  EXPECT_TRUE(fs::is_empty(root_));
+  EXPECT_EQ(ReadFile(sibling / "weights.onnx"), "other model");
+  EXPECT_EQ(ReadFile(catalog_metadata), "shared metadata");
+  EXPECT_TRUE(ScanLocalModels(cache_.string(), fl::test::NullLog()).empty());
+}
+
+TEST_F(ModelCacheRemovalTest, RemovesCorruptDownloadAndCanDownloadAgain) {
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(R"({"blobSasUri": "https://storage.test/container?sig=test"})");
+      });
+  auto downloader = std::make_unique<MockBlobDownloader>();
+  downloader->blobs_to_return = {{"v3/genai_config.json", 100}, {"v3/weights.onnx", 1024}};
+  auto* mock = downloader.get();
+  DownloadManager manager(cache_.string(), "eastus", 1, fl::test::NullLog(), fl::test::TestTelemetrySink(),
+                          false, std::move(registry), std::move(downloader));
+  info_.uri = "azureml://registries/test/models/test-model/versions/1";
+  fs::create_directories(root_ / "v3");
+  std::ofstream(root_ / "v3" / "inference_model.json") << "invalid json";
+  std::ofstream(root_ / "v3" / "weights.onnx") << "corrupt payload";
+  auto model = Model::FromModelInfo(info_, (root_ / "v3").string(), manager, services_.model_load_manager);
+
+  ASSERT_NO_THROW(model.RemoveFromCache());
+  ASSERT_FALSE(model.IsCached());
+  std::vector<float> progress;
+  ASSERT_NO_THROW(model.Download([&](float percent) {
+    if (progress.empty()) {
+      EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+    }
+    progress.push_back(percent);
+    return 0;
+  }));
+
+  EXPECT_TRUE(model.IsCached());
+  EXPECT_TRUE(manager.IsModelCached(info_));
+  ASSERT_FALSE(progress.empty());
+  EXPECT_EQ(progress.front(), 0.0f);
+  EXPECT_EQ(mock->downloaded_blobs.size(), 2u);
+  EXPECT_EQ(ReadFile(root_ / "v3" / "weights.onnx"), "mock content for v3/weights.onnx");
+}
+
+TEST_F(ModelCacheRemovalTest, PreservesScannerDiscoveredNonstandardPath) {
+  auto scanned_path = fs::path(cache_.string()) / "imported-model";
+  fs::create_directories(scanned_path);
+  std::ofstream(scanned_path / "weights.onnx") << "payload";
+  fs::create_directories(root_);
+  std::ofstream(root_ / "unrelated.txt") << "preserve";
+  auto model = MakeModel(scanned_path.string());
+
+  ASSERT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_FALSE(model.IsCached());
+  EXPECT_TRUE(fs::is_empty(scanned_path));
+  EXPECT_EQ(ReadFile(root_ / "unrelated.txt"), "preserve");
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsRemovalWhileDownloadLockIsHeld) {
+  fs::create_directories(root_ / "v3");
+  std::ofstream(root_ / "v3" / "weights.onnx") << "payload";
+  auto model = MakeModel((root_ / "v3").string());
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(root_, fl::test::NullLog());
+  ASSERT_NE(lock, nullptr);
+
+  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+  EXPECT_TRUE(model.IsCached());
+  EXPECT_EQ(ReadFile(root_ / "v3" / "weights.onnx"), "payload");
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsUncachedModelWithoutDownloadState) {
+  auto model = MakeModel();
+
+  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+  EXPECT_FALSE(fs::exists(root_));
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsExternalRegistrationAndRetiredModel) {
+  fs::create_directories(root_);
+  std::ofstream(root_ / "weights.onnx") << "preserve";
+  auto registered = Model::FromLocalRegistration(info_, root_.string(), services_.download_manager,
+                                                 services_.model_load_manager);
+  auto retired = MakeModel(root_.string());
+  retired.Deactivate();
+
+  EXPECT_THROW(registered.RemoveFromCache(), fl::Exception);
+  EXPECT_THROW(retired.RemoveFromCache(), fl::Exception);
+  EXPECT_EQ(ReadFile(root_ / "weights.onnx"), "preserve");
+}
+
+TEST_F(ModelCacheRemovalTest, ClearsCachedStateWhenFilesWereAlreadyDeleted) {
+  auto model = MakeModel((root_ / "v3").string());
+  ASSERT_TRUE(model.IsCached());
+
+  EXPECT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_FALSE(model.IsCached());
+  EXPECT_TRUE(model.GetPath().empty());
+  EXPECT_FALSE(fs::exists(root_));
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsCacheRootAndPathsOutsideCache) {
+  auto outside = TempPath::CreateTempDir();
+  std::ofstream(fs::path(outside.string()) / "weights.onnx") << "preserve";
+  auto outside_model = MakeModel(outside.string());
+  auto root_model = MakeModel(cache_.string());
+
+  EXPECT_THROW(outside_model.RemoveFromCache(), fl::Exception);
+  EXPECT_THROW(root_model.RemoveFromCache(), fl::Exception);
+  EXPECT_TRUE(outside_model.IsCached());
+  EXPECT_TRUE(root_model.IsCached());
+  EXPECT_EQ(ReadFile(fs::path(outside.string()) / "weights.onnx"), "preserve");
+}
 
 TEST(DownloadManagerTest, FullDownloadFlow) {
   auto tmpdir = TempPath::CreateTempDir();
