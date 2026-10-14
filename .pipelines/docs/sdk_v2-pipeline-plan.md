@@ -32,7 +32,7 @@ unconditionally on every run.
 | Windows x64     | `onnxruntime-Win-CPU-2022`        | ✅    | ✅   | Also stages public headers              |
 | Windows ARM64   | `onnxruntime-Win-CPU-2022`        | ✅    | ❌   | Cross-compiled from x64 host            |
 | Linux x64       | `onnxruntime-Ubuntu2404-AMD-CPU`  | ✅    | ✅   | manylinux 2.28 container, CPU-only      |
-| Linux ARM64     | `onnxruntime-linux-ARM64-CPU-2019`| ✅    | ✅   | manylinux 2.28 container, CPU-only      |
+| Linux ARM64     | `onnxruntime-linux-ARM64-CPU-2019`| ✅    | ✅   | manylinux 2.34 container, CPU-only      |
 | macOS ARM64     | `AcesShared` (Sequoia)            | ✅    | ✅   | Native                                  |
 
 ## Architectural decisions (locked)
@@ -333,12 +333,15 @@ Windows x64 explicitly passes `--cmake_generator "Visual Studio 17 2022"`.
 Windows ARM64 adds `--arm64`. macOS expects `cmake`/`ninja`/`pkg-config` and
 falls back to Homebrew if any are missing.
 
-Linux x64 and ARM64 run the same `build.py` command inside the matching
-`quay.io/pypa/manylinux_2_28_<arch>` container. The native-build stage uses a
-small derived image with the required native build prerequisites. Python
-wheels are built in the policy container and passed through `auditwheel repair`;
-ORT and GenAI shared libraries remain external because their declared pip
-dependencies provide them.
+Linux x64 and ARM64 run the same `build.py` command inside architecture-specific
+containers: `quay.io/pypa/manylinux_2_28_x86_64` (glibc 2.28) and
+`quay.io/pypa/manylinux_2_34_aarch64` (glibc 2.34). The ARM64 baseline matches
+the pinned GenAI runtime, including CPU-only usage. The native-build stage uses a
+small derived image with the required native build prerequisites. Python wheels
+are built in the corresponding policy container, passed through `auditwheel repair`,
+and tagged `manylinux_2_28_x86_64` or `manylinux_2_34_aarch64`. ABI checks enforce
+the matching architecture-specific ceiling. ORT and GenAI shared libraries remain
+external because their declared pip dependencies provide them.
 
 Build output directories follow `build.py`'s convention:
 `sdk_v2/cpp/build/<Windows|Linux|macOS>/<Config>/...`.
