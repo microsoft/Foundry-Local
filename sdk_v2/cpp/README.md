@@ -83,6 +83,12 @@ above it. Removal clears the model's cache root, including payloads, inference m
 remain for download-lock safety; it is not considered cached. Shared catalog metadata
 and other models are retained.
 
+For scanner-discovered locations outside the standard layout, removal also recognizes a
+parent containing only numeric revision directories (`v2`, `v3`, etc.) and download
+markers. It clears that parent unless a revision's readable metadata identifies another
+model. Without this ownership evidence, only the discovered inference directory is
+cleared; removal never expands to the cache root or across unrelated parent entries.
+
 ## Native Export Isolation
 
 The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.

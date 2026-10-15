@@ -1012,6 +1012,94 @@ TEST_F(ModelCacheRemovalTest, RejectsRemovalWhileDownloadLockIsHeld) {
   EXPECT_EQ(ReadFile(root_ / "v3" / "weights.onnx"), "payload");
 }
 
+TEST_F(ModelCacheRemovalTest, RemovesNonstandardRevisionRootWithDownloadState) {
+  for (const auto* marker : {"download.tmp", ".download.progress"}) {
+    SCOPED_TRACE(marker);
+    const auto imported_root = fs::path(cache_.string()) / "imported-model";
+    fs::create_directories(imported_root / "v3");
+    fs::create_directories(imported_root / "v2");
+    WriteInferenceModelJson((imported_root / "v3").string(), info_.model_id, {});
+    std::ofstream(imported_root / "v3" / "genai_config.json") << "{}";
+    std::ofstream(imported_root / "v3" / "weights.onnx") << "payload";
+    std::ofstream(imported_root / "v3" / "weights.onnx.dlstate") << "resume state";
+    std::ofstream(imported_root / "v2" / "inference_model.json") << "corrupt metadata";
+    std::ofstream(imported_root / marker) << "42";
+    fs::create_directories(root_);
+    std::ofstream(root_ / "unrelated.txt") << "preserve";
+    const auto scanned = ScanLocalModels(cache_.string(), fl::test::NullLog());
+    ASSERT_EQ(scanned.at(info_.model_id), (imported_root / "v3").string());
+    auto model = MakeModel(scanned.at(info_.model_id));
+
+    ASSERT_NO_THROW(model.RemoveFromCache());
+
+    EXPECT_TRUE(fs::is_empty(imported_root));
+    EXPECT_FALSE(model.IsCached());
+    EXPECT_TRUE(model.GetPath().empty());
+    EXPECT_TRUE(ScanLocalModels(cache_.string(), fl::test::NullLog()).empty());
+    EXPECT_EQ(ReadFile(root_ / "unrelated.txt"), "preserve");
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsNonstandardRevisionRemovalWhileParentLockIsHeld) {
+  const auto imported_root = fs::path(cache_.string()) / "imported-model";
+  fs::create_directories(imported_root / "v3");
+  std::ofstream(imported_root / ".download.progress") << "42";
+  std::ofstream(imported_root / "v3" / "weights.onnx") << "preserve";
+  auto model = MakeModel((imported_root / "v3").string());
+  auto lock = CrossProcessFileLock::TryAcquireForDirectory(imported_root, fl::test::NullLog());
+  ASSERT_NE(lock, nullptr);
+
+  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+  EXPECT_TRUE(model.IsCached());
+  EXPECT_EQ(ReadFile(imported_root / "v3" / "weights.onnx"), "preserve");
+  EXPECT_EQ(ReadFile(imported_root / ".download.progress"), "42");
+}
+
+TEST_F(ModelCacheRemovalTest, DoesNotExpandNonstandardRemovalAcrossUnrelatedEntries) {
+  for (const auto* unrelated : {"notes.txt", "other-model", "v2"}) {
+    SCOPED_TRACE(unrelated);
+    const auto parent = fs::path(cache_.string()) / unrelated;
+    fs::create_directories(parent / "v3");
+    std::ofstream(parent / ".download.progress") << "preserve";
+    const auto other = parent / unrelated;
+    if (std::string(unrelated) == "notes.txt") {
+      std::ofstream(other) << "preserve";
+    } else {
+      fs::create_directories(other);
+      WriteInferenceModelJson(other.string(), "other-model:1", {});
+    }
+
+    auto model = MakeModel((parent / "v3").string());
+
+    ASSERT_NO_THROW(model.RemoveFromCache());
+
+    EXPECT_TRUE(fs::is_empty(parent / "v3"));
+    EXPECT_TRUE(fs::exists(other));
+    EXPECT_EQ(ReadFile(parent / ".download.progress"), "preserve");
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, DoesNotExpandNonstandardRemovalWithoutDownloadStateOrIntoCacheRoot) {
+  for (const bool use_cache_root : {false, true}) {
+    SCOPED_TRACE(use_cache_root);
+    const auto parent = use_cache_root ? fs::path(cache_.string()) : fs::path(cache_.string()) / "imported-model";
+    fs::create_directories(parent / "v3");
+    fs::create_directories(parent / "v2");
+    std::ofstream(parent / "v2" / "weights.onnx") << "preserve";
+    if (use_cache_root) {
+      std::ofstream(parent / ".download.progress") << "preserve";
+    }
+
+    auto model = MakeModel((parent / "v3").string());
+
+    ASSERT_NO_THROW(model.RemoveFromCache());
+
+    EXPECT_TRUE(fs::is_empty(parent / "v3"));
+    EXPECT_EQ(ReadFile(parent / "v2" / "weights.onnx"), "preserve");
+  }
+}
+
 TEST_F(ModelCacheRemovalTest, RejectsUncachedModelWithoutDownloadState) {
   auto model = MakeModel();
 

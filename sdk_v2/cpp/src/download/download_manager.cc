@@ -13,6 +13,7 @@
 #include "utils.h"
 
 #include <foundry_local/foundry_local_c.h>
+#include <nlohmann/json.hpp>
 
 #include <cctype>
 #include <chrono>
@@ -31,6 +32,62 @@ const char* kDownloadSignalFileName = "download.tmp";
 const char* kGenAIConfigFileName = "genai_config.json";
 const char* kInferenceModelFileName = "inference_model.json";
 const char* kDefaultRegistryRegion = "centralus";
+
+bool IsRevisionName(const std::filesystem::path& name) {
+  const auto value = name.string();
+  if (value.size() < 2 || value.front() != 'v') {
+    return false;
+  }
+
+  for (size_t i = 1; i < value.size(); ++i) {
+    if (value[i] < '0' || value[i] > '9') {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::filesystem::path ResolveNonstandardRemovalRoot(const std::filesystem::path& inference_path,
+                                                    const std::filesystem::path& cache_root,
+                                                    const std::string& model_id) {
+  const auto parent = inference_path.parent_path();
+  if (!IsRevisionName(inference_path.filename()) || !IsPathWithinDirectory(parent, cache_root) ||
+      IsPathWithinDirectory(cache_root, parent) || !std::filesystem::is_directory(parent)) {
+    return inference_path;
+  }
+
+  // A revision name alone is not ownership evidence. Only expand across a revision-only parent with download state.
+  bool has_download_state = false;
+  for (const auto& entry : std::filesystem::directory_iterator(parent)) {
+    const auto name = entry.path().filename();
+    if (entry.is_regular_file() && (name == kDownloadSignalFileName || name == ".download.progress")) {
+      has_download_state = true;
+    } else if (entry.is_regular_file() && name == ".download.lock") {
+      continue;
+    } else if (entry.is_directory() && !entry.is_symlink() && IsRevisionName(name)) {
+      std::ifstream metadata(entry.path() / kInferenceModelFileName);
+      if (metadata.is_open()) {
+        const auto json = nlohmann::json::parse(metadata, nullptr, false);
+        // Corrupt metadata must not prevent cleanup, but a known different model must never be removed.
+        if (json.is_object() && json.contains("Name") && json["Name"].is_string()) {
+          auto name_in_metadata = json["Name"].get<std::string>();
+          if (name_in_metadata.find(':') == std::string::npos) {
+            name_in_metadata += ":0";
+          }
+
+          if (name_in_metadata != model_id) {
+            return inference_path;
+          }
+        }
+      }
+    } else {
+      return inference_path;
+    }
+  }
+
+  return has_download_state ? parent : inference_path;
+}
 
 /// Check whether inference_model.json exists at the root or in any immediate
 /// subdirectory.  This is the definitive proof that a download completed
@@ -459,7 +516,7 @@ void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::str
   // Downloads can return a revision subdirectory. Remove their computed root, but preserve support for models
   // discovered by the scanner at a different location within the configured cache.
   if (!local_path.empty() && !IsPathWithinDirectory(local_path, model_path)) {
-    model_path = local_path;
+    model_path = ResolveNonstandardRemovalRoot(local_path, cache_directory_, info.model_id);
   }
 
   const auto cache_root = std::filesystem::path(cache_directory_);
