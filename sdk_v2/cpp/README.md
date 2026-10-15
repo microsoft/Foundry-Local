@@ -71,6 +71,8 @@ Use `Model::RemoveFromCache()` to clear a completed, interrupted, or corrupted d
 It does not require `IsCached()` to return true. Unload the model first and stop any active
 downloads; removal rejects loaded models and conflicting downloads. After successful
 removal, the model handle reports `IsCached() == false` and its path is cleared.
+Removal on the same handle is rejected until an active download has finished its
+callbacks and published its cached state, including cache-hit downloads.
 Externally registered models must be unregistered instead; their files are not deleted.
 Applications sharing a cache must coordinate removal with other instances using the
 model. The download lock serializes file mutations, but does not protect cache-hit
@@ -85,9 +87,11 @@ and other models are retained.
 
 For scanner-discovered locations outside the standard layout, removal also recognizes a
 parent containing only numeric revision directories (`v2`, `v3`, etc.) and download
-markers. It clears that parent unless a revision's readable metadata identifies another
-model. Without this ownership evidence, only the discovered inference directory is
-cleared; removal never expands to the cache root or across unrelated parent entries.
+markers or root-level `inference_model.json`. Matching root metadata can establish
+ownership without download markers; corrupt metadata requires a marker. Removal locks
+the parent before inspecting ownership and retains that lock even if unrelated entries
+or another model's metadata restrict deletion to the discovered inference directory.
+It never expands to the cache root or across unrelated parent entries.
 
 ## Native Export Isolation
 

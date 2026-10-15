@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -74,6 +75,17 @@ class RecordingDownloadTelemetry final : public TelemetryLogger {
   void RecordDownload(const DownloadInfo& info) override { calls.push_back(info); }
 
   std::vector<DownloadInfo> calls;
+};
+
+class CacheOperationLogger final : public ILogger {
+ public:
+  void Log(LogLevel, std::string_view message) override {
+    if (on_log) {
+      on_log(message);
+    }
+  }
+
+  std::function<void(std::string_view)> on_log;
 };
 
 http::HttpResponse MakeRegistryResponse(std::string body, int status = 200) {
@@ -1041,19 +1053,203 @@ TEST_F(ModelCacheRemovalTest, RemovesNonstandardRevisionRootWithDownloadState) {
 }
 
 TEST_F(ModelCacheRemovalTest, RejectsNonstandardRevisionRemovalWhileParentLockIsHeld) {
+  for (const bool ambiguous_parent : {false, true}) {
+    SCOPED_TRACE(ambiguous_parent);
+    const auto imported_root = fs::path(cache_.string()) / "imported-model";
+    fs::create_directories(imported_root / "v3");
+    std::ofstream(imported_root / ".download.progress") << "42";
+    std::ofstream(imported_root / "v3" / "weights.onnx") << "preserve";
+    if (ambiguous_parent) {
+      std::ofstream(imported_root / "notes.txt") << "unrelated";
+    }
+
+    auto model = MakeModel((imported_root / "v3").string());
+    auto lock = CrossProcessFileLock::TryAcquireForDirectory(imported_root, fl::test::NullLog());
+    ASSERT_NE(lock, nullptr);
+
+    EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+    EXPECT_TRUE(model.IsCached());
+    EXPECT_EQ(ReadFile(imported_root / "v3" / "weights.onnx"), "preserve");
+    EXPECT_EQ(ReadFile(imported_root / ".download.progress"), "42");
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, HandlesRootMetadataInNonstandardRevisionCaches) {
+  const struct {
+    const char* marker;
+    const char* metadata;
+    bool remove_parent;
+  } cases[] = {
+      {"download.tmp", R"({"Name":"test-model:1"})", true},
+      {".download.progress", R"({"Name":"test-model:1"})", true},
+      {"", R"({"Name":"test-model:1"})", true},
+      {"download.tmp", "invalid json", true},
+      {".download.progress", "invalid json", true},
+      {"", "invalid json", false},
+      {".download.progress", R"({"Name":"other-model:1"})", false},
+      {"", R"({"Name":"other-model:1"})", false},
+      {".download.progress", R"({"Name":""})", true},
+  };
+
+  int case_index = 0;
+  for (const auto& test_case : cases) {
+    SCOPED_TRACE(case_index);
+    const auto imported_root = fs::path(cache_.string()) / ("imported-model-" + std::to_string(case_index++));
+    fs::create_directories(imported_root / "v3");
+    fs::create_directories(imported_root / "v2");
+    std::ofstream(imported_root / "inference_model.json") << test_case.metadata;
+    std::ofstream(imported_root / "v2" / "weights.onnx") << "older revision";
+    std::ofstream(imported_root / "v3" / "weights.onnx") << "current revision";
+    if (test_case.marker[0] != '\0') {
+      std::ofstream(imported_root / test_case.marker) << "42";
+    }
+
+    auto model = MakeModel((imported_root / "v3").string());
+
+    ASSERT_NO_THROW(model.RemoveFromCache());
+
+    EXPECT_FALSE(model.IsCached());
+    EXPECT_TRUE(model.GetPath().empty());
+    if (test_case.remove_parent) {
+      EXPECT_TRUE(fs::is_empty(imported_root));
+    } else {
+      EXPECT_TRUE(fs::is_empty(imported_root / "v3"));
+      EXPECT_EQ(ReadFile(imported_root / "inference_model.json"), test_case.metadata);
+      EXPECT_EQ(ReadFile(imported_root / "v2" / "weights.onnx"), "older revision");
+      if (test_case.marker[0] != '\0') {
+        EXPECT_EQ(ReadFile(imported_root / test_case.marker), "42");
+      }
+    }
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, RechecksNonstandardOwnershipAfterTakingParentLock) {
   const auto imported_root = fs::path(cache_.string()) / "imported-model";
   fs::create_directories(imported_root / "v3");
+  fs::create_directories(imported_root / "v2");
   std::ofstream(imported_root / ".download.progress") << "42";
-  std::ofstream(imported_root / "v3" / "weights.onnx") << "preserve";
-  auto model = MakeModel((imported_root / "v3").string());
-  auto lock = CrossProcessFileLock::TryAcquireForDirectory(imported_root, fl::test::NullLog());
-  ASSERT_NE(lock, nullptr);
+  WriteInferenceModelJson((imported_root / "v2").string(), info_.model_id, {});
+  CacheOperationLogger logger;
+  const auto parent_acquired = "CrossProcessFileLock acquired: " + (imported_root / ".download.lock").string();
+  const auto child_acquired = "CrossProcessFileLock acquired: " + (imported_root / "v3" / ".download.lock").string();
+  bool ownership_changed = false;
+  bool parent_held_during_fallback = false;
+  logger.on_log = [&](std::string_view message) {
+    if (message == parent_acquired) {
+      ownership_changed = true;
+      WriteInferenceModelJson((imported_root / "v2").string(), "other-model:1", {});
+    } else if (message == child_acquired) {
+      parent_held_during_fallback = true;
+      EXPECT_EQ(CrossProcessFileLock::TryAcquireForDirectory(imported_root, fl::test::NullLog()), nullptr);
+    }
+  };
 
-  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+  DownloadManager manager(cache_.string(), "eastus", 1, logger, fl::test::TestTelemetrySink());
+  auto model = Model::FromModelInfo(info_, (imported_root / "v3").string(), manager, services_.model_load_manager);
+
+  ASSERT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_TRUE(ownership_changed);
+  EXPECT_TRUE(parent_held_during_fallback);
+  EXPECT_TRUE(fs::is_empty(imported_root / "v3"));
+  EXPECT_EQ(ReadFile(imported_root / ".download.progress"), "42");
+  EXPECT_EQ(nlohmann::json::parse(ReadFile(imported_root / "v2" / "inference_model.json"))["Name"], "other-model:1");
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsRemovalDuringCachedDownloadCallbacksAndReleasesGuardOnFailure) {
+  fs::create_directories(root_);
+  std::ofstream(root_ / "weights.onnx") << "preserve";
+  auto model = MakeModel(root_.string());
+
+  EXPECT_NO_THROW(model.Download([&](float percent) {
+    EXPECT_EQ(percent, 100.0f);
+    EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+    return 0;
+  }));
 
   EXPECT_TRUE(model.IsCached());
-  EXPECT_EQ(ReadFile(imported_root / "v3" / "weights.onnx"), "preserve");
-  EXPECT_EQ(ReadFile(imported_root / ".download.progress"), "42");
+  EXPECT_EQ(ReadFile(root_ / "weights.onnx"), "preserve");
+  EXPECT_THROW(model.Download([](float) -> int { throw std::runtime_error("callback failed"); }), std::runtime_error);
+  EXPECT_NO_THROW(model.RemoveFromCache());
+  EXPECT_TRUE(fs::is_empty(root_));
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsRemovalBetweenDownloadLockReleaseAndCachePublication) {
+  auto registry = std::make_unique<ModelRegistryClient>(
+      "eastus", fl::test::NullLog(), std::make_unique<RegionFallback>(fl::test::NullLog(), false),
+      [](const std::string&) {
+        return MakeRegistryResponse(R"({"blobSasUri": "https://storage.test/container?sig=test"})");
+      });
+  auto downloader = std::make_unique<MockBlobDownloader>();
+  downloader->blobs_to_return = {{"v3/genai_config.json", 100}, {"v3/weights.onnx", 1024}};
+  CacheOperationLogger logger;
+  DownloadManager manager(cache_.string(), "eastus", 1, logger, fl::test::TestTelemetrySink(),
+                          false, std::move(registry), std::move(downloader));
+  info_.uri = "azureml://registries/test/models/test-model/versions/1";
+  auto model = Model::FromModelInfo(info_, "", manager, services_.model_load_manager);
+  const auto released = "CrossProcessFileLock released: " + (root_ / ".download.lock").string();
+  std::mutex mutex;
+  std::condition_variable cv;
+  bool download_paused = false;
+  bool allow_publication = false;
+  logger.on_log = [&](std::string_view message) {
+    if (message == released) {
+      std::unique_lock<std::mutex> lock(mutex);
+      if (!download_paused) {
+        download_paused = true;
+        cv.notify_all();
+        EXPECT_TRUE(cv.wait_for(lock, std::chrono::seconds(10), [&] { return allow_publication; }));
+      }
+    }
+  };
+
+  std::exception_ptr download_failure;
+  std::thread download([&] {
+    try {
+      model.Download();
+    } catch (...) {
+      download_failure = std::current_exception();
+    }
+  });
+
+  bool observed_release;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    observed_release = cv.wait_for(lock, std::chrono::seconds(5), [&] { return download_paused; });
+  }
+
+  if (observed_release) {
+    EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    allow_publication = true;
+  }
+
+  cv.notify_all();
+  download.join();
+  ASSERT_TRUE(observed_release);
+  if (download_failure) {
+    std::rethrow_exception(download_failure);
+  }
+
+  EXPECT_TRUE(model.IsCached());
+  EXPECT_EQ(model.GetPath(), (root_ / "v3").string());
+  EXPECT_TRUE(fs::exists(root_ / "v3" / "weights.onnx"));
+  EXPECT_NO_THROW(model.RemoveFromCache());
+  logger.on_log = {};
+}
+
+TEST_F(ModelCacheRemovalTest, FailedDownloadDoesNotBlockLaterRemoval) {
+  auto model = MakeModel();
+  EXPECT_THROW(model.Download(), fl::Exception);
+  fs::create_directories(root_);
+  std::ofstream(root_ / "download.tmp") << "";
+
+  EXPECT_NO_THROW(model.RemoveFromCache());
+  EXPECT_TRUE(fs::is_empty(root_));
 }
 
 TEST_F(ModelCacheRemovalTest, DoesNotExpandNonstandardRemovalAcrossUnrelatedEntries) {
