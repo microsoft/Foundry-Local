@@ -33,6 +33,10 @@ wrapper need only C++17 or newer.
 The build resolves its C++ dependencies from the manifest in `vcpkg.json`, and obtains
 the pinned ONNX Runtime and ONNX Runtime GenAI dependencies during CMake configuration.
 
+Linux runtime requirements are architecture-specific: glibc 2.28 or newer on x64,
+and glibc 2.34 or newer on ARM64. The ARM64 minimum also applies to CPU-only usage
+because the pinned GenAI runtime requires it.
+
 Chat completions accept a typed `chat_template_kwargs` JSON object, such as
 `{"enable_thinking": false}`, for model-specific template controls. The pinned stable
 GenAI package supports this feature; a nightly package is not required. Session-level
@@ -40,6 +44,26 @@ kwargs are defaults: per-request kwargs override the entire object, and `{}` exp
 clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
+
+### CUDA acceleration
+
+On Windows and Linux (x64 and ARM64), Foundry Local downloads and verifies only the
+CUDA execution provider and ORT GenAI CUDA libraries. It does not distribute the
+CUDA toolkit or cuDNN runtime libraries. Install compatible CUDA and cuDNN runtimes
+separately before registering the CUDA execution provider.
+
+On Windows, make the runtime DLL directories available through `PATH` for ORT's
+provider loader. On x64, also call `AddDllDirectory` for the CUDA runtime directory
+before CUDA registration: the GenAI CUDA bridge directly imports the CUDA runtime,
+and its explicit DLL search policy includes application-added directories but not `PATH`.
+
+Applications that manage DLL search directories instead of `PATH` can call
+`AddDllDirectory` for each runtime directory and enable these directories with
+`SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` before CUDA registration.
+This process-wide setting replaces the standard PATH-based DLL search; register all
+required runtime directories when using it. It is not needed solely for the x64 bridge load.
+Foundry Local leaves runtime dependency loading to ORT and GenAI. On Linux, use the
+system loader configuration or `LD_LIBRARY_PATH`.
 
 ## Clearing a Model Cache
 
