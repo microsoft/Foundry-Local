@@ -450,8 +450,11 @@ std::string DownloadManager::GetModelCachePath(const ModelInfo& info) const {
 }
 
 void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::string& local_path) {
-  // This lock coordinates cache mutations, not model use: cache-hit reads and loaded models in other processes do
-  // not hold it. Applications sharing a cache must coordinate removal with other instances using that model.
+  // The download lock coordinates cache mutations, not model use. Both Model::Download's cached-state shortcut and
+  // DownloadModel's on-disk cache-hit path bypass it, so another instance can report download success while removal
+  // deletes the files it considers cached. Its cached flag/path can then remain stale, and a later load can fail.
+  // Loaded models in other processes do not hold this lock either. Applications sharing a cache must coordinate
+  // removal with other instances using that model.
   auto model_path = std::filesystem::path(ComputeModelPath(info));
   // Downloads can return a revision subdirectory. Remove their computed root, but preserve support for models
   // discovered by the scanner at a different location within the configured cache.
