@@ -356,6 +356,16 @@ TEST(ResponseCreateParamsTest, ToolChoiceString) {
   EXPECT_EQ(*s, "required");
 }
 
+TEST(ResponseCreateParamsTest, RejectsNonBooleanParallelToolCalls) {
+  auto j = json::parse(R"({
+    "model": "m",
+    "input": "x",
+    "parallel_tool_calls": "false"
+  })");
+
+  EXPECT_THROW((void)j.get<ResponseCreateParams>(), json::type_error);
+}
+
 // ========================================================================
 // to_json — Output content types
 // ========================================================================
