@@ -1116,6 +1116,8 @@ struct flModelApi {
   FL_API_STATUS(Unload, _In_ flModel* model);
   /// Removes completed or incomplete cached assets and download state for the selected model variant.
   /// Does not require IsCached to be true. Unload the model and stop downloads before removal.
+  /// Applications sharing a cache must coordinate removal with other instances using the model: the download lock
+  /// does not protect cache-hit reads or models loaded in another process.
   /// Externally registered models must be unregistered instead; their files are never deleted.
   FL_API_STATUS(RemoveFromCache, _In_ flModel* model);
 

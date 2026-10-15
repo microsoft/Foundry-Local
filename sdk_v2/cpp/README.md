@@ -48,6 +48,9 @@ It does not require `IsCached()` to return true. Unload the model first and stop
 downloads; removal rejects loaded models and conflicting downloads. After successful
 removal, the model handle reports `IsCached() == false` and its path is cleared.
 Externally registered models must be unregistered instead; their files are not deleted.
+Applications sharing a cache must coordinate removal with other instances using the
+model. The download lock serializes file mutations, but does not protect cache-hit
+reads or models loaded in another process.
 
 `GetPath()` returns the inference directory, which may be a revision subdirectory.
 Do not delete that directory manually: download markers and other revisions can live
