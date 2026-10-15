@@ -288,10 +288,9 @@ Manager::Manager(const Configuration& config) : config_(config) {
       config_.disable_nonessential_telemetry || IsAdditionalOptionEnabled(config_, "DisableNonessentialTelemetry") ||
       TelemetryEnvironment::IsTelemetryDisabledByEnvVar();
   const bool telemetry_hard_disabled = TelemetryEnvironment::IsCiEnvironment();
-  telemetry_ = std::make_unique<OneDsTelemetry>(config_.app_name, *logger_, disable_nonessential_telemetry);
+  auto telemetry = std::make_unique<OneDsTelemetry>(config_.app_name, *logger_, disable_nonessential_telemetry);
   try {
-    telemetry_->RecordProcessInfo(BuildProcessInfo(BuildTelemetryMetadata(config_.app_name), config_,
-                                                   !telemetry_hard_disabled));
+    telemetry->RecordProcessInfo(config_);
   } catch (const std::exception& ex) {
     logger_->Log(LogLevel::Warning,
                  fmt::format("telemetry ProcessInfo failed during Manager initialization: {}",
@@ -300,6 +299,7 @@ Manager::Manager(const Configuration& config) : config_(config) {
     logger_->Log(LogLevel::Warning, "telemetry ProcessInfo failed during Manager initialization.");
   }
 
+  telemetry_ = std::move(telemetry);
   ep_detector_ =
       std::make_unique<EpDetector>(*ort_api_, *ort_env_, std::move(bootstrappers), *logger_, *telemetry_);
   if (!disable_nonessential_telemetry && !telemetry_hard_disabled) {

@@ -188,7 +188,6 @@ struct HardwareInfo {
 
 /// Payload for the ProcessInfo event — emitted once during process startup when telemetry is not CI-suppressed.
 struct ProcessInfo {
-  std::string app_name;
   std::string app_version;
   std::string os_name;
   std::string os_version;
@@ -261,10 +260,6 @@ class ITelemetry {
 
   /// Record one access to a model catalog source (CatalogFetch event).
   virtual void RecordCatalogFetch(const CatalogFetchInfo& info) = 0;
-
-  /// Record one process/system metadata snapshot. Default no-op for test fakes
-  /// and embedders that do not care about startup telemetry.
-  virtual void RecordProcessInfo(const ProcessInfo& /*info*/) {}
 
   /// Record coarse hardware/accelerator availability. Default no-op for test fakes
   /// and embedders that do not care about startup telemetry.

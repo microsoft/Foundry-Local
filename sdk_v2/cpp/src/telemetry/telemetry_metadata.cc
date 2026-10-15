@@ -493,6 +493,7 @@ TelemetryMetadata BuildTelemetryMetadata(std::string_view app_name) {
     m.app_version = m.version;
   }
   m.app_name = TelemetryInternal::SanitizeTelemetryValue(app_name);
+  m.process_name = TelemetryInternal::SanitizeTelemetryValue(GetProcessName());
 
 #ifdef _WIN32
   m.os_name = "Windows";
@@ -508,14 +509,14 @@ TelemetryMetadata BuildTelemetryMetadata(std::string_view app_name) {
   return m;
 }
 
-ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, bool include_device_id_status) {
+ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, const Configuration& configuration,
+                             bool include_device_id_status) {
   ProcessInfo info;
-  info.app_name = TelemetryInternal::SanitizeTelemetryValue(metadata.app_name);
   info.app_version = TelemetryInternal::SanitizeTelemetryValue(metadata.app_version);
   info.os_name = TelemetryInternal::SanitizeTelemetryValue(metadata.os_name);
   info.os_version = TelemetryInternal::SanitizeTelemetryValue(metadata.os_version);
   info.cpu_arch = TelemetryInternal::SanitizeTelemetryValue(metadata.cpu_arch);
-  info.process_name = TelemetryInternal::SanitizeTelemetryValue(GetProcessName());
+  info.process_name = TelemetryInternal::SanitizeTelemetryValue(metadata.process_name);
   info.device_id_status = include_device_id_status ? TelemetryDeviceId::Instance().GetStatusString() : "Disabled";
   const auto host_environment = GetHostEnvironmentInfo();
   info.is_container = host_environment.is_container;
@@ -528,12 +529,6 @@ ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, bool include_dev
   info.device_id_scope = host_environment.device_id_scope;
   info.cpu_count = static_cast<int32_t>(std::thread::hardware_concurrency());
   info.total_memory_mb = GetTotalMemoryMB();
-  return info;
-}
-
-ProcessInfo BuildProcessInfo(const TelemetryMetadata& metadata, const Configuration& configuration,
-                             bool include_device_id_status) {
-  auto info = BuildProcessInfo(metadata, include_device_id_status);
   info.app_data_dir = configuration.app_data_dir
                           ? TelemetryInternal::SanitizeTelemetryPath(*configuration.app_data_dir)
                           : "";

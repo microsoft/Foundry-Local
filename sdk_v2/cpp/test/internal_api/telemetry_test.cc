@@ -308,6 +308,36 @@ TEST(OneDsTelemetryTest, OrtEnvironmentVariableSuppressesOnlyNonessentialUpload)
   EXPECT_FALSE(telemetry.IsUploadEnabled());
 }
 
+TEST(OneDsTelemetryTest, RecordProcessInfoUsesCachedIdentityAndResolvedConfiguration) {
+  ScopedEnvVar ci("CI", "true");
+  RecordingLogger logger;
+  OneDsTelemetry telemetry("cached-app", logger);
+  ASSERT_FALSE(telemetry.IsUploadEnabled());
+  logger.entries.clear();
+
+  Configuration configuration;
+  configuration.app_name = "different-config-app";
+  configuration.app_data_dir = "private-app-data";
+  configuration.log_level = LogLevel::Debug;
+  configuration.web_service_endpoints = {"http://127.0.0.1:0", "http://localhost:0"};
+  configuration.external_service_url = "https://private.example.invalid?token=secret";
+  configuration.Validate();
+  {
+    ScopedEnvVar changed_ci("CI", nullptr);
+    telemetry.RecordProcessInfo(configuration);
+  }
+
+  ASSERT_EQ(logger.entries.size(), 1u);
+  const auto& message = logger.entries.front().message;
+  EXPECT_NE(message.find("ProcessInfo AppName=cached-app "), std::string::npos);
+  EXPECT_NE(message.find("DeviceIdStatus=Disabled"), std::string::npos);
+  EXPECT_NE(message.find("AppDataDir=[path] ModelCacheDir=[path] LogsDir=[path]"), std::string::npos);
+  EXPECT_NE(message.find("LogLevel=1 WebServiceUrlCount=2 ExternalUrlCount=1"), std::string::npos);
+  EXPECT_EQ(message.find(configuration.app_name), std::string::npos);
+  EXPECT_EQ(message.find("private"), std::string::npos);
+  EXPECT_EQ(message.find("secret"), std::string::npos);
+}
+
 TEST(TelemetryActionTest, EpActionNamesMatchEventNames) {
   EXPECT_EQ(ActionToString(Action::kEpDownloadAttempt), "EPDownloadAttempt");
   EXPECT_EQ(ActionToString(Action::kEpDownloadAndRegister), "EPDownloadAndRegister");
@@ -435,7 +465,6 @@ TEST(TelemetryLoggerTest, RecordProcessInfoIncludesStartupMetadata) {
   TelemetryLogger telemetry("foundry-local", logger);
 
   ProcessInfo info;
-  info.app_name = "foundry-local";
   info.app_version = "4.5.6";
   info.os_name = "Windows";
   info.os_version = "10.0.26100";
@@ -580,6 +609,25 @@ TEST(TelemetryMetadataTest, HostAppVersionIsAlwaysPopulated) {
 
   EXPECT_FALSE(metadata.app_version.empty());
   EXPECT_FALSE(metadata.version.empty());
+  EXPECT_FALSE(metadata.process_name.empty());
+}
+
+TEST(TelemetryMetadataTest, ProcessInfoReusesCachedProcessMetadata) {
+  TelemetryMetadata metadata;
+  metadata.app_version = "cached-version";
+  metadata.os_name = "cached-os";
+  metadata.os_version = "cached-os-version";
+  metadata.cpu_arch = "cached-architecture";
+  metadata.process_name = "cached-process.exe";
+
+  const auto info = BuildProcessInfo(metadata, {}, false);
+
+  EXPECT_EQ(info.app_version, metadata.app_version);
+  EXPECT_EQ(info.os_name, metadata.os_name);
+  EXPECT_EQ(info.os_version, metadata.os_version);
+  EXPECT_EQ(info.cpu_arch, metadata.cpu_arch);
+  EXPECT_EQ(info.process_name, metadata.process_name);
+  EXPECT_EQ(info.device_id_status, "Disabled");
 }
 
 #ifdef _WIN32
@@ -665,7 +713,7 @@ TEST(TelemetryDeviceIdPlatformTest, ExistingDeviceIdIsHardenedBeforeReuse) {
 
 #ifdef _WIN32
 TEST(TelemetryMetadataTest, ProcessNamePreservesExecutableExtensionOnWindows) {
-  auto info = BuildProcessInfo(BuildTelemetryMetadata("foundry-local-test"), /*include_device_id_status=*/false);
+  auto info = BuildProcessInfo(BuildTelemetryMetadata("foundry-local-test"), {}, /*include_device_id_status=*/false);
 
   EXPECT_TRUE(info.process_name.ends_with(".exe")) << info.process_name;
 }
@@ -740,7 +788,6 @@ TEST(TelemetryMetadataTest, ProcessInfoIncludesResolvedRedactedConfiguration) {
   const auto original = configuration;
   const auto info = BuildProcessInfo(BuildTelemetryMetadata(configuration.app_name), configuration, false);
 
-  EXPECT_EQ(info.app_name, "configured-app");
   EXPECT_EQ(info.app_data_dir, "[path]");
   EXPECT_EQ(info.model_cache_dir, "[path]");
   EXPECT_EQ(info.logs_dir, "[path]");
@@ -1310,12 +1357,13 @@ TEST(TelemetryMetadataTest, BoundsMetadataBeforeRetentionAndProcessInfoCopies) {
   metadata.os_name = input;
   metadata.os_version = input;
   metadata.cpu_arch = input;
-  const auto process = BuildProcessInfo(metadata, false);
-  EXPECT_EQ(process.app_name.size(), 1024u);
+  metadata.process_name = input;
+  const auto process = BuildProcessInfo(metadata, {}, false);
   EXPECT_EQ(process.app_version.size(), 1024u);
   EXPECT_EQ(process.os_name.size(), 1024u);
   EXPECT_EQ(process.os_version.size(), 1024u);
   EXPECT_EQ(process.cpu_arch.size(), 1024u);
+  EXPECT_EQ(process.process_name.size(), 1024u);
   EXPECT_EQ(metadata.app_name, input);
 }
 
@@ -1516,7 +1564,7 @@ TEST(TelemetryLoggerTest, BoundsEveryEventStringBeforeFormatting) {
   catalog.error_message = catalog.user_agent = catalog.correlation_id = input;
   telemetry.RecordCatalogFetch(catalog);
   ProcessInfo process;
-  process.app_name = process.app_version = process.os_name = process.os_version = process.cpu_arch = input;
+  process.app_version = process.os_name = process.os_version = process.cpu_arch = input;
   process.process_name = process.device_id_status = process.container_type = process.virtualization_type = input;
   process.host_environment = process.environment_detection_confidence = process.device_id_scope = input;
   telemetry.RecordProcessInfo(process);

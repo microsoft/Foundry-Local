@@ -51,11 +51,13 @@ the platform does not supply a usable GUID.
 
 After configuration defaults and path placeholders are resolved, the startup
 `ProcessInfo` event includes `appDataDir`, `modelCacheDir`, `logsDir`, `logLevel`,
-`webServiceUrlCount`, and `externalUrlCount`. Nonempty directory values are fully
-redacted to `[path]`, including relative and single-component paths; empty values
-remain empty. `logLevel` uses the configuration enum values (Verbose=0 through
-Fatal=5). Web counts reflect configured bind URLs and whether the single optional
-external URL is present (0 or 1); URL values are not collected.
+`webServiceUrlCount`, and `externalUrlCount`. Telemetry builds this payload using
+its cached process/application metadata and the resolved configuration by reference;
+it does not rebuild identity metadata or retain a copy of the configuration.
+Nonempty directory values are fully redacted to `[path]`, including relative and
+single-component paths; empty values remain empty. `logLevel` uses the configuration
+enum values (Verbose=0 through Fatal=5). Web counts reflect configured bind URLs and
+whether the single optional external URL is present (0 or 1); URL values are not collected.
 
 Runtime telemetry opt-out suppresses nonessential events but still uploads
 `ProcessInfo`, including hashed device identity and these redacted configuration
