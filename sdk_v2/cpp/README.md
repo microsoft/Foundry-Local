@@ -43,9 +43,10 @@ by session defaults. Omitting kwargs inherits the session default, if any.
 
 ## Telemetry
 
-All uploaded events, including session events, carry the configured `appName` and a
-SHA-256-hashed `deviceId` in common context. The legacy `AppName` property remains
-available. The raw device GUID is never uploaded; `deviceId` is `Unavailable` if
+All uploaded events, including `ProcessInfo` and session events, carry the configured
+`AppName` and a SHA-256-hashed `deviceId` in common context. Application name is
+collected only once, as `AppName`, without a lowercase alias or an event-specific
+duplicate. The raw device GUID is never uploaded; `deviceId` is `Unavailable` if
 the platform does not supply a usable GUID.
 
 After configuration defaults and path placeholders are resolved, the startup

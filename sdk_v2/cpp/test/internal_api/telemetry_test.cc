@@ -714,14 +714,16 @@ TEST(TelemetryContextTest, CommonEventIdentityIncludesConfiguredAppNameAndHashed
 
   TelemetryInternal::SetCommonEventIdentity(context, "configured-app", hashed);
 
+  EXPECT_EQ(context.fields.size(), 2u);
   EXPECT_EQ(context.fields.at("AppName"), "configured-app");
-  EXPECT_EQ(context.fields.at("appName"), "configured-app");
+  EXPECT_FALSE(context.fields.contains("appName"));
   EXPECT_EQ(context.fields.at("deviceId"), hashed);
   EXPECT_NE(context.fields.at("deviceId"), "01234567-89ab-4def-8123-456789abcdef");
 
   TelemetryInternal::SetCommonEventIdentity(context, "app /private", {});
+  EXPECT_EQ(context.fields.size(), 2u);
   EXPECT_EQ(context.fields.at("AppName"), "app [path]");
-  EXPECT_EQ(context.fields.at("appName"), "app [path]");
+  EXPECT_FALSE(context.fields.contains("appName"));
   EXPECT_EQ(context.fields.at("deviceId"), "Unavailable");
 }
 
@@ -956,7 +958,7 @@ TEST(OneDsTelemetryTest, BoundsEveryStringDimensionBeforeEventPropertyCopies) {
       "ExceptionMessage",
       "ErrorMessage",
       "appVersion",
-      "appName",
+      "AppName",
       "osName",
       "osVersion",
       "architecture",

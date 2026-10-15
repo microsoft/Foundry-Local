@@ -12,9 +12,7 @@ namespace fl::TelemetryInternal {
 
 template <typename Logger>
 void SetCommonEventIdentity(Logger& logger, std::string_view app_name, std::string_view hashed_device_id) {
-  const auto sanitized_app_name = SanitizeTelemetryValue(app_name);
-  logger.SetContext("AppName", sanitized_app_name);
-  logger.SetContext("appName", sanitized_app_name);
+  logger.SetContext("AppName", SanitizeTelemetryValue(app_name));
   logger.SetContext("deviceId", hashed_device_id.empty() ? std::string{"Unavailable"}
                                                          : SanitizeTelemetryValue(hashed_device_id));
 }

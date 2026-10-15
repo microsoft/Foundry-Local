@@ -18,7 +18,7 @@ namespace fl {
 /// ProcessInfo; CI and unit-test processes suppress upload entirely.
 class OneDsTelemetry : public ITelemetry {
  public:
-  /// @param app_name      Configuration::app_name; stamped as appName (and legacy AppName) on every event.
+  /// @param app_name      Configuration::app_name; stamped as AppName on every event.
   /// @param logger        Diagnostic logger; used by the embedded TelemetryLogger mirror.
   /// @param disable_nonessential_telemetry  When true, non-essential uploads are suppressed; ProcessInfo still
   ///                                        uploads and events are still written to the local diagnostic logger.
