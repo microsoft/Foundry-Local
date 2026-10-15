@@ -155,32 +155,11 @@ TEST(CudaEpBootstrapperTest, PlatformSupportMatchesPublishedBundles) {
 TEST(CudaEpManifestTest, WindowsX64MetadataMatches20261014Bundle) {
   const auto manifest = BuildCudaEpManifest(CudaEpPlatform::WindowsX64);
   ASSERT_TRUE(manifest.has_value());
-  EXPECT_EQ(manifest->bundle_id, "cuda-ep-win-x64-cuda-12.8.4-ort-1.31.0-genai-0.18.0-20261014-064231");
+  EXPECT_EQ(manifest->bundle_id, "cuda-ep-win-x64-ort-1.31.0-genai-0.18.0-20261014-064231");
   EXPECT_EQ(manifest->provider_relative_path, "onnxruntime_providers_cuda.dll");
-  ASSERT_EQ(manifest->artifacts.size(), 3u);
-
-  ExpectArtifact(manifest->artifacts[0], "cuda-toolkit", "cuda-bins-win-x64-20260806-182620.zip",
-                 "a90223e4091cfa63b1e40af27a5d5f0267fdfdd15f0459c2922106afe352d306", 640 * kMiB,
-                 {
-                     {"cublas64_12.dll", "9513540e4ec4c51ee9e7304138c2cc255c29a8c181f9e80c38efa25738becd99"},
-                     {"cublasLt64_12.dll", "b199d1ff892a81b7fd3d57ba1781549609b41500b36008fef326038393ad46c7"},
-                     {"cudart64_12.dll", "c2c9a9c22a9bcba90e261825968836787b331038047a26770cffb7a583c28344"},
-                 });
+  ASSERT_EQ(manifest->artifacts.size(), 1u);
   ExpectArtifact(
-      manifest->artifacts[1], "cudnn", "cudnn-bins-win-x64-20260806-182620.zip",
-      "b82cd271c8c9cbd52ea9e4dedaa4cc3864bf8d7b221d87d5bde81d6ee4a399da", 704 * kMiB,
-      {
-          {"cudnn64_9.dll", "0d1d71325eb5e91570ab8ba8e399e07bf717ffd76511b2407229a8f45e0b1305"},
-          {"cudnn_adv64_9.dll", "6d66bce22502c2582a9c0e5398ee8cc38addce2c837eb6db8786abc650e48dd8"},
-          {"cudnn_engines_precompiled64_9.dll", "b410c3b42921afc6e668ff994fce1bf12c5a8a9b1a9445ebee61958bf49b1e0a"},
-          {"cudnn_engines_runtime_compiled64_9.dll",
-           "8e62214495c96b93c6333c084fec49b43f272b7e1977a12fe62275e9070647eb"},
-          {"cudnn_graph64_9.dll", "82f710b01d15d20c311009721c771b76360a4954ebf7b5f4a407b0f96587f568"},
-          {"cudnn_heuristic64_9.dll", "50719eefb6692074096bf83c87e9cd186f7ce5b953201da33669c1277a61949b"},
-          {"cudnn_ops64_9.dll", "49487537744256a3d4365c4792b03bf31130ad1faea0a13eafa219620941d837"},
-      });
-  ExpectArtifact(
-      manifest->artifacts[2], "cuda-ep", "cuda-ep-bins-win-x64-20261014-064231.zip",
+      manifest->artifacts[0], "cuda-ep", "cuda-ep-bins-win-x64-20261014-064231.zip",
       "ad7e1d0ad84d0ca6861848fa31f2cd92c548b67c57d264d819f26bda03383b98", 256 * kMiB,
       {
           {"onnxruntime-genai-cuda.dll", "d9bc0e9a737d6169b2e801f13bf87a51e7182f65ad64ba8f0c4ee3037be12457"},
@@ -192,32 +171,11 @@ TEST(CudaEpManifestTest, WindowsX64MetadataMatches20261014Bundle) {
 TEST(CudaEpManifestTest, WindowsArm64MetadataMatches20261014Bundle) {
   const auto manifest = BuildCudaEpManifest(CudaEpPlatform::WindowsArm64);
   ASSERT_TRUE(manifest.has_value());
-  EXPECT_EQ(manifest->bundle_id, "cuda-ep-win-arm64-cuda-13.4.1-ort-1.31.0-genai-0.18.0-20261014-064257");
+  EXPECT_EQ(manifest->bundle_id, "cuda-ep-win-arm64-ort-1.31.0-genai-0.18.0-20261014-064257");
   EXPECT_EQ(manifest->provider_relative_path, "onnxruntime_providers_cuda.dll");
-  ASSERT_EQ(manifest->artifacts.size(), 3u);
-
-  ExpectArtifact(manifest->artifacts[0], "cuda-toolkit", "cuda-bins-win-arm64-20260806-182803.zip",
-                 "de71001db47deb1b59567c50cd5fb1c7705945a9461c95505e987fb8731d6175", 192 * kMiB,
-                 {
-                     {"cublas64_13.dll", "80b322ce3fe77d1c6c0348e30a31c5f2682da4197680177a179af69275b57997"},
-                     {"cublasLt64_13.dll", "d13048a5f17deeb1a051189c0d5ac898cdf398c6dfca62d100c6eb39329a1d80"},
-                     {"cudart64_13.dll", "32504bd5f424a4e73d3bb5ecc69f018538ae371efa0210bd33e88c7c78b9dca7"},
-                 });
+  ASSERT_EQ(manifest->artifacts.size(), 1u);
   ExpectArtifact(
-      manifest->artifacts[1], "cudnn", "cudnn-bins-win-arm64-20260806-182803.zip",
-      "84338552f83a602e989e2a964ed37c342560486031c955225d265402ccf02bd1", 192 * kMiB,
-      {
-          {"cudnn64_9.dll", "247cecbb33132c829c6ed328b7dd34d077a27d0f0fb0ee0b56469ec6bdfd1c17"},
-          {"cudnn_adv64_9.dll", "b624590960a3ce3ac7c3a5fc683912dbd9ba9de20fa1af52db4485c435c78375"},
-          {"cudnn_engines_precompiled64_9.dll", "c3be7f8a9091865b7fc94ddd69e62024338d42a188633729e4520244b072da2d"},
-          {"cudnn_engines_runtime_compiled64_9.dll",
-           "bd558d60e1dbeeeee8f59dfec8bd5ce992876f923e2f19f7ef03a4a7e110a89a"},
-          {"cudnn_graph64_9.dll", "8f568df300b0733abe2cb35ea6bfcc40d2330db005ab9ebba96d008f6bc0b568"},
-          {"cudnn_heuristic64_9.dll", "59d5aad876ab55d30194f36d3f2c5ff90eeaeed502b256c83ed3d6082030f58d"},
-          {"cudnn_ops64_9.dll", "c9e0ec0e0a4e659393e15897ed1f6e5bac677e0c0fe7e12290f0386f19477b6b"},
-      });
-  ExpectArtifact(
-      manifest->artifacts[2], "cuda-ep", "cuda-ep-bins-win-arm64-20261014-064257.zip",
+      manifest->artifacts[0], "cuda-ep", "cuda-ep-bins-win-arm64-20261014-064257.zip",
       "728acba50d92f7c41d9a848bfc122f628959dddf3ca25293f31e3c963aff5209", 96 * kMiB,
       {
           {"onnxruntime-genai-cuda.dll", "6727494a28d352dc2992c79f5320410b70a1d954a92dd452b34b0ee2de790617"},
