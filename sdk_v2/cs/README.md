@@ -406,6 +406,16 @@ await FoundryLocalManager.Instance.StopWebServiceAsync();
 | `Web` | `WebService?` | `null` | Web service configuration (see below) |
 | `AdditionalSettings` | `IDictionary<string, string>?` | `null` | Extra key-value settings passed to Core |
 
+**Logging**
+
+The `ILogger` passed to `FoundryLocalManager.CreateAsync` controls managed SDK diagnostics,
+including native library resolution. Successful library loads are logged at `Debug`; failed
+preload attempts are logged at `Warning`. Use `NullLogger.Instance` to discard managed SDK
+logs. The SDK does not write these diagnostics directly to the console or `Trace`.
+
+`Configuration.LogLevel` and `LogsDir` separately control the native Core log level and log
+directory; they do not configure the supplied `ILogger`.
+
 **`Configuration.WebService`**
 
 | Property | Type | Default | Description |
