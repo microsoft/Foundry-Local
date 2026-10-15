@@ -9,6 +9,9 @@ service.
 The SDK implementation builds as C++20, while applications that consume the public
 wrapper need only C++17 or newer.
 
+For an inference-focused introduction to models, sessions, requests, responses, items,
+and streaming across languages, see [Inference with the Foundry Local SDK](../INFERENCING.md).
+
 ## Features
 
 - **Model catalog** -- discover model aliases, variants, cached models, and loaded models
@@ -33,6 +36,10 @@ wrapper need only C++17 or newer.
 The build resolves its C++ dependencies from the manifest in `vcpkg.json`, and obtains
 the pinned ONNX Runtime and ONNX Runtime GenAI dependencies during CMake configuration.
 
+Linux runtime requirements are architecture-specific: glibc 2.28 or newer on x64,
+and glibc 2.34 or newer on ARM64. The ARM64 minimum also applies to CPU-only usage
+because the pinned GenAI runtime requires it.
+
 Chat completions accept a typed `chat_template_kwargs` JSON object, such as
 `{"enable_thinking": false}`, for model-specific template controls. The pinned stable
 GenAI package supports this feature; a nightly package is not required. Session-level
@@ -41,27 +48,25 @@ clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
 
-## Telemetry
+### CUDA acceleration
 
-All uploaded events, including `ProcessInfo` and session events, carry the configured
-`AppName` and a SHA-256-hashed `deviceId` in common context. Application name is
-collected only once, as `AppName`, without a lowercase alias or an event-specific
-duplicate. The raw device GUID is never uploaded; `deviceId` is `Unavailable` if
-the platform does not supply a usable GUID.
+On Windows and Linux (x64 and ARM64), Foundry Local downloads and verifies only the
+CUDA execution provider and ORT GenAI CUDA libraries. It does not distribute the
+CUDA toolkit or cuDNN runtime libraries. Install compatible CUDA and cuDNN runtimes
+separately before registering the CUDA execution provider.
 
-After configuration defaults and path placeholders are resolved, the startup
-`ProcessInfo` event includes `appDataDir`, `modelCacheDir`, `logsDir`, `logLevel`,
-`webServiceUrlCount`, and `externalUrlCount`. Telemetry builds this payload using
-its cached process/application metadata and the resolved configuration by reference;
-it does not rebuild identity metadata or retain a copy of the configuration.
-Nonempty directory values are fully redacted to `[path]`, including relative and
-single-component paths; empty values remain empty. `logLevel` uses the configuration
-enum values (Verbose=0 through Fatal=5). Web counts reflect configured bind URLs and
-whether the single optional external URL is present (0 or 1); URL values are not collected.
+On Windows, make the runtime DLL directories available through `PATH` for ORT's
+provider loader. On x64, also call `AddDllDirectory` for the CUDA runtime directory
+before CUDA registration: the GenAI CUDA bridge directly imports the CUDA runtime,
+and its explicit DLL search policy includes application-added directories but not `PATH`.
 
-Runtime telemetry opt-out suppresses nonessential events but still uploads
-`ProcessInfo`, including hashed device identity and these redacted configuration
-diagnostics. CI suppresses all uploads.
+Applications that manage DLL search directories instead of `PATH` can call
+`AddDllDirectory` for each runtime directory and enable these directories with
+`SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` before CUDA registration.
+This process-wide setting replaces the standard PATH-based DLL search; register all
+required runtime directories when using it. It is not needed solely for the x64 bridge load.
+Foundry Local leaves runtime dependency loading to ORT and GenAI. On Linux, use the
+system loader configuration or `LD_LIBRARY_PATH`.
 
 ## Native Export Isolation
 

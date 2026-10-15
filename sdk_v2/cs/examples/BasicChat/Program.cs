@@ -73,12 +73,13 @@ internal static class Program
                 "What is the capital of France? Answer with only the city name."));
 
             using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
-            var responseText = string.Join(
-                Environment.NewLine,
+            var responseText = string.Concat(
                 response
                     .OfType<MessageItem>()
-                    .Where(message => message.IsSimpleText())
-                    .Select(message => message.GetSimpleText()));
+                    .SelectMany(message => message.Parts)
+                    .OfType<TextItem>()
+                    .Where(text => text.Type == TextItemType.Default)
+                    .Select(text => text.Text));
 
             Console.WriteLine($"Assistant: {responseText}");
 
