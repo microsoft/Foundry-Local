@@ -1073,7 +1073,10 @@ struct flCatalogApi {
   /// Register a model in a local catalog without taking ownership of its assets.
   /// `model_path` must identify a model directory containing genai_config.json.
   /// `model_id` must use the canonical `<name>:<version>` format and be unique in the local catalog.
-  /// The metadata is copied; model identity and location are taken only from the explicit arguments.
+  /// `metadata.task` is required. The metadata is copied; model identity and location come from the explicit arguments.
+  /// Missing display name and modalities receive defaults, while context length comes from model.context_length, then
+  /// search.max_length, when positive. A caller-supplied provider remains the default Load override; when omitted,
+  /// runtime metadata remains unset and genai_config.json selects the provider during loading.
   FL_API_STATUS(RegisterModel, _In_ flCatalog* catalog, _In_ const char* model_path,
                 _In_ const char* model_id, _In_ const flModelInfo* metadata,
                 _Outptr_ flModel** out_model);

@@ -36,6 +36,10 @@ and streaming across languages, see [Inference with the Foundry Local SDK](../IN
 The build resolves its C++ dependencies from the manifest in `vcpkg.json`, and obtains
 the pinned ONNX Runtime and ONNX Runtime GenAI dependencies during CMake configuration.
 
+Linux runtime requirements are architecture-specific: glibc 2.28 or newer on x64,
+and glibc 2.34 or newer on ARM64. The ARM64 minimum also applies to CPU-only usage
+because the pinned GenAI runtime requires it.
+
 Chat completions accept a typed `chat_template_kwargs` JSON object, such as
 `{"enable_thinking": false}`, for model-specific template controls. The pinned stable
 GenAI package supports this feature; a nightly package is not required. Session-level
@@ -43,6 +47,23 @@ kwargs are defaults: per-request kwargs override the entire object, and `{}` exp
 clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
+
+## Native Export Isolation
+
+The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.
+ELF builds use a version script and `--exclude-libs,ALL` to keep bundled dependencies
+and compiler compatibility archives private. macOS/iOS use an exported-symbols
+allowlist; Windows retains its explicit `.def` exports. Static and OBJECT libraries
+remain available to white-box tests. Linux's statically linked internal test executable
+also localizes archive-owned symbols so telemetry-thread vtables cannot interpose
+with GenAI. The public export allowlist applies to `foundry_local`, not separately
+shipped shared dependencies.
+
+Model-free exact-export checks run in Linux and macOS builds; Linux also checks
+strong/weak archive isolation, private transport symbols in internal tests, and runtime
+calls through the public fixture API.
+ELF checks inspect external definitions only: local symbols retained in `.dynsym`
+by GCC compatibility objects are not public exports.
 
 ## Build From Source
 

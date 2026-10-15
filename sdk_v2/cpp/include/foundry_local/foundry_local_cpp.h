@@ -813,7 +813,10 @@ class ICatalog {
                                      const std::string& variant_name = {},
                                      int max_versions = 50) = 0;
 
-  /// Register existing local model assets. `model_id` must use `<name>:<version>`; metadata is copied.
+  /// Register existing local model assets. `model_id` must use `<name>:<version>` and `metadata.Task()` is required.
+  /// Metadata is copied. Missing display name and modalities receive defaults, while context length comes from
+  /// model.context_length, then search.max_length, when positive. A caller-supplied provider remains the default
+  /// IModel::Load override; when omitted, runtime metadata remains unset and genai_config.json selects the provider.
   /// The catalog does not take ownership of `model_path` and never deletes its contents.
   virtual std::unique_ptr<IModel> RegisterModel(const std::string& model_path, const std::string& model_id,
                                                 const ModelInfo& metadata) = 0;

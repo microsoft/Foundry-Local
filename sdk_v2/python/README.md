@@ -72,7 +72,8 @@ foundry-local-install
 ## Requirements
 
 - Python 3.11 or newer (single `cp311-abi3` wheel works on every CPython ≥ 3.11)
-- Windows (x64), Linux (x64), or macOS (arm64)
+- Windows (x64), Linux (x64 or ARM64), or macOS (arm64)
+- Linux: glibc 2.28 or newer on x64; glibc 2.34 or newer on ARM64, including CPU-only usage
 
 ## Quick start
 
@@ -181,7 +182,6 @@ local_catalog = manager.get_catalog(CatalogType.LOCAL)
 with ModelInfoBuilder() as metadata:
     metadata.set_string_property("task", "chat-completion")
     metadata.set_string_property("display_name", "My Local Model")
-    metadata.set_int_property("context_length", 4096)
     model = local_catalog.register_model(
         model_path="/path/to/model-directory",
         model_id="my-model-generic-cpu:1",

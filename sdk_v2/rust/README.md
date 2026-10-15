@@ -231,8 +231,7 @@ let mut metadata = local_catalog.create_model_info()?;
 metadata
     .set_string_property("task", "chat-completion")?
     .set_string_property("device_type", "CPU")?
-    .set_string_property("execution_provider", "CPUExecutionProvider")?
-    .set_int_property("context_length", 4096)?;
+    .set_string_property("execution_provider", "CPUExecutionProvider")?;
 
 let model = local_catalog
     .register_model("C:/models/my-model", "my-model:1", metadata)
