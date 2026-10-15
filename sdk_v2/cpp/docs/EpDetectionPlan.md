@@ -274,7 +274,11 @@ available in retail builds yet.
 
 **Platform behavior:**
 - **Windows x64/ARM64 + NVIDIA GPU:** Download from CDN, verify, register; resolve external
-  runtime DLLs through `PATH` or application-configured `AddDllDirectory` and `SetDefaultDllDirectories`.
+  runtime DLLs through `PATH` for ORT's provider loader. On x64, also register the CUDA runtime
+  directory with `AddDllDirectory` for the GenAI CUDA bridge's direct runtime imports.
+  Applications using DLL directories instead of `PATH` must register all runtime directories
+  and enable them with `SetDefaultDllDirectories`; this process-wide setting is not required
+  solely for the bridge load.
 - **Linux x64/ARM64 + NVIDIA GPU:** Download from CDN, verify, register; resolve external
   runtime libraries through the system loader configuration or `LD_LIBRARY_PATH`.
 - **Other platforms:** Not applicable — bootstrapper not created.

@@ -52,13 +52,18 @@ CUDA execution provider and ORT GenAI CUDA libraries. It does not distribute the
 CUDA toolkit or cuDNN runtime libraries. Install compatible CUDA and cuDNN runtimes
 separately before registering the CUDA execution provider.
 
-On Windows, make the runtime DLL directories available through `PATH`. Applications
-that manage DLL search directories themselves can instead call `AddDllDirectory`
-for each runtime directory and enable these directories with
+On Windows, make the runtime DLL directories available through `PATH` for ORT's
+provider loader. On x64, also call `AddDllDirectory` for the CUDA runtime directory
+before CUDA registration: the GenAI CUDA bridge directly imports the CUDA runtime,
+and its explicit DLL search policy includes application-added directories but not `PATH`.
+
+Applications that manage DLL search directories instead of `PATH` can call
+`AddDllDirectory` for each runtime directory and enable these directories with
 `SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` before CUDA registration.
 This process-wide setting replaces the standard PATH-based DLL search; register all
-required runtime directories when using it. Foundry Local leaves runtime dependency
-loading to ORT and GenAI. On Linux, use the system loader configuration or `LD_LIBRARY_PATH`.
+required runtime directories when using it. It is not needed solely for the x64 bridge load.
+Foundry Local leaves runtime dependency loading to ORT and GenAI. On Linux, use the
+system loader configuration or `LD_LIBRARY_PATH`.
 
 ## Native Export Isolation
 
