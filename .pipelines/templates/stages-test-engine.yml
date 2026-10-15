@@ -48,6 +48,7 @@ stages:
           https://github.com/microsoft/cpp_client_telemetry.git "$TELEMETRY_SOURCE"
         test "$(git -C "$TELEMETRY_SOURCE" rev-parse HEAD)" = 29d0083644f6450fec037f8afc1ad8d8a3b3c830
         git -C "$TELEMETRY_SOURCE" apply "$PWD/ports/cpp-client-telemetry/apple-system-libraries.patch"
+        git -C "$TELEMETRY_SOURCE" apply "$PWD/ports/cpp-client-telemetry/sdk-version-lifetime.patch"
         "$python" build.py --configure --build --skip_examples \
           --config "$BUILD_CONFIG" \
           --cmake_path "$ENGINE_VENV/bin/cmake" \
@@ -62,21 +63,7 @@ stages:
         results="$build/TestResults"
         mkdir -p "$results"
         ctest="$ENGINE_VENV/bin/ctest"
-        "$ctest" --test-dir "$build" -R '^(TelemetryShutdown-|TelemetryPortPolicy$)' \
-          --show-only=json-v1 > "$results/telemetry-tests.json"
-        "$python" - "$results/telemetry-tests.json" <<'PY'
-        import json
-        import sys
-        with open(sys.argv[1]) as report:
-            actual = {test["name"] for test in json.load(report)["tests"]}
-        modes = ("retained", "threaded", "recreated", "explicit", "prime-only", "optout",
-                 "ci-disabled", "enabled-after-ci", "late-create")
-        expected = {"TelemetryPortPolicy", *(f"TelemetryShutdown-{mode}" for mode in modes)}
-        if actual != expected:
-            raise SystemExit(f"Telemetry regression discovery mismatch: {actual ^ expected}")
-        PY
-        "$ctest" --test-dir "$build" -R '^(TelemetryShutdown-|TelemetryPortPolicy$)' \
-          --no-tests=error --output-on-failure --output-junit "$results/telemetry.xml"
+        "$python" tools/run_dependency_tests.py --build "$build" --config "$BUILD_CONFIG" --ctest "$ctest"
         cd "$bin"
         timeout --signal=TERM --kill-after=30s 10m ./foundry_local_tests \
           --gtest_filter="DynamicEngineChatTest.*" \
@@ -136,7 +123,7 @@ stages:
       condition: succeededOrFailed()
       inputs:
         testResultsFormat: JUnit
-        testResultsFiles: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/TestResults/telemetry.xml'
+        testResultsFiles: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/Linux/${{ parameters.buildConfig }}/TestResults/dependency-regressions.xml'
         testRunTitle: 'C++ telemetry lifetime and overlay policy'
         failTaskOnFailedTests: true
         failTaskOnMissingResultsFile: true

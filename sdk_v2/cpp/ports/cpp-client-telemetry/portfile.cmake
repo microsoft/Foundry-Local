@@ -6,7 +6,7 @@ vcpkg_from_github(
     REF v${VERSION}
     SHA512 934ac980096f571aa4eaeba5159ee87a687e32e174c548190c3926c5c29c1054f7b7924647457c8bcc97a78dd216651577dbb958a7895175d49a97784fb3bf51
     HEAD_REF main
-    PATCHES apple-system-libraries.patch
+    PATCHES apple-system-libraries.patch sdk-version-lifetime.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS

@@ -1,6 +1,14 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/telemetry-shutdown-tests.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/nanoarrow-consumer-tests.cmake")
+
+if(NOT CMAKE_CROSSCOMPILING AND NOT ANDROID AND NOT IOS)
+    add_executable(sdk-dependency-probe ../tools/sdk-dependency-probe.cc)
+    target_include_directories(sdk-dependency-probe PRIVATE ../include)
+    target_compile_options(sdk-dependency-probe PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+    target_link_libraries(sdk-dependency-probe PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
    (NOT CMAKE_CROSSCOMPILING AND NOT ANDROID AND NOT IOS))

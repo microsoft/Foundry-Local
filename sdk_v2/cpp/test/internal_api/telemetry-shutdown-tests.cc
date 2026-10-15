@@ -7,6 +7,8 @@
 #include "telemetry/telemetry_environment.h"
 #include "DebugEvents.hpp"
 #include "ITaskDispatcher.hpp"
+#include "mat/config.h"
+#include "http/HttpClientFactory.hpp"
 #include "pal/PAL.hpp"
 
 #include <chrono>
@@ -48,6 +50,11 @@ struct State {
   bool essential_only = false;
   bool late_create_expected = false;
   bool late_create_rejected = false;
+  bool upload_at_exit = false;
+  bool encode_started = false;
+  bool version_destroyed = false;
+  int version_reads = 0;
+  int uploads_completed = 0;
   int workers_started = 0;
   int collector_events = 0;
   int process_info_events = 0;
@@ -57,9 +64,12 @@ struct State {
       if (workers_started != 0 || collector_events != 0) {
         Fail(32, "priming or suppression started a worker or emitted a collector event");
       }
-    } else if (!mutex_before_owner || !mutex_retired || !callback_started ||
-               !callback_completed || !worker_joined || !worker.expired()) {
+    } else if (!mutex_before_owner || !mutex_retired || !worker_joined || !worker.expired() ||
+               (!upload_at_exit && (!callback_started || !callback_completed))) {
       Fail(32, "owner, native SDK worker, and mutex teardown were not fully exercised");
+    }
+    if (upload_at_exit && (!encode_started || uploads_completed == 0 || version_reads < 2)) {
+      Fail(32, "shutdown did not exercise production decoration, encoding, and upload completion");
     }
     if (essential_only && (process_info_events == 0 || process_info_events != collector_events)) {
       Fail(32, "runtime opt-out did not preserve ProcessInfo-only telemetry");
@@ -67,7 +77,7 @@ struct State {
     if (late_create_expected && !late_create_rejected) {
       Fail(32, "final owner destruction did not reject late creation");
     }
-    std::fputs("PASS: actual Manager owner preserved SDK mutex lifetime\n", stderr);
+    std::fputs("PASS: actual Manager shutdown preserved SDK dependencies\n", stderr);
   }
 };
 
@@ -89,7 +99,7 @@ struct MutexLifetime {
     std::lock_guard lock(state.mutex);
     // Registered immediately after the real mutex; fail before libc++ destroys it.
     if (!state.no_worker_expected &&
-        (!state.callback_completed || !state.worker_joined || !state.worker.expired())) {
+        ((!state.upload_at_exit && !state.callback_completed) || !state.worker_joined || !state.worker.expired())) {
       Fail(21, "SDK mutex retired before Manager joined the worker");
     }
     state.mutex_retired = true;
@@ -164,7 +174,58 @@ void AttemptLateCreate() {
   }
   Fail(32, "late creation succeeded after final owner destruction");
 }
+
+class LocalHttpClient final : public sdk::IHttpClient {
+ public:
+  sdk::IHttpRequest* CreateRequest() override { return new sdk::SimpleHttpRequest(pal::generateUuidString()); }
+
+  void SendRequestAsync(sdk::IHttpRequest* request, sdk::IHttpResponseCallback* callback) override {
+    if (request->GetHeaders().get("SDK-Version").empty() || request->GetBody().empty()) {
+      Fail(32, "upload did not contain an encoded event and SDK version");
+    }
+    auto* response = new sdk::SimpleHttpResponse(request->GetId());
+    response->m_result = sdk::HttpResult_OK;
+    response->m_statusCode = 200;
+    {
+      auto& state = GetState();
+      std::lock_guard lock(state.mutex);
+      ++state.uploads_completed;
+    }
+    callback->OnHttpResponse(response);
+  }
+
+  void CancelRequestAsync(const std::string&) override {}
+};
 }  // namespace
+
+namespace Microsoft::Applications::Events {
+// Replace only transport: production Foundry events still traverse the pinned SDK's whole upload pipeline.
+std::shared_ptr<IHttpClient> HttpClientFactory::Create() { return std::make_shared<LocalHttpClient>(); }
+}  // namespace Microsoft::Applications::Events
+
+extern "C" void TelemetryTestVersionDestroyed() {
+  auto& state = GetState();
+  std::lock_guard lock(state.mutex);
+  state.version_destroyed = true;
+}
+
+extern "C" void TelemetryTestVersionAccess() {
+  auto& state = GetState();
+  std::lock_guard lock(state.mutex);
+  if (state.version_destroyed) Fail(21, "SDK read its version after string destruction");
+  ++state.version_reads;
+}
+
+extern "C" void TelemetryTestBeforeEncode() {
+  auto& state = GetState();
+  std::unique_lock lock(state.mutex);
+  if (!state.upload_at_exit) return;
+  state.encode_started = true;
+  state.changed.notify_all();
+  if (!state.changed.wait_for(lock, 30s, [&] { return state.release_callback; })) {
+    Fail(32, "process exit did not release production upload encoding");
+  }
+}
 
 extern "C" void TelemetryTestBeforeDebugLock() {
   auto& state = GetState();
@@ -195,7 +256,7 @@ extern "C" void TelemetryTestWorkerJoined(void* address) {
 }
 
 extern "C" void TelemetryTestCollectorEvent(const char* name) {
-  // Test-only Logger::LogEvent instrumentation consumes events before persistence/transmission.
+  // Observe without intercepting normal processing; LocalHttpClient prevents external transmission.
   auto& state = GetState();
   std::lock_guard lock(state.mutex);
   ++state.collector_events;
@@ -209,13 +270,14 @@ int main(int argc, char* argv[]) {
   const std::string_view mode{argv[1]};
   if (mode != "retained" && mode != "threaded" && mode != "recreated" && mode != "explicit" &&
       mode != "prime-only" && mode != "optout" && mode != "ci-disabled" &&
-      mode != "enabled-after-ci" && mode != "late-create") {
+      mode != "enabled-after-ci" && mode != "late-create" && mode != "upload-after-ci") {
     Fail(32, "unknown shutdown regression mode");
   }
   auto& state = GetState();
   state.no_worker_expected = mode == "prime-only" || mode == "ci-disabled";
   state.essential_only = mode == "optout";
   state.late_create_expected = mode == "late-create";
+  state.upload_at_exit = mode == "upload-after-ci";
   if (mode == "prime-only") return 0;
   if (state.late_create_expected && std::atexit(AttemptLateCreate) != 0) {
     Fail(32, "cannot register late creation check");
@@ -228,11 +290,16 @@ int main(int argc, char* argv[]) {
   }
   if (state.no_worker_expected) return 0;
 
-  if (mode == "enabled-after-ci") {
+  if (mode == "enabled-after-ci" || state.upload_at_exit) {
     if (state.workers_started != 0 || state.collector_events != 0) {
       Fail(32, "CI-suppressed first creation started a worker or emitted a collector event");
     }
     fl::Manager::Destroy();
+    // Register before the first real event initializes the SDK version, but after the first Manager owner.
+    // The unpatched SDK destroys its version before this callback releases the blocked upload.
+    if (state.upload_at_exit && std::atexit(ReleaseCallback) != 0) {
+      Fail(32, "cannot register production upload release");
+    }
 #ifdef _WIN32
     if (_putenv_s("CI", "0") != 0) Fail(32, "cannot clear CI suppression");
 #else
@@ -242,6 +309,22 @@ int main(int argc, char* argv[]) {
     if (state.workers_started == 0 || state.collector_events == 0) {
       Fail(32, "recreation did not enable telemetry after CI suppression");
     }
+  }
+
+  if (state.upload_at_exit) {
+    auto dispatcher = pal::getDefaultTaskDispatcher();
+    if (!dispatcher) Fail(32, "actual SDK upload dispatcher unavailable");
+    {
+      std::lock_guard lock(state.mutex);
+      state.worker = dispatcher;
+      state.worker_address = dispatcher.get();
+    }
+    dispatcher.reset();
+    std::unique_lock lock(state.mutex);
+    if (!state.changed.wait_for(lock, 30s, [&] { return state.encode_started; })) {
+      Fail(32, "production event never reached upload encoding");
+    }
+    return 0;
   }
 
   if (mode == "recreated") {
