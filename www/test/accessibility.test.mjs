@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import test from 'node:test';
+import { transpileModule } from 'typescript';
 
 const readSource = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -190,7 +192,7 @@ test('C and C++ selectors provide package installation and complete native examp
 				`${key}: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'`
 			)
 		);
-		assert.equal(installCommand.split(`${key}: plainSnippet(String.raw`).length - 1, 2);
+		assert.equal(installCommand.split(`${key}: nativeSnippet(String.raw`).length - 1, 2);
 		assert.ok(dropdown.includes(`label: '${label} SDK'`));
 	}
 
@@ -198,6 +200,37 @@ test('C and C++ selectors provide package installation and complete native examp
 	assert.doesNotMatch(installCommand, /Combine steps 2 and 3|Runtime package's|#if isNative/);
 	assert.doesNotMatch(installCommand, /#build-from-source/);
 	assert.doesNotMatch(dropdown, /Build from source/);
+});
+
+test('native examples use the shared syntax colors without changing the displayed or copied code', () => {
+	const source = readSource('../src/lib/components/install-command.svelte');
+	const helper = source.slice(
+		source.indexOf('function nativeSnippet'),
+		source.indexOf('const tabs:')
+	);
+	const { outputText } = transpileModule(helper, {});
+	const nativeSnippet = runInNewContext(`${outputText}; nativeSnippet`);
+	const examples = [...source.matchAll(/(?:c|cpp): nativeSnippet\(String\.raw`([\s\S]*?)`\)/g)];
+
+	assert.equal(examples.length, 4);
+	for (const [, raw] of examples) {
+		const snippet = nativeSnippet(raw);
+		assert.equal(snippet.raw, raw);
+		for (const style of ['keyword', 'type', 'call', 'string']) {
+			assert.ok(snippet.html.includes(`class="code-${style}"`));
+		}
+		const displayed = snippet.html
+			.replace(/<span class="code-[a-z]+">|<\/span>/g, '')
+			.replaceAll('&lt;', '<')
+			.replaceAll('&gt;', '>')
+			.replaceAll('&amp;', '&');
+		assert.equal(displayed, raw);
+	}
+
+	const snippet = nativeSnippet('puts("<script>&\\"Hello\\"</script>");');
+	assert.ok(snippet.html.includes('class="code-string"'));
+	assert.doesNotMatch(snippet.html, /<script>/);
+	assert.match(snippet.html, /&lt;script&gt;&amp;/);
 });
 
 test('quickstarts display and copy one complete example instead of separate code fragments', () => {

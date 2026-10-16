@@ -10,10 +10,31 @@
 		html: string;
 	};
 
-	function plainSnippet(raw: string): Snippet {
+	function nativeSnippet(raw: string): Snippet {
+		const escaped = raw.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+		const tokens =
+			/("(?:\\.|[^"\\])*"|&lt;[\w./]+&gt;)|(#include\b|\b(?:auto|catch|const|false|for|if|namespace|nullptr|return|static|throw|true|try|using)\b)|(\b(?:fl[A-Z]\w*|[A-Z][A-Z0-9_]*|Configuration|Manager|ChatSession|Request|Response|Item|char|exception|int|runtime_error|size_t|void)\b)|(\b[A-Za-z_]\w*(?=\s*\())/g;
+
 		return {
 			raw,
-			html: raw.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+			html: escaped.replace(
+				tokens,
+				(
+					token: string,
+					stringToken: string | undefined,
+					keywordToken: string | undefined,
+					typeToken: string | undefined
+				) => {
+					const style = stringToken
+						? 'code-string'
+						: keywordToken
+							? 'code-keyword'
+							: typeToken
+								? 'code-type'
+								: 'code-call';
+					return `<span class="${style}">${token}</span>`;
+				}
+			)
 		};
 	}
 
@@ -45,7 +66,7 @@
 	};
 
 	const setupSnippets: Record<SdkLanguage, Snippet> = {
-		c: plainSnippet(String.raw`#include <foundry_local/foundry_local_c.h>
+		c: nativeSnippet(String.raw`#include <foundry_local/foundry_local_c.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -87,7 +108,7 @@ int main(void) {
     check(models->Download(model, NULL, NULL));
     check(models->Load(model));
     check(inference->Session_Create(model, &session));`),
-		cpp: plainSnippet(String.raw`#include <foundry_local/foundry_local_cpp.h>
+		cpp: nativeSnippet(String.raw`#include <foundry_local/foundry_local_cpp.h>
 #include <iostream>
 #include <stdexcept>
 #include <utility>
@@ -184,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	};
 
 	const inferenceSnippets: Record<SdkLanguage, Snippet> = {
-		c: plainSnippet(String.raw`    flRequest* request = NULL;
+		c: nativeSnippet(String.raw`    flRequest* request = NULL;
     flResponse* response = NULL;
     flItem* input = NULL;
     flTextData json = {
@@ -216,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     config_api->Configuration_Release(config);
     return EXIT_SUCCESS;
 }`),
-		cpp: plainSnippet(String.raw`        {
+		cpp: nativeSnippet(String.raw`        {
             ChatSession session(*model);
             Response response = session.ProcessRequest(Request{UserMessage("Hello!")});
             for (const Item& item : response.GetItems()) {
