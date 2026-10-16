@@ -4,6 +4,7 @@
 #include "platform/cross_process_file_lock.h"
 #include "download/inference_model_writer.h"
 #include "exception.h"
+#include "inferencing/model_load_manager.h"
 #include "log_level.h"
 #include "logger.h"
 #include "telemetry/download_tracker.h"
@@ -65,6 +66,20 @@ std::string ReadModelIdForRemoval(const std::filesystem::path& metadata_path) {
   }
 
   return model_id;
+}
+
+void ValidateRemovalOwnership(const std::filesystem::path& root, const std::string& model_id) {
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+    if (!entry.is_regular_file() || entry.path().filename() != kInferenceModelFileName) {
+      continue;
+    }
+
+    const auto metadata_id = ReadModelIdForRemoval(entry.path());
+    if (!metadata_id.empty() && metadata_id != model_id) {
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+               "cannot remove model cache containing another model: " + metadata_id + " at " + entry.path().string());
+    }
+  }
 }
 
 // The caller must hold the parent's download lock throughout inspection and removal.
@@ -514,7 +529,8 @@ std::string DownloadManager::GetModelCachePath(const ModelInfo& info) const {
   return {};
 }
 
-void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::string& local_path) {
+void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::string& local_path,
+                                           ModelLoadManager& model_load_manager) {
   // The download lock coordinates cache mutations, not model use. Both Model::Download's cached-state shortcut and
   // DownloadModel's on-disk cache-hit path bypass it, so another instance can report download success while removal
   // deletes the files it considers cached. Its cached flag/path can then remain stale, and a later load can fail.
@@ -570,13 +586,16 @@ void DownloadManager::RemoveModelFromCache(const ModelInfo& info, const std::str
   }
 
   validate_path();
+  ValidateRemovalOwnership(model_path, info.model_id);
   // Keep the root and its live lock intact: unlinking the lock during protected work would let another downloader
   // acquire a different lock file. The lock removes itself on release; an empty root is not a cache hit.
-  for (const auto& entry : std::filesystem::directory_iterator(model_path)) {
-    if (entry.path() != lock->path()) {
-      std::filesystem::remove_all(entry.path());
+  model_load_manager.RunWithUnloadedModelsInDirectory(model_path.string(), [&]() {
+    for (const auto& entry : std::filesystem::directory_iterator(model_path)) {
+      if (entry.path() != lock->path()) {
+        std::filesystem::remove_all(entry.path());
+      }
     }
-  }
+  });
 }
 
 }  // namespace fl

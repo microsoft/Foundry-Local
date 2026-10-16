@@ -570,7 +570,7 @@ void Model::RemoveFromCache() {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "cannot remove a loaded model from cache; unload it first");
   }
 
-  download_manager_->RemoveModelFromCache(Info(), path);
+  download_manager_->RemoveModelFromCache(Info(), path, *model_load_manager_);
 
   // Turn off the published state before tearing down the backing string (mirror of Download's ordering).
   cached_.store(false);

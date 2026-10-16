@@ -21,6 +21,7 @@
 #include "model.h"
 #include "model_info.h"
 #include "test_helpers.h"
+#include "test_model_cache.h"
 #include "util/path_safety.h"
 #include "util/region_fallback.h"
 #include <foundry_local/foundry_local_c.h>
@@ -958,6 +959,126 @@ TEST_F(ModelCacheRemovalTest, RemovesWholeRootForRevisionPathAndPreservesOtherMo
   EXPECT_EQ(ReadFile(sibling / "weights.onnx"), "other model");
   EXPECT_EQ(ReadFile(catalog_metadata), "shared metadata");
   EXPECT_TRUE(ScanLocalModels(cache_.string(), fl::test::NullLog()).empty());
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsConflictingMetadataAnywhereInComputedRoot) {
+  for (const auto& relative_path : {fs::path{}, fs::path("v3"), fs::path("v3") / "nested"}) {
+    for (const bool cached_handle : {false, true}) {
+      SCOPED_TRACE(relative_path);
+      SCOPED_TRACE(cached_handle);
+      const auto other_path = relative_path.empty() ? root_ : root_ / relative_path;
+      fs::create_directories(other_path);
+      WriteInferenceModelJson(other_path.string(), "other-model:1", {});
+      std::ofstream(other_path / "genai_config.json") << "{}";
+      std::ofstream(other_path / "weights.onnx") << "preserve";
+      std::ofstream(root_ / ".download.progress") << "42";
+      const auto scanned = ScanLocalModels(cache_.string(), fl::test::NullLog());
+      ASSERT_EQ(scanned.at("other-model:1"), other_path.string());
+      ASSERT_EQ(scanned.count(info_.model_id), 0u);
+      auto model = MakeModel(cached_handle ? other_path.string() : "");
+
+      EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+      EXPECT_EQ(model.IsCached(), cached_handle);
+      EXPECT_EQ(ReadFile(other_path / "weights.onnx"), "preserve");
+      EXPECT_EQ(ReadFile(root_ / ".download.progress"), "42");
+      EXPECT_EQ(ScanLocalModels(cache_.string(), fl::test::NullLog()), scanned);
+      fs::remove_all(root_);
+    }
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, ChecksComputedRootOwnershipAfterTakingDownloadLock) {
+  fs::create_directories(root_ / "v3");
+  WriteInferenceModelJson((root_ / "v3").string(), info_.model_id, {});
+  std::ofstream(root_ / "v3" / "weights.onnx") << "preserve";
+  CacheOperationLogger logger;
+  bool ownership_changed = false;
+  const auto lock_acquired = "CrossProcessFileLock acquired: " + (root_ / ".download.lock").string();
+  logger.on_log = [&](std::string_view message) {
+    if (message == lock_acquired) {
+      ownership_changed = true;
+      WriteInferenceModelJson((root_ / "v3").string(), "other-model:1", {});
+    }
+  };
+  DownloadManager manager(cache_.string(), "eastus", 1, logger, fl::test::TestTelemetrySink());
+  auto model = Model::FromModelInfo(info_, "", manager, services_.model_load_manager);
+
+  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+  EXPECT_TRUE(ownership_changed);
+  EXPECT_EQ(ReadFile(root_ / "v3" / "weights.onnx"), "preserve");
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsLoadedSiblingRevisionForCachedAndUncachedHandles) {
+  for (const bool nonstandard : {false, true}) {
+    for (const bool cached_handle : {false, true}) {
+      if (nonstandard && !cached_handle) {
+        continue;  // An uncached handle has no scanner-discovered nonstandard path.
+      }
+
+      SCOPED_TRACE(nonstandard);
+      SCOPED_TRACE(cached_handle);
+      const auto deletion_root = nonstandard ? fs::path(cache_.string()) / "imported-model" : root_;
+      const auto loaded_path = deletion_root / "v2";
+      fs::create_directories(deletion_root);
+      fs::copy(fl::test::GetTestDataPath("tiny-random-gpt2-fp32-1"), loaded_path, fs::copy_options::recursive);
+      fs::create_directories(deletion_root / "v3");
+      std::ofstream(deletion_root / "v3" / "weights.onnx") << "preserve";
+      std::ofstream(deletion_root / ".download.progress") << "42";
+      WriteInferenceModelJson(loaded_path.string(), info_.model_id, {});
+      const auto loaded = services_.model_load_manager.LoadModel(loaded_path.string(), info_.model_id);
+      ASSERT_EQ(loaded.status, ModelLoadManager::LoadStatus::kSuccess);
+      auto model = MakeModel(cached_handle ? (deletion_root / "v3").string() : "");
+      ASSERT_FALSE(model.IsLoaded());
+
+      EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+      EXPECT_EQ(model.IsCached(), cached_handle);
+      EXPECT_TRUE(fs::exists(loaded_path / "genai_config.json"));
+      EXPECT_EQ(ReadFile(deletion_root / "v3" / "weights.onnx"), "preserve");
+      EXPECT_EQ(ReadFile(deletion_root / ".download.progress"), "42");
+      EXPECT_EQ(services_.model_load_manager.GetLoadedModel(info_.model_id), loaded.model);
+      ASSERT_TRUE(services_.model_load_manager.UnloadModel(info_.model_id));
+      EXPECT_NO_THROW(model.RemoveFromCache());
+      EXPECT_TRUE(fs::is_empty(deletion_root));
+    }
+  }
+}
+
+TEST_F(ModelCacheRemovalTest, RejectsLoadedFilesWithDifferentIdAndCorruptMetadata) {
+  const auto loaded_path = root_ / "v2";
+  fs::create_directories(root_);
+  fs::copy(fl::test::GetTestDataPath("tiny-random-gpt2-fp32-1"), loaded_path, fs::copy_options::recursive);
+  std::ofstream(loaded_path / "inference_model.json") << "corrupt metadata";
+  const auto loaded = services_.model_load_manager.LoadModel(loaded_path.string(), "other-model:1");
+  ASSERT_EQ(loaded.status, ModelLoadManager::LoadStatus::kSuccess);
+  auto model = MakeModel();
+
+  EXPECT_THROW(model.RemoveFromCache(), fl::Exception);
+
+  EXPECT_TRUE(fs::exists(loaded_path / "genai_config.json"));
+  EXPECT_EQ(ReadFile(loaded_path / "inference_model.json"), "corrupt metadata");
+  EXPECT_EQ(services_.model_load_manager.GetLoadedModel("other-model:1"), loaded.model);
+  ASSERT_TRUE(services_.model_load_manager.UnloadModel("other-model:1"));
+  EXPECT_NO_THROW(model.RemoveFromCache());
+}
+
+TEST_F(ModelCacheRemovalTest, AllowsRemovalWhenSameIdIsLoadedOutsideDeletionRoot) {
+  const auto loaded_path = fl::test::GetTestDataPath("tiny-random-gpt2-fp32-1");
+  const auto loaded = services_.model_load_manager.LoadModel(loaded_path.string(), info_.model_id);
+  ASSERT_EQ(loaded.status, ModelLoadManager::LoadStatus::kSuccess);
+  fs::create_directories(root_);
+  std::ofstream(root_ / "weights.onnx") << "remove";
+  auto model = MakeModel(root_.string());
+  ASSERT_FALSE(model.IsLoaded());
+
+  EXPECT_NO_THROW(model.RemoveFromCache());
+
+  EXPECT_FALSE(model.IsCached());
+  EXPECT_TRUE(fs::is_empty(root_));
+  EXPECT_EQ(services_.model_load_manager.GetLoadedModel(info_.model_id), loaded.model);
+  EXPECT_TRUE(fs::exists(loaded_path / "genai_config.json"));
 }
 
 TEST_F(ModelCacheRemovalTest, RemovesCorruptDownloadAndCanDownloadAgain) {
