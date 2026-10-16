@@ -1275,30 +1275,42 @@ TEST(ChatSessionDecisionTest, PreAppendRebuildTracksBackendBakedSettings) {
 TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSemantics) {
   using chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn;
 
+  ToolCallContext context;
+  context.tool_output = true;
+  context.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
-      /*host_output_limit_reached=*/false));
-  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
 
+  context.guidance_type = "json_schema";
+  context.guidance_data = R"({"type":"object"})";
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  context.guidance_type.clear();
+  context.guidance_data.clear();
+
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/true,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/true));
 }
 
@@ -1923,7 +1935,7 @@ TEST_F(QwenNativeProductionIntegrationTest,
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
-       EngineAutoSchemaViolationRetriesWithoutPublishingRejectedBatch) {
+       EngineAutoMixedOfferSchemaViolationRetriesWithoutPublishingRejectedBatch) {
   const std::vector<std::string> outputs = {
       "<tool_call>\n<function=lookup>\n<parameter=path>\nParis\n</parameter>\n"
       "</function>\n</tool_call>\n"
@@ -1942,6 +1954,10 @@ TEST_F(QwenNativeProductionIntegrationTest,
   auto catalog_model = MakeCatalogModel();
   ChatSession session(catalog_model, *engine_model_, *logger_, telemetry_, {}, std::move(factory));
   AddFunctionTools(session);
+  session.AddToolDefinition(
+      {"unused", "Unsupported schema for a different function.",
+       R"({"type":"object","properties":{"input":{"type":"string","pattern":"^safe$"}}})",
+       ToolKind::kFunction});
 
   std::string streamed_text;
   session.SetStreamingCallback([&streamed_text](flStreamingCallbackData event, void*) {
@@ -3164,7 +3180,7 @@ TEST_F(QwenNativeProductionIntegrationTest,
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
-       MalformedVersionOneSerializedFunctionSchemaFallsBackToExactText) {
+       MalformedVersionOneSerializedFunctionSchemaFailsClosed) {
   constexpr std::string_view generated =
       "<tool_call>\n<function=legacy>\n<parameter=value>\ntext\n</parameter>\n"
       "</function>\n</tool_call>";
@@ -3203,14 +3219,11 @@ TEST_F(QwenNativeProductionIntegrationTest,
 
   auto request = MakeStatefulRequest("call legacy");
   Response response;
-  session.ProcessRequest(request, response);
+  EXPECT_THROW(session.ProcessRequest(request, response), fl::Exception);
 
   EXPECT_TRUE(generator_created);
-  EXPECT_EQ(streamed_text, generated);
+  EXPECT_TRUE(streamed_text.empty());
   EXPECT_TRUE(Calls(response).empty());
-  EXPECT_EQ(session.Transcript().Messages().back().VisibleText(), generated);
-  EXPECT_TRUE(session.Transcript().Messages().back().ToolCalls().empty());
-  EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
