@@ -21,6 +21,8 @@ steps:
     "$(Build.BinariesDirectory)/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
   displayName: 'Bootstrap vcpkg'
 
+- template: steps-prefetch-vcpkg.yml
+
 - bash: |
     set -euo pipefail
     # Most macOS images include cmake/ninja; install via brew if missing.
@@ -54,6 +56,8 @@ steps:
     parameters:
       destinationPath: '$(Agent.BuildDirectory)/test-data-shared'
 
+- template: steps-prepare-telemetry-tests.yml
+
 - bash: |
     set -euo pipefail
     python3 build.py --configure --build \
@@ -63,6 +67,24 @@ steps:
   workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
   env:
     VCPKG_ROOT: $(Build.BinariesDirectory)/vcpkg
+    VCPKG_DOWNLOADS: $(Build.BinariesDirectory)/vcpkg-downloads
+
+- bash: |
+    set -euo pipefail
+    python3 tools/run_dependency_tests.py \
+      --build "build/macOS/${{ parameters.buildConfig }}" --config "${{ parameters.buildConfig }}"
+  displayName: 'Run shutdown and installed nanoarrow regressions'
+  workingDirectory: $(Build.SourcesDirectory)/sdk_v2/cpp
+
+- task: PublishTestResults@2
+  displayName: 'Publish dependency regressions'
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFormat: JUnit
+    testResultsFiles: '$(Build.SourcesDirectory)/sdk_v2/cpp/build/macOS/${{ parameters.buildConfig }}/TestResults/dependency-regressions.xml'
+    testRunTitle: 'C++ dependency regressions (macOS ARM64)'
+    failTaskOnFailedTests: true
+    failTaskOnMissingResultsFile: true
 
 - bash: |
     set -euo pipefail

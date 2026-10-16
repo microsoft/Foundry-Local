@@ -113,7 +113,9 @@ bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
                                                 bool guidance_payload_changed,
                                                 bool retained_generation_settings_changed);
 bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
-                                                                bool grammar_was_active,
+                                                                const ToolCallContext& tool_ctx,
+                                                                bool prompt_opens_reasoning,
+                                                                bool recovered_tool_output,
                                                                 bool reasoning_was_active,
                                                                 bool stop_sequence_matched,
                                                                 bool host_output_limit_reached);

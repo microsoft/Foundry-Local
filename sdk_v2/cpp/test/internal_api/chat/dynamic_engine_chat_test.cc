@@ -5,6 +5,7 @@
 #include "inferencing/generative/chat/chat_template.h"
 #include "inferencing/generative/chat/onnx_chat_engine.h"
 #include "inferencing/generative/chat/onnx_engine_chat_stream.h"
+#include "inferencing/generative/toolcalling/qwen_xml_tool_call_decoder.h"
 #include "inferencing/model_load_manager.h"
 #include "c_api_types.h"
 #include "internal_api/test_helpers.h"
@@ -16,6 +17,7 @@
 #include <gtest/gtest.h>
 #include <ort_genai.h>
 
+#include <algorithm>
 #include <atomic>
 #include <barrier>
 #include <chrono>
@@ -98,6 +100,13 @@ std::vector<int32_t> EncodeUserPrompt(std::string prompt, GenAIModelInstance& mo
   std::vector<TranscriptMessage> messages;
   messages.emplace_back(FOUNDRY_LOCAL_ROLE_USER, std::move(prompt));
   auto sequences = EncodePrompt(BuildChatPrompt(messages, model), model);
+  const auto count = sequences->SequenceCount(0);
+  const auto* data = sequences->SequenceData(0);
+  return {data, data + count};
+}
+
+std::vector<int32_t> EncodeLiteral(std::string text, GenAIModelInstance& model) {
+  auto sequences = EncodePrompt(text, model);
   const auto count = sequences->SequenceCount(0);
   const auto* data = sequences->SequenceData(0);
   return {data, data + count};
@@ -212,6 +221,100 @@ class DynamicEngineChatTest : public ::testing::Test {
   static inline GenAIModelInstance* model_ = nullptr;
   TelemetryLogger telemetry_{"dynamic-engine-test", test::NullLog()};
 };
+
+// The tiny tokenizer has single-character markers; neither marker occurs in the grammar's required XML literals.
+TEST_F(DynamicEngineChatTest, QwenRegionGuidanceConstrainsNativeBodyAndRestoresFreeText) {
+  const auto opening = EncodeLiteral("~", ModelInstance());
+  const auto closing = EncodeLiteral("!", ModelInstance());
+  ASSERT_EQ(opening.size(), 1u);
+  ASSERT_EQ(closing.size(), 1u);
+
+  ToolCallContext context;
+  context.tools_json =
+      R"([{"type":"function","function":{"name":"grep","parameters":{"type":"object","properties":{}}}}])";
+  context.tool_kinds = {{"grep", ToolKind::kFunction}};
+  context.qwen_xml_tool_body_grammar = BuildQwenXmlToolBodyGrammar(context.tools_json, context.tool_kinds);
+  ASSERT_TRUE(context.qwen_xml_tool_body_grammar.has_value());
+  context.tool_call_start_token_id = opening.front();
+  context.tool_call_end_token_id = closing.front();
+
+  const auto prompt = EncodeUserPrompt("Try it.", ModelInstance());
+  const auto baseline = ReferenceTokens(prompt, 100);
+  const auto first_open = std::ranges::find(baseline, opening.front());
+  ASSERT_NE(first_open, baseline.end());
+  const auto free_count = static_cast<size_t>(first_open - baseline.begin());
+  ASSERT_GT(free_count, 0u);
+
+  SearchOptions options;
+  options.max_output_tokens = 100;
+  options.do_sample = false;
+  OnnxChatEngine engine(ModelInstance());
+  auto conversation = engine.CreateConversation(options, context, static_cast<int>(prompt.size()));
+  engine.BeginTurn(conversation, prompt, options, context, false);
+  const auto output = FinishConversation(engine, conversation);
+
+  const auto body = EncodeLiteral("\n<function=grep>\n</function>\n", ModelInstance());
+  ASSERT_GT(output.size(), free_count + body.size() + 1);
+  EXPECT_TRUE(std::equal(output.begin(), output.begin() + free_count + 1, baseline.begin()));
+  EXPECT_NE(baseline[free_count + 1], body.front());
+  EXPECT_TRUE(std::equal(body.begin(), body.end(), output.begin() + free_count + 1));
+  const auto closing_index = free_count + body.size() + 1;
+  EXPECT_EQ(output[closing_index], closing.front());
+
+  const auto resident = engine.ResidentTokens(conversation);
+  std::vector<int32_t> history(prompt);
+  history.insert(history.end(), output.begin(), output.begin() + closing_index + 1);
+  EXPECT_EQ(output[closing_index + 1], ReferenceTokens(history, 1).front());
+
+  const auto next_prompt = EncodeUserPrompt("Next turn.", ModelInstance());
+  history = resident;
+  history.insert(history.end(), next_prompt.begin(), next_prompt.end());
+  options.max_output_tokens = 5;
+  engine.BeginTurn(conversation, next_prompt, options, context, false);
+  const auto next_output = FinishConversation(engine, conversation);
+  ASSERT_EQ(next_output.size(), 5u);
+  EXPECT_EQ(next_output, ReferenceTokens(history, 5));
+  engine.Close(conversation);
+}
+
+TEST_F(DynamicEngineChatTest, QwenRegionGuidanceConstrainsRequiredParameterName) {
+  const auto opening = EncodeLiteral("~", ModelInstance());
+  const auto closing = EncodeLiteral("!", ModelInstance());
+  ASSERT_EQ(opening.size(), 1u);
+  ASSERT_EQ(closing.size(), 1u);
+
+  ToolCallContext context;
+  context.tools_json =
+      R"([{"type":"function","function":{"name":"grep","parameters":{"type":"object",)"
+      R"("properties":{"paths":{"type":"string"}},"required":["paths"]}}}])";
+  context.tool_kinds = {{"grep", ToolKind::kFunction}};
+  context.qwen_xml_tool_body_grammar = BuildQwenXmlToolBodyGrammar(context.tools_json, context.tool_kinds);
+  ASSERT_TRUE(context.qwen_xml_tool_body_grammar.has_value());
+  context.tool_call_start_token_id = opening.front();
+  context.tool_call_end_token_id = closing.front();
+
+  const auto prompt = EncodeUserPrompt("Try it.", ModelInstance());
+  const auto baseline = ReferenceTokens(prompt, 100);
+  const auto first_open = std::ranges::find(baseline, opening.front());
+  ASSERT_NE(first_open, baseline.end());
+  const auto free_count = static_cast<size_t>(first_open - baseline.begin());
+  ASSERT_GT(free_count, 0u);
+  const auto header = EncodeLiteral("\n<function=grep>\n<parameter=paths>\n", ModelInstance());
+
+  SearchOptions options;
+  options.max_output_tokens = static_cast<int>(free_count + header.size() + 2);
+  options.do_sample = false;
+  OnnxChatEngine engine(ModelInstance());
+  auto conversation = engine.CreateConversation(options, context, static_cast<int>(prompt.size()));
+  engine.BeginTurn(conversation, prompt, options, context, false);
+  const auto output = FinishConversation(engine, conversation);
+
+  ASSERT_GE(output.size(), free_count + header.size() + 1);
+  EXPECT_TRUE(std::equal(output.begin(), output.begin() + free_count + 1, baseline.begin()));
+  EXPECT_TRUE(std::equal(header.begin(), header.end(), output.begin() + free_count + 1));
+  EXPECT_NE(output[free_count + header.size()], closing.front());
+  engine.Close(conversation);
+}
 
 TEST_F(DynamicEngineChatTest, NativeCAbiPreflightCapturesAndExecutesExactlyOnce) {
   const auto* api = FoundryLocalGetApi(FOUNDRY_LOCAL_API_VERSION);

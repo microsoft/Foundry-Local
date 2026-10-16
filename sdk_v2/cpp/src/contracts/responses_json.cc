@@ -558,7 +558,7 @@ void from_json(const nlohmann::json& j, ResponseCreateParams& p) {
     p.allowed_tools = j["allowed_tools"].get<std::vector<std::string>>();
   }
 
-  opt_bool(j, "parallel_tool_calls", p.parallel_tool_calls);
+  opt(j, "parallel_tool_calls", p.parallel_tool_calls);
 
   // Reasoning
   if (j.contains("reasoning") && j["reasoning"].is_object()) {
