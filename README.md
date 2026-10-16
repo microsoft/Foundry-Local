@@ -43,7 +43,7 @@ Foundry Local may collect usage data and send it to Microsoft to help improve ou
 ## 🚀 Quickstart
 
 > [!TIP]
-> The following shows a quickstart for Python and JavaScript. C, C++, C#, and Rust are also supported. For C/C++, start with the [native SDK build and integration guide](sdk_v2/cpp/README.md#build-from-source) and [C++ quickstart](sdk_v2/cpp/README.md#quick-start). Take a look at the [samples](/samples/) for more details.
+> The following shows a quickstart for Python and JavaScript. C, C++, C#, and Rust are also supported. For C/C++, install the published [Runtime NuGet package](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local.Runtime) and follow the [native SDK package integration guide](sdk_v2/cpp/README.md#install-from-nuget) and [C++ quickstart](sdk_v2/cpp/README.md#quick-start) — no source build is required. Take a look at the [samples](/samples/) for more details.
 
 
 <details open>

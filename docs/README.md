@@ -5,7 +5,7 @@ Documentation for Foundry Local can be found in the following resources:
 - [Microsoft Learn](https://learn.microsoft.com/azure/foundry-local/): This is the official documentation for Foundry Local, providing comprehensive guides, tutorials, and reference materials to help you get started and make the most of Foundry Local.
 - SDK Reference:
     - [C API Reference](../sdk_v2/cpp/README.md#c-api): Use the stable C ABI directly through versioned function tables and opaque handles. Includes integration and resource-management guidance and links to the public C header.
-    - [C++ SDK Reference](../sdk_v2/cpp/README.md): Build and integrate the header-only C++17 RAII wrapper, with examples for chat, tool calling, embeddings, and audio transcription.
+    - [C++ SDK Reference](../sdk_v2/cpp/README.md): Install from NuGet and integrate the header-only C++17 RAII wrapper, with examples for chat, tool calling, embeddings, and audio transcription. No source build is required.
     - [C# SDK Reference](../sdk_v2/cs/README.md): This documentation provides detailed information about the C# SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your applications.
     - [JavaScript SDK Reference](../sdk_v2/js/README.md): This documentation offers detailed information about the JavaScript SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your web applications.
     - [Python SDK Reference](../sdk_v2/python/README.md): This documentation provides detailed information about the Python SDK for Foundry Local, including API references, usage examples, and best practices for integrating Foundry Local into your Python applications.

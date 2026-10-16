@@ -3,28 +3,97 @@
 	import { toast } from 'svelte-sonner';
 	import { cubicOut } from 'svelte/easing';
 
-	type SdkLanguage = 'python' | 'javascript' | 'csharp' | 'rust';
+	type SdkLanguage = 'python' | 'javascript' | 'csharp' | 'rust' | 'c' | 'cpp';
 
 	type Snippet = {
 		raw: string;
 		html: string;
 	};
 
+	function plainSnippet(raw: string): Snippet {
+		return {
+			raw,
+			html: raw.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+		};
+	}
+
 	const tabs: Array<{ key: SdkLanguage; label: string }> = [
 		{ key: 'python', label: 'Python' },
 		{ key: 'javascript', label: 'JS' },
 		{ key: 'csharp', label: 'C#' },
-		{ key: 'rust', label: 'Rust' }
+		{ key: 'rust', label: 'Rust' },
+		{ key: 'c', label: 'C' },
+		{ key: 'cpp', label: 'C++' }
 	];
 
 	const sdkCommands: Record<SdkLanguage, string> = {
 		python: 'pip install foundry-local-sdk',
 		javascript: 'npm install foundry-local-sdk',
 		csharp: 'dotnet add package Microsoft.AI.Foundry.Local',
-		rust: 'cargo add foundry-local-sdk'
+		rust: 'cargo add foundry-local-sdk',
+		c: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages',
+		cpp: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'
 	};
 
 	const setupSnippets: Record<SdkLanguage, Snippet> = {
+		c: plainSnippet(String.raw`#include <foundry_local/foundry_local_c.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+static const flApi* api;
+
+static void check(flStatus* status) {
+    if (status) {
+        fprintf(stderr, "%s\n", api->Status_GetErrorMessage(status));
+        api->Status_Release(status);
+        exit(EXIT_FAILURE);
+    }
+}
+
+int main(void) {
+    api = FoundryLocalGetApi(FOUNDRY_LOCAL_API_VERSION);
+    if (!api) {
+        fputs("Unsupported Foundry Local API version.\n", stderr);
+        return EXIT_FAILURE;
+    }
+    const flConfigurationApi* config_api = api->GetConfigurationApi();
+    const flModelApi* models = api->GetModelApi();
+    const flInferenceApi* inference = api->GetInferenceApi();
+    const flItemApi* items = api->GetItemApi();
+    flConfiguration* config = NULL;
+    flManager* manager = NULL;
+    flCatalog* catalog = NULL;
+    flModel* model = NULL;
+    flSession* session = NULL;
+    check(config_api->Create("my-app", &config));
+    check(api->Manager_Create(config, &manager));
+    check(api->Manager_GetCatalog(manager, &catalog));
+    check(api->GetCatalogApi()->GetModel(catalog, "qwen2.5-0.5b", &model));
+    if (!model) {
+        fputs("Model not found.\n", stderr);
+        api->Manager_Release(manager);
+        config_api->Configuration_Release(config);
+        return EXIT_FAILURE;
+    }
+    check(models->Download(model, NULL, NULL));
+    check(models->Load(model));
+    check(inference->Session_Create(model, &session));`),
+		cpp: plainSnippet(String.raw`#include <foundry_local/foundry_local_cpp.h>
+#include <iostream>
+#include <stdexcept>
+#include <utility>
+
+using namespace foundry_local;
+
+int main() {
+    try {
+        Manager manager{Configuration("my-app")};
+        auto model = manager.GetCatalog().GetModel("qwen2.5-0.5b");
+        if (!model) {
+            throw std::runtime_error("Model not found.");
+        }
+        model->Download();
+        model->Load();`),
 		python: {
 			raw: `from foundry_local_sdk import Configuration, FoundryLocalManager
 	
@@ -86,6 +155,53 @@ model.<span class="code-call">download</span>(None::&lt;fn(f64)&gt;).await?; mod
 	};
 
 	const inferenceSnippets: Record<SdkLanguage, Snippet> = {
+		c: plainSnippet(String.raw`    flRequest* request = NULL;
+    flResponse* response = NULL;
+    flItem* input = NULL;
+    flTextData json = {
+        FOUNDRY_LOCAL_API_VERSION,
+        "{\"messages\":[{\"role\":\"user\",\"content\":\"Hello!\"}]}",
+        FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON
+    };
+    check(inference->Request_Create(&request));
+    check(items->Create(FOUNDRY_LOCAL_ITEM_TEXT, &input));
+    check(items->SetText(input, &json));
+    check(inference->Request_AddItem(request, input, false));
+    check(inference->Session_ProcessRequest(session, request, &response));
+    for (size_t i = 0; i < inference->Response_GetItemCount(response); ++i) {
+        const flItem* output = NULL;
+        check(inference->Response_GetItem(response, i, &output));
+        if (items->GetType(output) == FOUNDRY_LOCAL_ITEM_TEXT) {
+            flTextData text = {0};
+            text.version = FOUNDRY_LOCAL_API_VERSION;
+            check(items->GetText(output, &text));
+            puts(text.text);
+        }
+    }
+    inference->Response_Release(response);
+    inference->Request_Release(request);
+    items->Item_Release(input);
+    inference->Session_Release(session);
+    check(models->Unload(model));
+    api->Manager_Release(manager);
+    config_api->Configuration_Release(config);
+    return EXIT_SUCCESS;
+}`),
+		cpp: plainSnippet(String.raw`        {
+            ChatSession session(*model);
+            Response response = session.ProcessRequest(Request{UserMessage("Hello!")});
+            for (const Item& item : response.GetItems()) {
+                if (item.GetType() == FOUNDRY_LOCAL_ITEM_MESSAGE) {
+                    std::cout << item.GetMessage().GetSimpleText() << "\n";
+                }
+            }
+        }
+        model->Unload();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << "\n";
+        return 1;
+    }
+}`),
 		python: {
 			raw: `response = client.complete_chat([
     {"role": "user", "content": "Hello!"}
@@ -137,6 +253,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 	let currentCommand = $derived(sdkCommands[activeTab]);
 	let currentSetupSnippet = $derived(setupSnippets[activeTab]);
 	let currentInferenceSnippet = $derived(inferenceSnippets[activeTab]);
+	let isNative = $derived(activeTab === 'c' || activeTab === 'cpp');
 
 	function revealMotion(node: HTMLElement) {
 		const height = node.offsetHeight;
@@ -214,7 +331,7 @@ let response = client.complete_chat(&messages, None).await?;`,
 		</p>
 	</div>
 
-	<div class="mb-4 flex justify-center gap-1">
+	<div class="mb-4 flex flex-wrap justify-center gap-1">
 		{#each tabs as tab}
 			<button
 				type="button"
@@ -232,23 +349,19 @@ let response = client.complete_chat(&messages, None).await?;`,
 		{/each}
 	</div>
 
-	<p class="text-muted-foreground mb-4 text-center text-xs">
-		Building in C or C++? Use the
-		<a
-			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#c-api"
-			class="text-primary underline underline-offset-4">C API</a
-		>
-		or
-		<a
-			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#quick-start"
-			class="text-primary underline underline-offset-4">C++ SDK</a
-		>.
-		<a
-			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#build-from-source"
-			class="text-primary underline underline-offset-4">Build the native library from source</a
-		>
-		and link it into your app.
-	</p>
+	{#if isNative}
+		<p class="text-muted-foreground mb-4 text-center text-xs">
+			Use the NuGet CLI to restore the Runtime package and its dependencies; no source build or .NET
+			runtime is required for your native app. Add the Runtime package's
+			<code>build/native/include</code> to your include path and link its library under
+			<code>runtimes/&lt;rid&gt;/native</code>. Deploy the matching runtime dependencies together.
+			See the
+			<a
+				href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#install-from-nuget"
+				class="text-primary underline underline-offset-4">C/C++ package integration guide</a
+			>. Combine steps 2 and 3 into one source file.
+		</p>
+	{/if}
 
 	<div class="grid gap-3">
 		<section class="border-primary/20 bg-background/55 rounded-lg border p-3">

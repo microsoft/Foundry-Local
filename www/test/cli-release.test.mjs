@@ -8,6 +8,7 @@ let getCliDownloadLinks;
 before(async () => {
 	server = await createServer({
 		server: { middlewareMode: true },
+		optimizeDeps: { noDiscovery: true },
 		appType: 'custom'
 	});
 	({ getCliDownloadLinks } = await server.ssrLoadModule('/src/lib/server/cli-release.ts'));

@@ -112,10 +112,16 @@ test('model dropdown triggers are labelled by their visible labels and values', 
 	assert.match(modelFilters, /<Button\b[^>]*aria-labelledby="sort-by sort-by-value"[^>]*>/);
 	assert.match(modelFilters, /<span id="sort-by-value">/);
 	assert.match(modelFilters, /<Label id="model-family">Model Family<\/Label>/);
-	assert.match(modelFilters, /<Button\b[^>]*aria-labelledby="model-family model-family-value"[^>]*>/);
+	assert.match(
+		modelFilters,
+		/<Button\b[^>]*aria-labelledby="model-family model-family-value"[^>]*>/
+	);
 	assert.match(modelFilters, /<span id="model-family-value">/);
 	assert.match(modelFilters, /<Label id="acceleration">Acceleration<\/Label>/);
-	assert.match(modelFilters, /<Button\b[^>]*aria-labelledby="acceleration acceleration-value"[^>]*>/);
+	assert.match(
+		modelFilters,
+		/<Button\b[^>]*aria-labelledby="acceleration acceleration-value"[^>]*>/
+	);
 	assert.match(modelFilters, /<span id="acceleration-value">/);
 });
 
@@ -128,9 +134,7 @@ test('download menu copy actions participate in keyboard menu navigation', () =>
 			'onclick={() => copyToClipboard(item.crossPlatformCommand, item.crossPlatformId)}'
 		)
 	);
-	assert.ok(
-		copyItem.source.includes('aria-label={`Copy ${item.label} installation command`}')
-	);
+	assert.ok(copyItem.source.includes('aria-label={`Copy ${item.label} installation command`}'));
 	assert.doesNotMatch(
 		downloadDropdown,
 		/<button[\s\S]*?onclick=\{\(\) => copyToClipboard\(item\.crossPlatformCommand, item\.crossPlatformId\)\}/
@@ -170,6 +174,31 @@ test('device and SDK selectors expose their pressed state', () => {
 
 	assert.match(modelFilters, /aria-pressed=\{selectedDevices\.includes\(device\)\}/);
 	assert.match(installCommand, /aria-pressed=\{activeTab === tab\.key\}/);
+});
+
+test('C and C++ selectors provide package installation and complete native examples', () => {
+	const installCommand = readSource('../src/lib/components/install-command.svelte');
+	const dropdown = readSource('../src/lib/components/download-dropdown.svelte');
+
+	for (const [key, label] of [
+		['c', 'C'],
+		['cpp', 'C++']
+	]) {
+		assert.ok(installCommand.includes(`{ key: '${key}', label: '${label}' }`));
+		assert.ok(
+			installCommand.includes(
+				`${key}: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'`
+			)
+		);
+		assert.equal(installCommand.split(`${key}: plainSnippet(String.raw`).length - 1, 2);
+		assert.ok(dropdown.includes(`label: '${label} SDK'`));
+	}
+
+	assert.match(installCommand, /flex flex-wrap justify-center/);
+	assert.match(installCommand, /#install-from-nuget/);
+	assert.match(installCommand, /Combine steps 2 and 3 into one source file/);
+	assert.doesNotMatch(installCommand, /#build-from-source/);
+	assert.doesNotMatch(dropdown, /Build from source/);
 });
 
 test('ModelDetailsModal describes Copy ID buttons with visible model IDs', () => {

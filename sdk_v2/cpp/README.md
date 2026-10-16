@@ -30,7 +30,45 @@ and streaming across languages, see [Inference with the Foundry Local SDK](../IN
 - **Embedded web service** -- optionally expose an OpenAI-compatible local endpoint
 - **C API** -- a stable ABI for other language bindings and low-level integrations
 
-## Prerequisites
+## Install From NuGet
+
+**You do not need to build Foundry Local from source.** Restore the published
+[`Microsoft.AI.Foundry.Local.Runtime`](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local.Runtime)
+package and its dependencies with the NuGet CLI:
+
+```bash
+nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages
+```
+
+The Runtime package contains the public C/C++ headers and prebuilt native libraries.
+It is also the native dependency of the `Microsoft.AI.Foundry.Local` C# SDK package.
+Install the Runtime package directly for C and C++ to avoid the managed SDK dependencies.
+Neither C nor C++ applications need a .NET runtime to use the native libraries.
+
+After restoring the packages:
+
+| Asset | Location |
+|---|---|
+| C API and C++17 wrapper headers | `packages/Microsoft.AI.Foundry.Local.Runtime.<version>/build/native/include/` |
+| Foundry Local native library | `packages/Microsoft.AI.Foundry.Local.Runtime.<version>/runtimes/<rid>/native/` |
+| ONNX Runtime and GenAI dependencies | Matching native assets in the restored `Microsoft.ML.OnnxRuntime` and `Microsoft.ML.OnnxRuntimeGenAI.Foundry` packages |
+
+Choose the RID for your application's operating system and architecture:
+`win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, or `osx-arm64`.
+Add the header directory to your compiler's include path. On Windows, link
+`foundry_local.lib`; on Linux, link `libfoundry_local.so`; on macOS, link
+`libfoundry_local.dylib`. Copy the matching native runtime files and their dependency
+libraries beside your executable or into its loader search path. Keep the restored
+package versions together; do not mix headers and native libraries from different
+releases.
+
+See [Use In Your Project](#use-in-your-project) for a CMake example,
+[Quick Start](#quick-start) for C++, and [C API](#c-api) for C.
+
+## Source Build Prerequisites
+
+The following tools are needed only when developing or customizing the native SDK,
+not when consuming the published NuGet packages.
 
 - CMake 3.20 or newer
 - Python 3.10 or newer to run `build.py`
@@ -92,6 +130,9 @@ ELF checks inspect external definitions only: local symbols retained in `.dynsym
 by GCC compatibility objects are not public exports.
 
 ## Build From Source
+
+Building from source is optional. For application development, use the
+[published NuGet packages](#install-from-nuget) instead.
 
 From this directory:
 
@@ -241,21 +282,29 @@ when they leave scope.
 
 ## Use In Your Project
 
-The public wrapper is header-only. Add `include/` to your header search path and link
-your executable to `foundry_local`:
+The public wrapper is header-only. After [installing from NuGet](#install-from-nuget),
+point CMake at the restored Runtime package and your application's RID, and link
+your executable to the packaged native library:
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
 project(my_foundry_app LANGUAGES CXX)
 
+set(FOUNDRY_LOCAL_RUNTIME_DIR "" CACHE PATH "Restored Microsoft.AI.Foundry.Local.Runtime.<version> directory")
+set(FOUNDRY_LOCAL_RID "linux-x64" CACHE STRING "Target NuGet runtime identifier")
+find_library(FOUNDRY_LOCAL_LIBRARY
+    NAMES foundry_local
+    PATHS "${FOUNDRY_LOCAL_RUNTIME_DIR}/runtimes/${FOUNDRY_LOCAL_RID}/native"
+    NO_DEFAULT_PATH REQUIRED)
+
 add_executable(my_foundry_app main.cc)
 target_compile_features(my_foundry_app PRIVATE cxx_std_17)
-target_include_directories(my_foundry_app PRIVATE /path/to/foundry-local/sdk_v2/cpp/include)
-target_link_libraries(my_foundry_app PRIVATE /path/to/foundry-local.dll-or-library)
+target_include_directories(my_foundry_app PRIVATE "${FOUNDRY_LOCAL_RUNTIME_DIR}/build/native/include")
+target_link_libraries(my_foundry_app PRIVATE "${FOUNDRY_LOCAL_LIBRARY}")
 ```
 
 On Windows, place `foundry_local.dll`, `onnxruntime.dll`, `onnxruntime-genai.dll`, and
-the other files from the SDK build output beside your executable. On Linux and macOS,
+the other native runtime dependencies from the restored packages beside your executable. On Linux and macOS,
 place `libfoundry_local` and its neighboring runtime libraries beside the executable or
 in a loader search path. The shared library uses `$ORIGIN` on Linux and `@loader_path` on
 macOS to locate co-located dependencies.
@@ -264,8 +313,8 @@ macOS to locate co-located dependencies.
 
 For a C application, a lower-level integration, or another language binding, include
 [`foundry_local/foundry_local_c.h`](include/foundry_local/foundry_local_c.h) and link the
-same `foundry_local` shared library. Use the [build instructions](#build-from-source)
-above to produce the native library and its runtime dependencies.
+same `foundry_local` shared library. Use the [NuGet installation instructions](#install-from-nuget)
+above to restore the prebuilt native library, matching headers, and runtime dependencies.
 
 Call `FoundryLocalGetApi(FOUNDRY_LOCAL_API_VERSION)` to obtain the root `flApi` function
 table. Check for a null pointer, which indicates that the library does not support the
