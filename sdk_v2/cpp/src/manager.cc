@@ -7,6 +7,7 @@
 #include <ort_genai_c.h>
 
 #include <atomic>
+#include <DebugEvents.hpp>
 #include <string_view>
 
 #include "catalog.h"
@@ -180,7 +181,26 @@ void SetOgaLogCallback(ILogger* logger) {
 }  // namespace
 
 std::mutex Manager::s_mutex_;
-std::unique_ptr<Manager> Manager::s_instance_;
+Manager::InstanceOwner* Manager::s_owner_ = nullptr;
+bool Manager::s_destroyed_ = false;
+
+struct Manager::InstanceOwner {
+  explicit InstanceOwner(std::unique_ptr<Manager> initial_instance) : instance(std::move(initial_instance)) {
+    // Prime the mutex even when the first Manager suppresses telemetry and a later Create enables it.
+    // An empty diagnostic source starts no uploader and emits no collector event.
+    ::Microsoft::Applications::Events::DebugEventSource source;
+    source.DispatchEvent({});
+  }
+
+  ~InstanceOwner() {
+    std::lock_guard<std::mutex> lock(s_mutex_);
+    s_destroyed_ = true;
+    instance.reset();
+    s_owner_ = nullptr;
+  }
+
+  std::unique_ptr<Manager> instance;
+};
 
 Manager::Manager(const Configuration& config) : config_(config) {
   config_.Validate();
@@ -415,8 +435,12 @@ Manager::~Manager() {
 Manager& Manager::Create(const Configuration& config) {
   std::lock_guard<std::mutex> lock(s_mutex_);
 
-  if (s_instance_ != nullptr) {
-    FL_LOG_AND_THROW(s_instance_->GetLogger(), FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+  if (s_destroyed_) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "Manager cannot be created during process shutdown.");
+  }
+
+  if (s_owner_ != nullptr && s_owner_->instance != nullptr) {
+    FL_LOG_AND_THROW(s_owner_->instance->GetLogger(), FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
                      "Manager already created. Call Destroy() first.");
   }
 
@@ -439,24 +463,32 @@ Manager& Manager::Create(const Configuration& config) {
 
   created->GetLogger().Log(LogLevel::Information, "Manager initialized successfully.");
 
-  s_instance_ = std::move(created);
-  return *s_instance_;
+  if (s_owner_ == nullptr) {
+    // Register the actual owner after Manager's construction has initialized its static dependencies.
+    static InstanceOwner owner(std::move(created));
+    s_owner_ = &owner;
+  } else {
+    s_owner_->instance = std::move(created);
+  }
+  return *s_owner_->instance;
 }
 
 Manager& Manager::Instance() {
   std::lock_guard<std::mutex> lock(s_mutex_);
-  if (s_instance_ == nullptr) {
+  if (s_owner_ == nullptr || s_owner_->instance == nullptr) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
              "Manager not created. Call Create() first. "
              "Manager must remain valid until all Model and Session instances are destroyed.");
   }
 
-  return *s_instance_;
+  return *s_owner_->instance;
 }
 
 void Manager::Destroy() {
   std::lock_guard<std::mutex> lock(s_mutex_);
-  s_instance_.reset();
+  if (s_owner_ != nullptr) {
+    s_owner_->instance.reset();
+  }
 }
 
 ICatalog& Manager::GetCatalog() {

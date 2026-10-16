@@ -127,6 +127,49 @@ example, the default library and examples are under
 The build places `foundry_local` alongside its ONNX Runtime and ONNX Runtime GenAI
 dependencies. Keep these files together when copying a build to another location.
 
+### Dependency regression checks
+
+Native Windows x64, macOS ARM64, and Linux CI run the telemetry shutdown and
+installed nanoarrow consumer regressions. Telemetry tests require
+`TELEMETRY_SHUTDOWN_SDK_SOURCE_DIR` to name the pinned telemetry sources with all
+patches from `ports/cpp-client-telemetry/portfile.cmake` applied. They link the real
+Foundry Manager and observe SDK lock, worker, version, and encoder lifetimes.
+Events traverse normal decoration, queuing, storage, and encoding; only the HTTP
+transport is replaced with an in-process responder. The `upload-after-ci` case
+holds encoding until process exit after a CI-suppressed first Manager.
+
+```pwsh
+python tools/run_dependency_tests.py --build build/Windows/RelWithDebInfo --config RelWithDebInfo
+```
+
+The runner rejects missing and skipped cases. Nanoarrow consumers configure,
+link, and run separately in Debug and Release, with an application-defined
+`flatccrt` target declared both before and after package discovery.
+
+### Measuring dependency updates
+
+Build baseline and updated SDKs from the same Foundry sources, toolchain,
+configuration, and ORT/GenAI packages, preserving each native bundle and its
+vcpkg status file. The `sdk-dependency-probe` executable loads the actual shared
+SDK through its public C ABI. Compare the bundles with:
+
+```pwsh
+python tools/measure_sdk_dependencies.py `
+  --probe build/Windows/RelWithDebInfo/bin/RelWithDebInfo/sdk-dependency-probe.exe `
+  --baseline build/baseline-native/foundry_local.dll `
+  --candidate build/updated-native/foundry_local.dll `
+  --output build/dependency-measurements --samples 10
+```
+
+Add `--model-id <exact-catalog-model-id>` to time real model downloads into fresh,
+isolated caches; this is opt-in and may transfer substantial data. Runs alternate
+baseline/current order and preserve every sample, binary hashes, medians, native
+payload/ZIP sizes, and (on Windows) unsigned C++ SDK-layout ZIP size including
+headers, symbols, and the import library. Telemetry is CI-suppressed in both
+bundles to prevent external collector transmission. These are warm-file-cache,
+local-host observations, not cold-boot, inference, telemetry-enabled, mobile, or
+release-signed-package measurements. Network variability is not itself evidence
+of a dependency performance regression.
 ### Qwen XML region guidance
 
 With ONNX Runtime GenAI 0.18.0 or later, Foundry Local automatically constrains
