@@ -227,10 +227,25 @@ test('native examples use the shared syntax colors without changing the displaye
 		assert.equal(displayed, raw);
 	}
 
-	const snippet = nativeSnippet('puts("<script>&\\"Hello\\"</script>");');
-	assert.ok(snippet.html.includes('class="code-string"'));
-	assert.doesNotMatch(snippet.html, /<script>/);
-	assert.match(snippet.html, /&lt;script&gt;&amp;/);
+	for (const text of [
+		'<script>&\\"Hello\\"</script>',
+		'<SCRIPT SRC=x></SCRIPT>',
+		'<ScRiPt type=x>alert(1)</sCrIpT foo=bar>',
+		'<img src=x onerror=alert(1)>',
+		'<!-- comment --!>'
+	]) {
+		const raw = `puts("${text}");`;
+		const snippet = nativeSnippet(raw);
+		const encoded = snippet.html.replace(/<span class="code-[a-z]+">|<\/span>/g, '');
+		assert.equal(snippet.raw, raw);
+		assert.ok(snippet.html.includes('class="code-string"'));
+		assert.equal(encoded.includes('<'), false);
+		assert.equal(encoded.includes('>'), false);
+		assert.equal(
+			encoded.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&'),
+			raw
+		);
+	}
 });
 
 test('quickstarts display and copy one complete example instead of separate code fragments', () => {
