@@ -17,6 +17,7 @@
 #include "inferencing/session/tool_registry.h"
 #include "items/text_item.h"
 #include "model_info.h"
+#include "service/non_streaming_disconnect_monitor.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
 
@@ -193,8 +194,9 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ha
                              std::move(tracker));
     } else {
       SessionRegistration reg(ctx_.session_manager, *session);
-      auto response = HandleNonStreaming(*session, session_request);
-      tracker->SetStatus(ResponseToActionStatus(response));
+      bool disconnected = false;
+      auto response = HandleNonStreaming(*session, session_request, request, disconnected);
+      tracker->SetStatus(disconnected ? ActionStatus::kCanceled : ResponseToActionStatus(response));
       return response;
     }
   } catch (const fl::Exception& ex) {
@@ -233,9 +235,23 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::ha
 // --- Inference dispatch ---
 
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ChatCompletionsHandler::HandleNonStreaming(
-    ChatSession& session, Request& session_request) {
+    ChatSession& session, Request& session_request, const std::shared_ptr<IncomingRequest>& request,
+    bool& disconnected) {
   fl::Response session_response;
-  session.ProcessRequest(session_request, session_response);
+  NonStreamingDisconnectMonitor monitor(request->getConnection(), session_request);
+  try {
+    session.ProcessRequest(session_request, session_response);
+  } catch (const fl::Exception& ex) {
+    disconnected = monitor.Stop();
+    if (disconnected && ex.code() == FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED) {
+      return ErrorResponse(Status(499, "Client Closed Request"), "Client disconnected");
+    }
+    throw;
+  }
+  disconnected = monitor.Stop();
+  if (disconnected) {
+    return ErrorResponse(Status(499, "Client Closed Request"), "Client disconnected");
+  }
 
   // ChatSession produces a single OPENAI_JSON-tagged TextItem with the ChatCompletionResponse.
   if (session_response.items.empty() || session_response.items[0]->type != FOUNDRY_LOCAL_ITEM_TEXT) {
