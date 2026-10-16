@@ -52,8 +52,8 @@
 		javascript: 'npm install foundry-local-sdk',
 		csharp: 'dotnet add package Microsoft.AI.Foundry.Local',
 		rust: 'cargo add foundry-local-sdk tokio --features tokio/macros,tokio/rt-multi-thread',
-		c: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages',
-		cpp: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'
+		c: 'nuget install Microsoft.AI.Foundry.Local.Runtime',
+		cpp: 'nuget install Microsoft.AI.Foundry.Local.Runtime'
 	};
 
 	const filenames: Record<SdkLanguage, string> = {

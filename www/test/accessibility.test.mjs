@@ -188,9 +188,7 @@ test('C and C++ selectors provide package installation and complete native examp
 	]) {
 		assert.ok(installCommand.includes(`{ key: '${key}', label: '${label}' }`));
 		assert.ok(
-			installCommand.includes(
-				`${key}: 'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'`
-			)
+			installCommand.includes(`${key}: 'nuget install Microsoft.AI.Foundry.Local.Runtime'`)
 		);
 		assert.equal(installCommand.split(`${key}: nativeSnippet(String.raw`).length - 1, 2);
 		assert.ok(dropdown.includes(`label: '${label} SDK'`));

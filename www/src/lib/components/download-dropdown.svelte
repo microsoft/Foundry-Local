@@ -78,16 +78,14 @@
 			label: 'C SDK',
 			icon: NativeIcon,
 			crossPlatformId: 'c-cross-platform',
-			crossPlatformCommand:
-				'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'
+			crossPlatformCommand: 'nuget install Microsoft.AI.Foundry.Local.Runtime'
 		},
 		{
 			id: 'cpp',
 			label: 'C++ SDK',
 			icon: NativeIcon,
 			crossPlatformId: 'cpp-cross-platform',
-			crossPlatformCommand:
-				'nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages'
+			crossPlatformCommand: 'nuget install Microsoft.AI.Foundry.Local.Runtime'
 		},
 		{
 			id: 'python',
