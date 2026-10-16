@@ -232,6 +232,24 @@ let response = client.complete_chat(&messages, None).await?;`,
 		{/each}
 	</div>
 
+	<p class="text-muted-foreground mb-4 text-center text-xs">
+		Building in C or C++? Use the
+		<a
+			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#c-api"
+			class="text-primary underline underline-offset-4">C API</a
+		>
+		or
+		<a
+			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#quick-start"
+			class="text-primary underline underline-offset-4">C++ SDK</a
+		>.
+		<a
+			href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md#build-from-source"
+			class="text-primary underline underline-offset-4">Build the native library from source</a
+		>
+		and link it into your app.
+	</p>
+
 	<div class="grid gap-3">
 		<section class="border-primary/20 bg-background/55 rounded-lg border p-3">
 			<div class="text-muted-foreground mb-2 flex items-center gap-2 text-xs font-medium">

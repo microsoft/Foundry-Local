@@ -1,10 +1,16 @@
-# Foundry Local C++ SDK (v2)
+# Foundry Local C and C++ SDK (v2)
 
 The Foundry Local C++ SDK runs AI models locally through the Foundry Local engine. It
 provides a header-only, RAII-style C++17 wrapper over the stable C ABI for catalog
 access, model lifecycle management, chat, tool calling, embeddings, audio
 transcription, execution-provider management, and the optional OpenAI-compatible web
 service.
+
+C and C++ are supported application interfaces to the same native runtime that powers
+the C#, JavaScript, Python, and Rust bindings. C applications use the
+[public C API](include/foundry_local/foundry_local_c.h) directly; C++ applications can
+use the [C++ wrapper](include/foundry_local/foundry_local_cpp.h). Neither requires a
+separate server process.
 
 The SDK implementation builds as C++20, while applications that consume the public
 wrapper need only C++17 or newer.
@@ -254,8 +260,31 @@ place `libfoundry_local` and its neighboring runtime libraries beside the execut
 in a loader search path. The shared library uses `$ORIGIN` on Linux and `@loader_path` on
 macOS to locate co-located dependencies.
 
-For a lower-level integration or another language binding, include
-`foundry_local/foundry_local_c.h` and use the versioned C API function tables instead.
+### C API
+
+For a C application, a lower-level integration, or another language binding, include
+[`foundry_local/foundry_local_c.h`](include/foundry_local/foundry_local_c.h) and link the
+same `foundry_local` shared library. Use the [build instructions](#build-from-source)
+above to produce the native library and its runtime dependencies.
+
+Call `FoundryLocalGetApi(FOUNDRY_LOCAL_API_VERSION)` to obtain the root `flApi` function
+table. Check for a null pointer, which indicates that the library does not support the
+requested API version. The root table exposes manager operations and accessors such as
+`GetConfigurationApi()`, `GetCatalogApi()`, `GetModelApi()`, `GetInferenceApi()`, and
+`GetItemApi()` for configuration, catalog access, model management, and inference.
+
+The C API uses opaque handles and explicit ownership rather than C++ classes:
+
+- Check the returned `flStatus*` from status-returning calls. A null status means
+  success; otherwise inspect `Status_GetErrorCode()` and `Status_GetErrorMessage()`,
+  then call `Status_Release()`.
+- Release owned handles with their corresponding `*_Release` function. Borrowed
+  pointers and views remain valid only for the lifetime documented in the header.
+- Follow the lifetime and callback ownership contracts documented on each function
+  in the public C header. The C++ wrapper automates handle cleanup with RAII.
+
+The C API exposes chat, tool calling, embeddings, audio transcription, and the same
+model and execution-provider lifecycle used by the C++ wrapper.
 
 ## Common Workflows
 

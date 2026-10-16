@@ -61,7 +61,8 @@
 	};
 
 	function getCliInstallOptions(): CliInstallOption[] {
-		const links = ($page.data.cliDownloadLinks as CliDownloadLink[] | undefined) ?? fallbackCliDownloadLinks;
+		const links =
+			($page.data.cliDownloadLinks as CliDownloadLink[] | undefined) ?? fallbackCliDownloadLinks;
 		return links.map((link) => ({
 			...link,
 			label: `${link.label} CLI`,
@@ -166,6 +167,26 @@
 					</div>
 				</div>
 			{/each}
+			<DropdownMenu.Item class="p-0">
+				{#snippet child({ props })}
+					<a
+						{...props}
+						href="https://github.com/microsoft/Foundry-Local/blob/main/sdk_v2/cpp/README.md"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="relative flex min-h-[44px] w-full items-center justify-between gap-2 rounded-sm px-2 py-2.5 text-sm"
+						aria-label="C and C++ SDK build and integration guide (opens in new tab)"
+					>
+						<span>
+							<span class="block font-medium">C / C++ SDK</span>
+							<span class="text-muted-foreground text-xs">
+								Build from source · C API and C++17 wrapper
+							</span>
+						</span>
+						<ExternalLink class="size-4 shrink-0 opacity-50" aria-hidden="true" />
+					</a>
+				{/snippet}
+			</DropdownMenu.Item>
 		</DropdownMenu.Group>
 
 		<DropdownMenu.Separator />
