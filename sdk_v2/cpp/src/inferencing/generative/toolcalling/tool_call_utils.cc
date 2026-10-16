@@ -369,7 +369,7 @@ std::string CleanToolName(std::string name) {
 ///   {"name": "fn", "arguments": {...}}
 std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
                                                  const nlohmann::json& advertised_tools,
-                                                 bool validate_tool_names) {
+                                                 bool validate_canonical_tool_names) {
   std::vector<ParsedToolCall> results;
 
   try {
@@ -587,7 +587,8 @@ std::vector<ParsedToolCall> DeserializeToolCalls(const std::string& json_text,
         SetArguments(tc, call["args"], argument_source);
       }
 
-      if (validate_tool_names && !HasAdvertisedTool(advertised_tools, tc.name)) {
+      if ((call_repaired || validate_canonical_tool_names) &&
+          !HasAdvertisedTool(advertised_tools, tc.name)) {
         return std::nullopt;
       }
 

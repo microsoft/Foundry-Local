@@ -2879,21 +2879,43 @@ TEST(ToolCallStreamAccumulatorTest, UnadvertisedParametersCallBecomesVisible) {
 TEST(ToolCallStreamAccumulatorTest, UnadvertisedCanonicalCallBecomesVisible) {
   const std::string tools =
       R"([{"type":"function","name":"advertised","parameters":{"type":"object"}}])";
-  ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
   const std::string generated =
       R"(<tool_call>{"name":"unadvertised","arguments":{"value":1}}</tool_call>)";
-  auto outs = RunChunks(acc, {generated});
 
-  EXPECT_EQ(CollectVisible(outs), generated);
-  EXPECT_TRUE(CollectCalls(outs).empty());
+  for (size_t split = 0; split <= generated.size(); ++split) {
+    ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
+    auto outs = RunChunks(acc, SplitAt(generated, split));
+
+    EXPECT_EQ(CollectVisible(outs), generated) << "split=" << split;
+    EXPECT_TRUE(CollectCalls(outs).empty()) << "split=" << split;
+  }
 }
 
 TEST(ToolCallStreamAccumulatorTest, UnadvertisedCanonicalSiblingRejectsEntireBatch) {
   const std::string tools =
       R"([{"type":"function","name":"advertised","parameters":{"type":"object"}}])";
+  const std::vector<std::string> generated = {
+      R"(<tool_call>[{"name":"advertised","arguments":{}},{"name":"unadvertised","arguments":{}}]</tool_call>)",
+      R"(<tool_call>[{"name":"unadvertised","arguments":{}},{"name":"advertised","arguments":{}}]</tool_call>)",
+  };
+
+  for (const auto& batch : generated) {
+    for (size_t split = 0; split <= batch.size(); ++split) {
+      ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
+      auto outs = RunChunks(acc, SplitAt(batch, split));
+
+      EXPECT_EQ(CollectVisible(outs), batch) << "split=" << split;
+      EXPECT_TRUE(CollectCalls(outs).empty()) << "split=" << split;
+    }
+  }
+}
+
+TEST(ToolCallStreamAccumulatorTest, FlushKeepsUnadvertisedCanonicalCallWithoutClosingMarkerVisible) {
+  const std::string tools =
+      R"([{"type":"function","name":"advertised","parameters":{"type":"object"}}])";
   ToolCallStreamAccumulator acc("<tool_call>", "</tool_call>", tools);
   const std::string generated =
-      R"(<tool_call>[{"name":"advertised","arguments":{}},{"name":"unadvertised","arguments":{}}]</tool_call>)";
+      R"(<tool_call>{"name":"unadvertised","arguments":{"value":1}})";
   auto outs = RunChunks(acc, {generated});
 
   EXPECT_EQ(CollectVisible(outs), generated);
