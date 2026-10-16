@@ -9,6 +9,9 @@ service.
 The SDK implementation builds as C++20, while applications that consume the public
 wrapper need only C++17 or newer.
 
+For an inference-focused introduction to models, sessions, requests, responses, items,
+and streaming across languages, see [Inference with the Foundry Local SDK](../INFERENCING.md).
+
 ## Features
 
 - **Model catalog** -- discover model aliases, variants, cached models, and loaded models
@@ -33,6 +36,10 @@ wrapper need only C++17 or newer.
 The build resolves its C++ dependencies from the manifest in `vcpkg.json`, and obtains
 the pinned ONNX Runtime and ONNX Runtime GenAI dependencies during CMake configuration.
 
+Linux runtime requirements are architecture-specific: glibc 2.28 or newer on x64,
+and glibc 2.34 or newer on ARM64. The ARM64 minimum also applies to CPU-only usage
+because the pinned GenAI runtime requires it.
+
 Chat completions accept a typed `chat_template_kwargs` JSON object, such as
 `{"enable_thinking": false}`, for model-specific template controls. The pinned stable
 GenAI package supports this feature; a nightly package is not required. Session-level
@@ -40,6 +47,26 @@ kwargs are defaults: per-request kwargs override the entire object, and `{}` exp
 clears an inherited default for that request.
 For OpenAI JSON requests, the payload takes precedence over request options, followed
 by session defaults. Omitting kwargs inherits the session default, if any.
+
+### CUDA acceleration
+
+On Windows and Linux (x64 and ARM64), Foundry Local downloads and verifies only the
+CUDA execution provider and ORT GenAI CUDA libraries. It does not distribute the
+CUDA toolkit or cuDNN runtime libraries. Install compatible CUDA and cuDNN runtimes
+separately before registering the CUDA execution provider.
+
+On Windows, make the runtime DLL directories available through `PATH` for ORT's
+provider loader. On x64, also call `AddDllDirectory` for the CUDA runtime directory
+before CUDA registration: the GenAI CUDA bridge directly imports the CUDA runtime,
+and its explicit DLL search policy includes application-added directories but not `PATH`.
+
+Applications that manage DLL search directories instead of `PATH` can call
+`AddDllDirectory` for each runtime directory and enable these directories with
+`SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` before CUDA registration.
+This process-wide setting replaces the standard PATH-based DLL search; register all
+required runtime directories when using it. It is not needed solely for the x64 bridge load.
+Foundry Local leaves runtime dependency loading to ORT and GenAI. On Linux, use the
+system loader configuration or `LD_LIBRARY_PATH`.
 
 ## Native Export Isolation
 
@@ -143,6 +170,53 @@ bundles to prevent external collector transmission. These are warm-file-cache,
 local-host observations, not cold-boot, inference, telemetry-enabled, mobile, or
 release-signed-package measurements. Network variability is not itself evidence
 of a dependency performance regression.
+### Qwen XML region guidance
+
+With ONNX Runtime GenAI 0.18.0 or later, Foundry Local automatically constrains
+the body of eligible Qwen XML function calls. No caller setting is required.
+
+Eligibility requires native Qwen XML automatic text-and-tools on Engine, distinct
+tool marker token IDs published by GenAI's tokenizer whose decoded strings match
+the effective model markers, no caller guidance or forced/raw tool,
+and a **fully representable** offered set of ordinary function tools. The planner
+accepts at most 64 declared fields per tool and emits required fields before optional fields
+in a canonical order, keeping grammar size linear in the field count. The strict
+decoder still accepts any valid field order. Bounded supported schemas include
+scalar, array, and nested object types, nullable types, enums, local `#/$defs/name`
+references, and selected unions; unsupported or malformed definitions leave the
+entire turn unguided with a warning. Explicitly open root parameter objects are
+ineligible, and the full request is subject to normalization and compiled-grammar
+size budgets. This is not unrestricted JSON Schema support.
+An unused unsupported but well-formed tool does not block recovery of a valid
+call to another tool; malformed declarations still block recovery, and a call
+to the unsupported tool remains invalid.
+The region grammar constrains function and parameter names, required fields, and
+reserved XML framing, while preserving multiline code and literal `<`. Structured
+values that are not constrained by the grammar are checked by the strict decoder,
+so guidance is not a guarantee that every generated value is valid.
+Ambiguous interrupted calls remain
+subject to strict rejection/finalization rules. As in the existing
+native `auto` path, an interrupted, structurally plausible *incomplete* call
+can be surfaced as text; schema-invalid or unsupported-only function calls cannot
+dispatch, and unrecognizable function declarations cannot leak their XML.
+Admission errors from the local GenAI API are reported, not retried as
+unguided success.
+
+To exercise the guided path with a Qwen model, run from the repository root:
+
+```powershell
+python sdk_v2\cpp\test\manual\qwen_region_guidance_smoke.py --model ..\models\qwen_3.8_27b_int4_int8kv_dflash2_int4
+```
+
+This optional Windows ARM64 smoke test requires a built Python SDK binding
+(`--binding <package-directory>` if it is not installed) and CUDA EP. It checks
+that the native Engine installed region guidance on each request, then verifies
+required, optional, parameterless, and multiline tool calls, strict decoding,
+and tool-result continuation; it does not download a model in CI.
+Run the same command with `--no-reasoning` to check two unconstrained text
+turns followed by a tool call without relying on reasoning-driven invalidation.
+Region guidance alone does not discard retained Engine state after an ordinary
+non-reasoning text turn; generated tool calls still invalidate it.
 
 ## Quick Start
 

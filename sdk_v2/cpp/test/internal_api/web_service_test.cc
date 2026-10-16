@@ -1268,6 +1268,34 @@ TEST_F(WebServiceTest, ResponsesStrictContractIsValidatedBeforeModelResolution) 
   }
 }
 
+TEST_F(WebServiceTest, ChatCompletionsRejectsNonBooleanParallelToolCalls) {
+  const json body = {
+      {"model", "alpha-model"},
+      {"messages", json::array({{{"role", "user"}, {"content", "hi"}}})},
+      {"parallel_tool_calls", "false"},
+  };
+
+  const auto result = PostJson(base_url_ + "/v1/chat/completions", body);
+
+  EXPECT_EQ(result.status, 400) << result.body.dump(2);
+  EXPECT_NE(ErrorMessageOf(result.body).find("boolean"), std::string::npos)
+      << result.body.dump(2);
+}
+
+TEST_F(WebServiceTest, ResponsesRejectsNonBooleanParallelToolCalls) {
+  const json body = {
+      {"model", "alpha-model"},
+      {"input", "hi"},
+      {"parallel_tool_calls", "false"},
+  };
+
+  const auto result = PostJson(base_url_ + "/v1/responses", body);
+
+  EXPECT_EQ(result.status, 400) << result.body.dump(2);
+  EXPECT_NE(ErrorMessageOf(result.body).find("boolean"), std::string::npos)
+      << result.body.dump(2);
+}
+
 TEST_F(WebServiceTest, ChatCompletionsAcceptsTextCustomToolDeclaration) {
   json body = {
       {"model", "alpha-model"},  // in the catalog, never loadable in this fixture

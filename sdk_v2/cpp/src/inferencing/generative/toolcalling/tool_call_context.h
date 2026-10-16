@@ -31,6 +31,8 @@ struct ToolCallContext {
   /// Whether the model may produce tool call output (controlled by tool_choice + tools presence).
   bool tool_output = false;
 
+  bool parallel_tool_calls = true;
+
   /// Whether the model supports chain-of-thought reasoning (e.g., DeepSeek R1 Distilled).
   /// When true, grammar guidance is applied for text-only output to produce correct <think> tags.
   bool supports_reasoning = false;
@@ -70,6 +72,14 @@ struct ToolCallContext {
   std::optional<ForcedToolChoice> forced_tool;
   std::optional<RawEnvelopeDescriptor> raw_envelope;
   bool guidance_disabled = false;
+  std::optional<std::string> qwen_xml_tool_body_grammar;
+
+  void ConfigureForGuidedToolRetry() {
+    text_output = false;
+    tool_output = true;
+    // The retry emits canonical JSON, not native XML inside the tool markers.
+    qwen_xml_tool_body_grammar.reset();
+  }
 
   const RawEnvelopeDescriptor* ActiveRawEnvelope() const {
     if (!tool_output || !raw_envelope.has_value() || !IsCustomTool(raw_envelope->tool_name)) {
@@ -132,7 +142,8 @@ struct ToolCallContext {
   bool HasSameTools(const ToolCallContext& other) const {
     return tools_json == other.tools_json && tool_kinds == other.tool_kinds &&
            custom_lark_grammars == other.custom_lark_grammars && raw_envelope == other.raw_envelope &&
-           guidance_disabled == other.guidance_disabled;
+           guidance_disabled == other.guidance_disabled &&
+           qwen_xml_tool_body_grammar == other.qwen_xml_tool_body_grammar;
   }
 
   /// Whether the model has known tool call marker tokens.

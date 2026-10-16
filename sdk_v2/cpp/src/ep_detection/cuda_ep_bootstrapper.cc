@@ -32,7 +32,9 @@ fl::CudaEpPlatform HostCudaEpPlatform() {
   return fl::CudaEpPlatform::WindowsArm64;
 #elif defined(_WIN32) && defined(_M_X64)
   return fl::CudaEpPlatform::WindowsX64;
-#elif defined(__linux__)
+#elif defined(__linux__) && defined(__aarch64__)
+  return fl::CudaEpPlatform::LinuxArm64;
+#elif defined(__linux__) && defined(__x86_64__)
   return fl::CudaEpPlatform::LinuxX64;
 #else
   return fl::CudaEpPlatform::Unsupported;
@@ -248,11 +250,7 @@ bool CudaEpBootstrapper::PrepareForModelLoad([[maybe_unused]] ILogger& logger) {
 bool CudaEpBootstrapper::HasNvidiaGpu(ILogger& logger) { return NvmlGpuDetector::HasNvidiaGpu(logger); }
 
 bool CudaEpBootstrapper::IsSupportedPlatform() {
-#if (defined(_WIN32) && (defined(_M_ARM64) || defined(_M_X64))) || defined(__linux__)
-  return true;
-#else
-  return false;
-#endif
+  return HostCudaEpPlatform() != CudaEpPlatform::Unsupported;
 }
 
 }  // namespace fl

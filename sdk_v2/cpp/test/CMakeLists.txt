@@ -169,6 +169,9 @@ target_sources(foundry_local_tests PRIVATE
 )
 
 target_compile_options(foundry_local_tests PRIVATE ${FOUNDRY_LOCAL_COMPILE_OPTIONS})
+if(MSVC)
+    target_compile_options(foundry_local_tests PRIVATE /bigobj)
+endif()
 
 target_link_libraries(foundry_local_tests
     PRIVATE

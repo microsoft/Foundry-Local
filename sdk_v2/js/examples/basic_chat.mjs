@@ -45,20 +45,18 @@ function compareModels(left, right) {
 
 function extractText(item) {
   if (item.type === "text") {
-    return item.text;
+    return (item.textType ?? "default") === "default" ? item.text : "";
   }
   if (item.type !== "message") {
     return "";
   }
-  if (typeof item.content === "string") {
-    return item.content;
-  }
-  return (
-    item.parts
-      ?.filter((part) => part.type === "text")
+  if (item.parts !== undefined) {
+    return item.parts
+      .filter((part) => part.type === "text" && (part.textType ?? "default") === "default")
       .map((part) => part.text)
-      .join("") ?? ""
-  );
+      .join("");
+  }
+  return typeof item.content === "string" ? item.content : "";
 }
 
 const manager = await FoundryLocalManager.createAsync(managerConfig);

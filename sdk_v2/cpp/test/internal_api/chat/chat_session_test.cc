@@ -41,6 +41,7 @@
 #include <fstream>
 #include <future>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -1274,30 +1275,42 @@ TEST(ChatSessionDecisionTest, PreAppendRebuildTracksBackendBakedSettings) {
 TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSemantics) {
   using chat_session_internal::ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn;
 
+  ToolCallContext context;
+  context.tool_output = true;
+  context.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
-      /*host_output_limit_reached=*/false));
-  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/true, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
 
+  context.guidance_type = "json_schema";
+  context.guidance_data = R"({"type":"object"})";
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  context.guidance_type.clear();
+  context.guidance_data.clear();
+
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/true,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator,
-      /*grammar_was_active=*/false, /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
+      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
+      /*host_output_limit_reached=*/false));
+  EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
+      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/true));
 }
 
@@ -1534,7 +1547,8 @@ class QwenNativeProductionIntegrationTest : public ::testing::Test {
   static nlohmann::json RunChatCompletions(ChatSession& session,
                                            std::string tool_choice,
                                            std::vector<nlohmann::json>* chunks = nullptr,
-                                           bool include_custom_tool = false) {
+                                           bool include_custom_tool = false,
+                                           std::optional<bool> parallel_tool_calls = std::nullopt) {
     if (chunks != nullptr) {
       session.SetStreamingCallback(
           [chunks](flStreamingCallbackData event, void*) {
@@ -1582,6 +1596,9 @@ class QwenNativeProductionIntegrationTest : public ::testing::Test {
       body["tools"].push_back(
           {{"type", "custom"},
            {"custom", {{"name", "transform"}, {"format", {{"type", "text"}}}}}});
+    }
+    if (parallel_tool_calls.has_value()) {
+      body["parallel_tool_calls"] = *parallel_tool_calls;
     }
 
     Request request;
@@ -1701,6 +1718,110 @@ TEST_F(QwenNativeProductionIntegrationTest,
   }
 }
 
+TEST_F(QwenNativeProductionIntegrationTest, ExplicitSerialToolCallsCapOutputAcrossApiShapesAndChunkSizes) {
+  const auto two_calls = std::string(kLookupCall) + std::string(kSecondCall);
+  for (const size_t chunk_size : {std::string::npos, size_t{1}}) {
+    SCOPED_TRACE(chunk_size);
+    for (const bool parallel : {true, false}) {
+      SCOPED_TRACE(parallel);
+      const size_t expected_count = parallel ? 2 : 1;
+      auto catalog_model = MakeCatalogModel();
+
+      ChatSession chat(catalog_model, *model_, *logger_, telemetry_, {},
+                       OutputFactory(two_calls, {}, BackendTerminationCause::kNaturalEnd, chunk_size));
+      std::vector<nlohmann::json> chunks;
+      const auto completion = RunChatCompletions(chat, "auto", &chunks, false, parallel);
+      const auto& choice = completion.at("choices").at(0);
+      const auto& calls = choice.at("message").at("tool_calls");
+      ASSERT_EQ(calls.size(), expected_count);
+      EXPECT_EQ(calls[0].at("function").at("name"), "lookup");
+      EXPECT_EQ(choice.at("finish_reason"), "tool_calls");
+
+      size_t streamed_calls = 0;
+      for (const auto& chunk : chunks) {
+        const auto& delta = chunk.at("choices").at(0).at("delta");
+        if (delta.contains("tool_calls")) {
+          streamed_calls += delta.at("tool_calls").size();
+        }
+      }
+      EXPECT_EQ(streamed_calls, expected_count);
+
+      auto params = nlohmann::json{
+          {"model", kModelId},
+          {"input", "get both values"},
+          {"tool_choice", "auto"},
+          {"parallel_tool_calls", parallel},
+          {"tools", nlohmann::json::array(
+                        {{{"type", "function"}, {"name", "lookup"},
+                          {"parameters", {{"type", "object"}, {"properties", {{"city", {{"type", "string"}}}}}}}},
+                         {{"type", "function"}, {"name", "clock"},
+                          {"parameters", {{"type", "object"}, {"properties", {{"zone", {{"type", "string"}}}}}}}}})}}
+                        .get<responses::ResponseCreateParams>();
+      auto request = ResponseConverter::ToSessionRequest(params);
+      size_t streamed_response_calls = 0;
+      ChatSession responses(catalog_model, *model_, *logger_, telemetry_, {},
+                            OutputFactory(two_calls, {}, BackendTerminationCause::kNaturalEnd, chunk_size));
+      for (auto& definition : ResponseConverter::ExtractResponsesToolDefinitions(params, request)) {
+        responses.AddToolDefinition(std::move(definition));
+      }
+      responses.SetStreamingCallback([&streamed_response_calls](flStreamingCallbackData event, void*) {
+        auto* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
+        while (auto item = queue->TryPop()) {
+          streamed_response_calls += item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL;
+        }
+        return 0;
+      });
+      Response result;
+      responses.ProcessRequest(request, result);
+      const auto response_calls = Calls(result);
+      ASSERT_EQ(response_calls.size(), expected_count);
+      EXPECT_EQ(response_calls.front()->name, "lookup");
+      EXPECT_EQ(streamed_response_calls, expected_count);
+      EXPECT_EQ(result.finish_reason, FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+    }
+  }
+}
+
+TEST_F(QwenNativeProductionIntegrationTest, SerialToolCallsCapGuidedEngineRetry) {
+  const std::vector<std::string> outputs = {
+      "<tool_call>\n<function=lookup>\n<param=city>\nParis\n</param>\n</function>\n</tool_call>",
+      R"(<tool_call>[{"name":"lookup","parameters":{"city":"Paris"}},{"name":"clock","parameters":{"zone":"UTC"}}]</tool_call>)",
+  };
+  const auto make_factory = [&outputs]() -> TextChatGeneratorFactory {
+    return [&outputs, attempt = size_t{0}](const auto&, const auto&, auto&, const auto&, bool) mutable {
+      return std::make_unique<FixedOutputGenerator>(outputs.at(attempt++), BackendTerminationCause::kNaturalEnd,
+                                                    /*prompt_opens_reasoning=*/false);
+    };
+  };
+  auto catalog_model = MakeCatalogModel();
+  ChatSession chat(catalog_model, *engine_model_, *logger_, telemetry_, {}, make_factory());
+  auto completion = RunChatCompletions(chat, "auto", nullptr, false, false);
+  const auto& calls = completion.at("choices").at(0).at("message").at("tool_calls");
+  ASSERT_EQ(calls.size(), 1u);
+  EXPECT_EQ(calls[0].at("function").at("name"), "lookup");
+
+  auto params = nlohmann::json{
+      {"model", kEngineModelId}, {"input", "route this"}, {"tool_choice", "auto"},
+      {"parallel_tool_calls", false},
+      {"tools", nlohmann::json::array(
+                    {{{"type", "function"}, {"name", "lookup"},
+                      {"parameters", {{"type", "object"}, {"properties", {{"city", {{"type", "string"}}}}}}}},
+                     {{"type", "function"}, {"name", "clock"},
+                      {"parameters", {{"type", "object"}, {"properties", {{"zone", {{"type", "string"}}}}}}}}})}}
+                    .get<responses::ResponseCreateParams>();
+  auto request = ResponseConverter::ToSessionRequest(params);
+  ChatSession responses(catalog_model, *engine_model_, *logger_, telemetry_, {}, make_factory());
+  for (auto& definition : ResponseConverter::ExtractResponsesToolDefinitions(params, request)) {
+    responses.AddToolDefinition(std::move(definition));
+  }
+  Response result;
+  responses.ProcessRequest(request, result);
+  const auto response_calls = Calls(result);
+  ASSERT_EQ(response_calls.size(), 1u);
+  EXPECT_EQ(response_calls.front()->name, "lookup");
+  EXPECT_EQ(result.finish_reason, FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+}
+
 TEST_F(QwenNativeProductionIntegrationTest,
        EngineAutoMalformedCallRetriesAfterDestroyAndPublishesAcceptedUsageOnce) {
   const std::vector<std::string> outputs = {
@@ -1814,7 +1935,7 @@ TEST_F(QwenNativeProductionIntegrationTest,
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
-       EngineAutoSchemaViolationRetriesWithoutPublishingRejectedBatch) {
+       EngineAutoMixedOfferSchemaViolationRetriesWithoutPublishingRejectedBatch) {
   const std::vector<std::string> outputs = {
       "<tool_call>\n<function=lookup>\n<parameter=path>\nParis\n</parameter>\n"
       "</function>\n</tool_call>\n"
@@ -1833,6 +1954,10 @@ TEST_F(QwenNativeProductionIntegrationTest,
   auto catalog_model = MakeCatalogModel();
   ChatSession session(catalog_model, *engine_model_, *logger_, telemetry_, {}, std::move(factory));
   AddFunctionTools(session);
+  session.AddToolDefinition(
+      {"unused", "Unsupported schema for a different function.",
+       R"({"type":"object","properties":{"input":{"type":"string","pattern":"^safe$"}}})",
+       ToolKind::kFunction});
 
   std::string streamed_text;
   session.SetStreamingCallback([&streamed_text](flStreamingCallbackData event, void*) {
@@ -3055,7 +3180,7 @@ TEST_F(QwenNativeProductionIntegrationTest,
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
-       MalformedVersionOneSerializedFunctionSchemaFallsBackToExactText) {
+       MalformedVersionOneSerializedFunctionSchemaFailsClosed) {
   constexpr std::string_view generated =
       "<tool_call>\n<function=legacy>\n<parameter=value>\ntext\n</parameter>\n"
       "</function>\n</tool_call>";
@@ -3094,14 +3219,11 @@ TEST_F(QwenNativeProductionIntegrationTest,
 
   auto request = MakeStatefulRequest("call legacy");
   Response response;
-  session.ProcessRequest(request, response);
+  EXPECT_THROW(session.ProcessRequest(request, response), fl::Exception);
 
   EXPECT_TRUE(generator_created);
-  EXPECT_EQ(streamed_text, generated);
+  EXPECT_TRUE(streamed_text.empty());
   EXPECT_TRUE(Calls(response).empty());
-  EXPECT_EQ(session.Transcript().Messages().back().VisibleText(), generated);
-  EXPECT_TRUE(session.Transcript().Messages().back().ToolCalls().empty());
-  EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
