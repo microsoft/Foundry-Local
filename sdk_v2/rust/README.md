@@ -244,6 +244,9 @@ local_catalog.unregister_model(model.id()).await?;
 The existing `manager.catalog()` accessor remains the default public catalog. Use
 `manager.get_catalog(CatalogType::Public)` when explicit catalog selection is preferred.
 
+Models registered with task `coding` use the existing text-only `ChatSession` interface. See
+[coding models](../INFERENCING.md#coding-models) for capability and compatibility details.
+
 ### Model Lifecycle
 
 Each model may have multiple variants (different quantizations, hardware targets). The SDK auto-selects the best available variant, preferring cached versions. All models are represented by the `Model` type.

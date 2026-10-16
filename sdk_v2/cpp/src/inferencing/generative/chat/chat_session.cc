@@ -1141,6 +1141,31 @@ std::unique_ptr<PreparedChatRequest> PrepareChatRequest(
     }
 
     auto request_json = nlohmann::json::parse(text_item.text);
+    if (model_info.task == "coding") {
+      // Validate media before the text-only chat contract parser discards non-text content parts.
+      for (const auto& message : request_json.at("messages")) {
+        const auto content = message.find("content");
+        if (content == message.end() || !content->is_array()) {
+          continue;
+        }
+
+        for (const auto& part : *content) {
+          if (!part.is_object()) {
+            continue;
+          }
+
+          const auto type = part.value("type", "");
+          if (type == "image_url" || type == "input_image" || type == "image") {
+            FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "IMAGE input is not supported by model task 'coding'");
+          }
+
+          if (type == "input_audio" || type == "audio") {
+            FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, "AUDIO input is not supported by model task 'coding'");
+          }
+        }
+      }
+    }
+
     auto chat_request = request_json.get<ChatCompletionRequest>();
     prepared->json_message_count = TelemetryInternal::CountParsedJsonMessages(request_json);
     chat_completions::ApplyCatalogDefaults(chat_request, model_info.model_settings);

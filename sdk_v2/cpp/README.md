@@ -22,13 +22,16 @@ and streaming across languages, see [Inference with the Foundry Local SDK](../IN
 
 - **Model catalog** -- discover model aliases, variants, cached models, and loaded models
 - **Model lifecycle** -- download, load, unload, remove, and register local model assets
-- **Chat** -- stateful chat sessions with streaming callbacks and per-request settings
+- **Chat** -- stateful chat sessions, including text-only `coding` models, with streaming and per-request settings
 - **Tool calling** -- session-scoped and request-scoped tool definitions, plus typed tool call/result items
 - **Embeddings** -- single and batch `std::vector<float>` helpers
 - **Audio** -- offline and real-time streaming audio transcription
 - **Execution providers** -- discover, download, and register hardware acceleration on demand
 - **Embedded web service** -- optionally expose an OpenAI-compatible local endpoint
 - **C API** -- a stable ABI for other language bindings and low-level integrations
+
+Models with task `coding` use `ChatSession`. See [coding models](../INFERENCING.md#coding-models) for
+capabilities, registration, and compatibility considerations.
 
 ## Install From NuGet
 
