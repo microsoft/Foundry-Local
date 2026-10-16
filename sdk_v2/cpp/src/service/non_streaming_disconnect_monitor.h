@@ -70,21 +70,36 @@ class NonStreamingDisconnectMonitor {
  private:
   static bool PeerDisconnected(oatpp::v_io_handle handle) {
     // A FIN only closes the peer's sending direction; HTTP clients may still be waiting for the response.
-    // SO_ERROR detects transport failures, including resets behind unread input, without consuming request bytes.
-    int error = 0;
 #ifdef _WIN32
-    int length = sizeof(error);
-    if (::getsockopt(static_cast<SOCKET>(handle), SOL_SOCKET, SO_ERROR,
-                     reinterpret_cast<char*>(&error), &length) == SOCKET_ERROR) {
+    // Winsock reports a reset through recv even when SO_ERROR is zero. Readability makes the peek nonblocking.
+    const auto socket = static_cast<SOCKET>(handle);
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(socket, &readable);
+    timeval timeout{};
+    const int ready = ::select(0, &readable, nullptr, nullptr, &timeout);
+    if (ready == SOCKET_ERROR) {
       return ::WSAGetLastError() != WSAEINTR;
     }
+    if (ready == 0) {
+      return false;
+    }
+
+    char byte;
+    if (::recv(socket, &byte, 1, MSG_PEEK) == SOCKET_ERROR) {
+      const int error = ::WSAGetLastError();
+      return error != WSAEWOULDBLOCK && error != WSAEINTR;
+    }
+    return false;
 #else
+    // SO_ERROR detects resets behind unread input without consuming request bytes.
+    int error = 0;
     socklen_t length = sizeof(error);
     if (::getsockopt(static_cast<int>(handle), SOL_SOCKET, SO_ERROR, &error, &length) < 0) {
       return errno != EINTR;
     }
-#endif
     return error != 0;
+#endif
   }
 
   std::shared_ptr<oatpp::network::tcp::Connection> tcp_;

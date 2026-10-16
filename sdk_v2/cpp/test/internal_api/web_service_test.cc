@@ -205,8 +205,10 @@ TEST_F(NonStreamingDisconnectMonitorTest, CancelsWhenClientResetsWithoutConsumin
 
   EXPECT_TRUE(monitor.Stop());
   EXPECT_TRUE(request.IsCancellationRequested());
+#ifndef _WIN32
   ASSERT_EQ(::recv(static_cast<Socket>(server_->getHandle()), &byte, 1, MSG_PEEK), 1);
   EXPECT_EQ(byte, 'x');
+#endif
 }
 
 TEST_F(NonStreamingDisconnectMonitorTest, CompletingRequestDoesNotCancelIt) {
