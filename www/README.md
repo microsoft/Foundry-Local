@@ -53,6 +53,7 @@ npm run dev        # Using npm
 | `bun run preview` / `npm run preview` | Preview production build locally |
 | `bun run check` / `npm run check` | Run Svelte type checking |
 | `bun run check:watch` / `npm run check:watch` | Run type checking in watch mode |
+| `bun run test:cli` / `npm run test:cli` | Verify latest CLI release selection and platform download links |
 | `bun run format` / `npm run format` | Format code with Prettier |
 | `bun run lint` / `npm run lint` | Check code formatting |
 

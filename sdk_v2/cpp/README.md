@@ -1,10 +1,16 @@
-# Foundry Local C++ SDK (v2)
+# Foundry Local C and C++ SDK (v2)
 
 The Foundry Local C++ SDK runs AI models locally through the Foundry Local engine. It
 provides a header-only, RAII-style C++17 wrapper over the stable C ABI for catalog
 access, model lifecycle management, chat, tool calling, embeddings, audio
 transcription, execution-provider management, and the optional OpenAI-compatible web
 service.
+
+C and C++ are supported application interfaces to the same native runtime that powers
+the C#, JavaScript, Python, and Rust bindings. C applications use the
+[public C API](include/foundry_local/foundry_local_c.h) directly; C++ applications can
+use the [C++ wrapper](include/foundry_local/foundry_local_cpp.h). Neither requires a
+separate server process.
 
 The SDK implementation builds as C++20, while applications that consume the public
 wrapper need only C++17 or newer.
@@ -24,7 +30,45 @@ and streaming across languages, see [Inference with the Foundry Local SDK](../IN
 - **Embedded web service** -- optionally expose an OpenAI-compatible local endpoint
 - **C API** -- a stable ABI for other language bindings and low-level integrations
 
-## Prerequisites
+## Install From NuGet
+
+**You do not need to build Foundry Local from source.** Restore the published
+[`Microsoft.AI.Foundry.Local.Runtime`](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local.Runtime)
+package and its dependencies with the NuGet CLI:
+
+```bash
+nuget install Microsoft.AI.Foundry.Local.Runtime -OutputDirectory packages
+```
+
+The Runtime package contains the public C/C++ headers and prebuilt native libraries.
+It is also the native dependency of the `Microsoft.AI.Foundry.Local` C# SDK package.
+Install the Runtime package directly for C and C++ to avoid the managed SDK dependencies.
+Neither C nor C++ applications need a .NET runtime to use the native libraries.
+
+After restoring the packages:
+
+| Asset | Location |
+|---|---|
+| C API and C++17 wrapper headers | `packages/Microsoft.AI.Foundry.Local.Runtime.<version>/build/native/include/` |
+| Foundry Local native library | `packages/Microsoft.AI.Foundry.Local.Runtime.<version>/runtimes/<rid>/native/` |
+| ONNX Runtime and GenAI dependencies | Matching native assets in the restored `Microsoft.ML.OnnxRuntime` and `Microsoft.ML.OnnxRuntimeGenAI.Foundry` packages |
+
+Choose the RID for your application's operating system and architecture:
+`win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, or `osx-arm64`.
+Add the header directory to your compiler's include path. On Windows, link
+`foundry_local.lib`; on Linux, link `libfoundry_local.so`; on macOS, link
+`libfoundry_local.dylib`. Copy the matching native runtime files and their dependency
+libraries beside your executable or into its loader search path. Keep the restored
+package versions together; do not mix headers and native libraries from different
+releases.
+
+See [Use In Your Project](#use-in-your-project) for a CMake example,
+[Quick Start](#quick-start) for C++, and [C API](#c-api) for C.
+
+## Source Build Prerequisites
+
+The following tools are needed only when developing or customizing the native SDK,
+not when consuming the published NuGet packages.
 
 - CMake 3.20 or newer
 - Python 3.10 or newer to run `build.py`
@@ -86,6 +130,9 @@ ELF checks inspect external definitions only: local symbols retained in `.dynsym
 by GCC compatibility objects are not public exports.
 
 ## Build From Source
+
+Building from source is optional. For application development, use the
+[published NuGet packages](#install-from-nuget) instead.
 
 From this directory:
 
@@ -278,27 +325,58 @@ when they leave scope.
 
 ## Use In Your Project
 
-The public wrapper is header-only. Add `include/` to your header search path and link
-your executable to `foundry_local`:
+The public wrapper is header-only. After [installing from NuGet](#install-from-nuget),
+point CMake at the restored Runtime package and your application's RID, and link
+your executable to the packaged native library:
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
 project(my_foundry_app LANGUAGES CXX)
 
+set(FOUNDRY_LOCAL_RUNTIME_DIR "" CACHE PATH "Restored Microsoft.AI.Foundry.Local.Runtime.<version> directory")
+set(FOUNDRY_LOCAL_RID "linux-x64" CACHE STRING "Target NuGet runtime identifier")
+find_library(FOUNDRY_LOCAL_LIBRARY
+    NAMES foundry_local
+    PATHS "${FOUNDRY_LOCAL_RUNTIME_DIR}/runtimes/${FOUNDRY_LOCAL_RID}/native"
+    NO_DEFAULT_PATH REQUIRED)
+
 add_executable(my_foundry_app main.cc)
 target_compile_features(my_foundry_app PRIVATE cxx_std_17)
-target_include_directories(my_foundry_app PRIVATE /path/to/foundry-local/sdk_v2/cpp/include)
-target_link_libraries(my_foundry_app PRIVATE /path/to/foundry-local.dll-or-library)
+target_include_directories(my_foundry_app PRIVATE "${FOUNDRY_LOCAL_RUNTIME_DIR}/build/native/include")
+target_link_libraries(my_foundry_app PRIVATE "${FOUNDRY_LOCAL_LIBRARY}")
 ```
 
 On Windows, place `foundry_local.dll`, `onnxruntime.dll`, `onnxruntime-genai.dll`, and
-the other files from the SDK build output beside your executable. On Linux and macOS,
+the other native runtime dependencies from the restored packages beside your executable. On Linux and macOS,
 place `libfoundry_local` and its neighboring runtime libraries beside the executable or
 in a loader search path. The shared library uses `$ORIGIN` on Linux and `@loader_path` on
 macOS to locate co-located dependencies.
 
-For a lower-level integration or another language binding, include
-`foundry_local/foundry_local_c.h` and use the versioned C API function tables instead.
+### C API
+
+For a C application, a lower-level integration, or another language binding, include
+[`foundry_local/foundry_local_c.h`](include/foundry_local/foundry_local_c.h) and link the
+same `foundry_local` shared library. Use the [NuGet installation instructions](#install-from-nuget)
+above to restore the prebuilt native library, matching headers, and runtime dependencies.
+
+Call `FoundryLocalGetApi(FOUNDRY_LOCAL_API_VERSION)` to obtain the root `flApi` function
+table. Check for a null pointer, which indicates that the library does not support the
+requested API version. The root table exposes manager operations and accessors such as
+`GetConfigurationApi()`, `GetCatalogApi()`, `GetModelApi()`, `GetInferenceApi()`, and
+`GetItemApi()` for configuration, catalog access, model management, and inference.
+
+The C API uses opaque handles and explicit ownership rather than C++ classes:
+
+- Check the returned `flStatus*` from status-returning calls. A null status means
+  success; otherwise inspect `Status_GetErrorCode()` and `Status_GetErrorMessage()`,
+  then call `Status_Release()`.
+- Release owned handles with their corresponding `*_Release` function. Borrowed
+  pointers and views remain valid only for the lifetime documented in the header.
+- Follow the lifetime and callback ownership contracts documented on each function
+  in the public C header. The C++ wrapper automates handle cleanup with RAII.
+
+The C API exposes chat, tool calling, embeddings, audio transcription, and the same
+model and execution-provider lifecycle used by the C++ wrapper.
 
 ## Common Workflows
 
