@@ -112,6 +112,34 @@ required runtime directories when using it. It is not needed solely for the x64 
 Foundry Local leaves runtime dependency loading to ORT and GenAI. On Linux, use the
 system loader configuration or `LD_LIBRARY_PATH`.
 
+## Clearing a Model Cache
+
+Use `Model::RemoveFromCache()` to clear a completed, interrupted, or corrupted download.
+It does not require `IsCached()` to return true. Unload the model first and stop any active
+downloads; removal rejects loaded models and conflicting downloads. After successful
+removal, the model handle reports `IsCached() == false` and its path is cleared.
+Removal on the same handle is rejected until an active download has finished its
+callbacks and published its cached state, including cache-hit downloads.
+Externally registered models must be unregistered instead; their files are not deleted.
+Applications sharing a cache must coordinate removal with other instances using the
+model. The download lock serializes file mutations, but does not protect cache-hit
+reads or models loaded in another process.
+
+`GetPath()` returns the inference directory, which may be a revision subdirectory.
+Do not delete that directory manually: download markers and other revisions can live
+above it. Removal clears the model's cache root, including payloads, inference metadata,
+`download.tmp`, blob resume sidecars, and legacy progress markers. An empty root may
+remain for download-lock safety; it is not considered cached. Shared catalog metadata
+and other models are retained.
+
+For scanner-discovered locations outside the standard layout, removal also recognizes a
+parent containing only numeric revision directories (`v2`, `v3`, etc.) and download
+markers or root-level `inference_model.json`. Matching root metadata can establish
+ownership without download markers; corrupt metadata requires a marker. Removal locks
+the parent before inspecting ownership and retains that lock even if unrelated entries
+or another model's metadata restrict deletion to the discovered inference directory.
+It never expands to the cache root or across unrelated parent entries.
+
 ## Native Export Isolation
 
 The shared library exports only `FoundryLocalGetApi` and `FoundryLocalGetVersionString`.
