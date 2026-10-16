@@ -195,10 +195,23 @@ test('C and C++ selectors provide package installation and complete native examp
 	}
 
 	assert.match(installCommand, /flex flex-wrap justify-center/);
-	assert.match(installCommand, /#install-from-nuget/);
-	assert.match(installCommand, /Combine steps 2 and 3 into one source file/);
+	assert.doesNotMatch(installCommand, /Combine steps 2 and 3|Runtime package's|#if isNative/);
 	assert.doesNotMatch(installCommand, /#build-from-source/);
 	assert.doesNotMatch(dropdown, /Build from source/);
+});
+
+test('quickstarts display and copy one complete example instead of separate code fragments', () => {
+	const installCommand = readSource('../src/lib/components/install-command.svelte');
+
+	assert.match(
+		installCommand,
+		/raw: `\$\{setupSnippets\[activeTab\]\.raw\}\\n\\n\$\{inferenceSnippets\[activeTab\]\.raw\}`/
+	);
+	assert.match(installCommand, /navigator\.clipboard\.writeText\(currentExample\.raw\)/);
+	assert.match(installCommand, /aria-label="Copy complete example"/);
+	assert.match(installCommand, /aria-label="Reveal complete example"/);
+	assert.match(installCommand, /\{@html currentExample\.html\}/);
+	assert.doesNotMatch(installCommand, /Copy model setup|Copy inference call|revealedStep/);
 });
 
 test('ModelDetailsModal describes Copy ID buttons with visible model IDs', () => {

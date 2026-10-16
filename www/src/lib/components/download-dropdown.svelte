@@ -115,7 +115,8 @@
 			label: 'Rust SDK',
 			icon: RustIcon,
 			crossPlatformId: 'rust-cross-platform',
-			crossPlatformCommand: 'cargo add foundry-local-sdk'
+			crossPlatformCommand:
+				'cargo add foundry-local-sdk tokio --features tokio/macros,tokio/rt-multi-thread'
 		}
 	];
 
