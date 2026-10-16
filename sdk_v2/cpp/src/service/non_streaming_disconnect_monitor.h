@@ -18,10 +18,8 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
-#include <mstcpip.h>
 #else
 #include <cerrno>
-#include <poll.h>
 #include <sys/socket.h>
 #endif
 
@@ -39,10 +37,8 @@ class NonStreamingDisconnectMonitor {
     thread_ = std::jthread([this](std::stop_token stop) {
       while (!stop.stop_requested()) {
         if (PeerDisconnected(tcp_->getHandle())) {
-          if (!stop.stop_requested()) {
-            request_.CancelCurrentOrNext();
-            disconnected_.store(true);
-          }
+          request_.CancelCurrentOrNext();
+          disconnected_.store(true);
           return;
         }
 
@@ -73,66 +69,22 @@ class NonStreamingDisconnectMonitor {
 
  private:
   static bool PeerDisconnected(oatpp::v_io_handle handle) {
+    // A FIN only closes the peer's sending direction; HTTP clients may still be waiting for the response.
+    // SO_ERROR detects transport failures, including resets behind unread input, without consuming request bytes.
+    int error = 0;
 #ifdef _WIN32
-    const auto socket = static_cast<SOCKET>(handle);
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(socket, &readable);
-    timeval timeout{};
-    const int ready = ::select(0, &readable, nullptr, nullptr, &timeout);
-    if (ready == SOCKET_ERROR) {
+    int length = sizeof(error);
+    if (::getsockopt(static_cast<SOCKET>(handle), SOL_SOCKET, SO_ERROR,
+                     reinterpret_cast<char*>(&error), &length) == SOCKET_ERROR) {
       return ::WSAGetLastError() != WSAEINTR;
     }
-    if (ready == 0) {
-      return false;
-    }
-
-    char byte;
-    const int received = ::recv(socket, &byte, 1, MSG_PEEK);
-    if (received == 0) {
-      return true;
-    }
-    if (received == SOCKET_ERROR) {
-      return ::WSAGetLastError() != WSAEWOULDBLOCK && ::WSAGetLastError() != WSAEINTR;
-    }
-
-    // An unread pipelined byte masks EOF from recv(MSG_PEEK); TCP state still reports the peer's FIN.
-    DWORD version = 0;
-    DWORD bytes_returned = 0;
-    TCP_INFO_v0 info{};
-    if (::WSAIoctl(socket, SIO_TCP_INFO, &version, sizeof(version), &info, sizeof(info),
-                   &bytes_returned, nullptr, nullptr) == SOCKET_ERROR) {
-      return ::WSAGetLastError() != WSAEINTR;
-    }
-    return info.State != TCPSTATE_ESTABLISHED;
 #else
-    pollfd descriptor{static_cast<int>(handle), POLLIN, 0};
-#ifdef POLLRDHUP
-    descriptor.events |= POLLRDHUP;
-#endif
-    const int ready = ::poll(&descriptor, 1, 0);
-    if (ready < 0) {
+    socklen_t length = sizeof(error);
+    if (::getsockopt(static_cast<int>(handle), SOL_SOCKET, SO_ERROR, &error, &length) < 0) {
       return errno != EINTR;
     }
-    if (ready == 0) {
-      return false;
-    }
-
-    if (descriptor.revents & (POLLHUP | POLLERR | POLLNVAL
-#ifdef POLLRDHUP
-                              | POLLRDHUP
 #endif
-                              )) {
-      return true;
-    }
-    if (!(descriptor.revents & POLLIN)) {
-      return false;
-    }
-
-    char byte;
-    const int received = ::recv(descriptor.fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
-    return received == 0 || (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
-#endif
+    return error != 0;
   }
 
   std::shared_ptr<oatpp::network::tcp::Connection> tcp_;

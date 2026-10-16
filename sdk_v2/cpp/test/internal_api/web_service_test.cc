@@ -39,6 +39,7 @@
 
 #ifndef _WIN32
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
@@ -133,26 +134,70 @@ std::string TestHttpDelete(const std::string& url, const std::string& user_agent
 
 }  // namespace
 
-#ifndef _WIN32
-TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithoutConsumingBufferedInput) {
-  int sockets[2];
-  ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
-  auto connection = std::make_shared<oatpp::network::tcp::Connection>(sockets[0]);
+class NonStreamingDisconnectMonitorTest : public ::testing::Test {
+ protected:
+  using Socket = decltype(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+
+  void SetUp() override {
+#ifdef _WIN32
+    WSADATA winsock{};
+    ASSERT_EQ(::WSAStartup(MAKEWORD(2, 2), &winsock), 0);
+#endif
+    const auto listener_socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ASSERT_NE(listener_socket, static_cast<Socket>(-1));
+    auto listener = std::make_shared<oatpp::network::tcp::Connection>(listener_socket);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    ASSERT_EQ(::bind(listener_socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
+    ASSERT_EQ(::listen(listener_socket, 1), 0);
+#ifdef _WIN32
+    int address_length = sizeof(address);
+#else
+    socklen_t address_length = sizeof(address);
+#endif
+    ASSERT_EQ(::getsockname(listener_socket, reinterpret_cast<sockaddr*>(&address), &address_length), 0);
+    const auto client_socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ASSERT_NE(client_socket, static_cast<Socket>(-1));
+    client_ = std::make_shared<oatpp::network::tcp::Connection>(client_socket);
+    ASSERT_EQ(::connect(client_socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
+    const auto server_socket = ::accept(listener_socket, nullptr, nullptr);
+    ASSERT_NE(server_socket, static_cast<Socket>(-1));
+    server_ = std::make_shared<oatpp::network::tcp::Connection>(server_socket);
+  }
+
+  void TearDown() override {
+    server_.reset();
+    client_.reset();
+#ifdef _WIN32
+    ::WSACleanup();
+#endif
+  }
+
+  void ResetClient() {
+    linger abortive_close{1, 0};
+    ASSERT_EQ(::setsockopt(static_cast<Socket>(client_->getHandle()), SOL_SOCKET, SO_LINGER,
+                           reinterpret_cast<const char*>(&abortive_close), sizeof(abortive_close)),
+              0);
+    client_.reset();
+  }
+
+  std::shared_ptr<oatpp::network::tcp::Connection> client_;
+  std::shared_ptr<oatpp::network::tcp::Connection> server_;
+};
+
+TEST_F(NonStreamingDisconnectMonitorTest, CancelsWhenClientResetsWithoutConsumingBufferedInput) {
   Request request;
   ASSERT_TRUE(request.TryBegin());
-  NonStreamingDisconnectMonitor monitor(connection, request);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(150));
-  EXPECT_FALSE(request.IsCancellationRequested());
-
-  ASSERT_EQ(::send(sockets[1], "x", 1, 0), 1);
+  NonStreamingDisconnectMonitor monitor(server_, request);
+  ASSERT_EQ(::send(static_cast<Socket>(client_->getHandle()), "x", 1, 0), 1);
   std::this_thread::sleep_for(std::chrono::milliseconds(150));
   EXPECT_FALSE(request.IsCancellationRequested());
   char byte = 0;
-  ASSERT_EQ(::recv(sockets[0], &byte, 1, MSG_PEEK | MSG_DONTWAIT), 1);
+  ASSERT_EQ(::recv(static_cast<Socket>(server_->getHandle()), &byte, 1, MSG_PEEK), 1);
   EXPECT_EQ(byte, 'x');
 
-  ASSERT_EQ(::shutdown(sockets[1], SHUT_WR), 0);
+  ResetClient();
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
   while (!request.IsCancellationRequested() && std::chrono::steady_clock::now() < deadline) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -160,74 +205,56 @@ TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithoutConsumingB
 
   EXPECT_TRUE(monitor.Stop());
   EXPECT_TRUE(request.IsCancellationRequested());
-  ::close(sockets[1]);
+  ASSERT_EQ(::recv(static_cast<Socket>(server_->getHandle()), &byte, 1, MSG_PEEK), 1);
+  EXPECT_EQ(byte, 'x');
 }
 
-TEST(NonStreamingDisconnectMonitorTest, CompletingRequestDoesNotCancelIt) {
-  int sockets[2];
-  ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
-  auto connection = std::make_shared<oatpp::network::tcp::Connection>(sockets[0]);
+TEST_F(NonStreamingDisconnectMonitorTest, CompletingRequestDoesNotCancelIt) {
   Request request;
-  NonStreamingDisconnectMonitor monitor(connection, request);
-
+  NonStreamingDisconnectMonitor monitor(server_, request);
   EXPECT_FALSE(monitor.Stop());
-  ::close(sockets[1]);
+  ResetClient();
+  EXPECT_FALSE(monitor.Stop());
   EXPECT_FALSE(request.IsCancellationRequested());
 }
 
-TEST(NonStreamingDisconnectMonitorTest, StopDetectsDisconnectAfterLastWorkerPoll) {
-  int sockets[2];
-  ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets), 0);
-  auto connection = std::make_shared<oatpp::network::tcp::Connection>(sockets[0]);
+TEST_F(NonStreamingDisconnectMonitorTest, StopDetectsResetAfterLastWorkerPoll) {
   Request request;
   ASSERT_TRUE(request.TryBegin());
-  NonStreamingDisconnectMonitor monitor(connection, request);
-
-  ASSERT_EQ(::shutdown(sockets[1], SHUT_WR), 0);
+  NonStreamingDisconnectMonitor monitor(server_, request);
+  ResetClient();
+  fd_set readable;
+  FD_ZERO(&readable);
+  const auto server_socket = static_cast<Socket>(server_->getHandle());
+  FD_SET(server_socket, &readable);
+  timeval timeout{2, 0};
+  ASSERT_EQ(::select(static_cast<int>(server_socket) + 1, &readable, nullptr, nullptr, &timeout), 1);
   EXPECT_TRUE(monitor.Stop());
   EXPECT_TRUE(request.IsCancellationRequested());
-  ::close(sockets[1]);
 }
-#else
-TEST(NonStreamingDisconnectMonitorTest, CancelsWhenClientClosesWithUnreadBufferedInput) {
-  WSADATA winsock{};
-  ASSERT_EQ(::WSAStartup(MAKEWORD(2, 2), &winsock), 0);
-  const SOCKET listener = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  ASSERT_NE(listener, INVALID_SOCKET);
-  sockaddr_in address{};
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  ASSERT_EQ(::bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
-  ASSERT_EQ(::listen(listener, 1), 0);
-  int address_length = sizeof(address);
-  ASSERT_EQ(::getsockname(listener, reinterpret_cast<sockaddr*>(&address), &address_length), 0);
 
-  const SOCKET client = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  ASSERT_NE(client, INVALID_SOCKET);
-  ASSERT_EQ(::connect(client, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
-  const SOCKET server = ::accept(listener, nullptr, nullptr);
-  ASSERT_NE(server, INVALID_SOCKET);
-  {
-    auto connection = std::make_shared<oatpp::network::tcp::Connection>(server);
-    Request request;
-    ASSERT_TRUE(request.TryBegin());
-    NonStreamingDisconnectMonitor monitor(connection, request);
-    ASSERT_EQ(::send(client, "x", 1, 0), 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-    EXPECT_FALSE(request.IsCancellationRequested());
+class NonStreamingHalfCloseTest : public NonStreamingDisconnectMonitorTest,
+                                  public ::testing::WithParamInterface<bool> {};
 
-    ASSERT_EQ(::shutdown(client, SD_SEND), 0);
-    EXPECT_TRUE(monitor.Stop());
-    EXPECT_TRUE(request.IsCancellationRequested());
-    char byte = 0;
-    ASSERT_EQ(::recv(server, &byte, 1, MSG_PEEK), 1);
-    EXPECT_EQ(byte, 'x');
+TEST_P(NonStreamingHalfCloseTest, PreservesResponseWithOrWithoutBufferedInput) {
+  Request request;
+  ASSERT_TRUE(request.TryBegin());
+  NonStreamingDisconnectMonitor monitor(server_, request);
+  if (GetParam()) {
+    ASSERT_EQ(::send(static_cast<Socket>(client_->getHandle()), "x", 1, 0), 1);
   }
-  ::closesocket(client);
-  ::closesocket(listener);
-  ::WSACleanup();
-}
+
+#ifdef _WIN32
+  ASSERT_EQ(::shutdown(static_cast<Socket>(client_->getHandle()), SD_SEND), 0);
+#else
+  ASSERT_EQ(::shutdown(static_cast<Socket>(client_->getHandle()), SHUT_WR), 0);
 #endif
+  std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  EXPECT_FALSE(monitor.Stop());
+  EXPECT_FALSE(request.IsCancellationRequested());
+}
+
+INSTANTIATE_TEST_SUITE_P(Tcp, NonStreamingHalfCloseTest, ::testing::Bool());
 
 // ========================================================================
 // Test fixture — starts a real web service on an ephemeral port
@@ -1154,6 +1181,47 @@ TEST_F(WebServiceTest, LocalStoredResponsesRemainIsolatedFromPublicRoutes) {
 }
 
 #ifndef _WIN32
+TEST_F(WebServiceTest, HalfClosedNonStreamingChatConnectionReceivesCompletion) {
+  const auto load_result = Get(std::string("/models/load/") + kResponseStoreTestModelAlias);
+  ASSERT_EQ(load_result["status"], "loaded") << load_result.dump(2);
+  const int client = ::socket(AF_INET, SOCK_STREAM, 0);
+  ASSERT_GE(client, 0);
+  auto connection = std::make_shared<oatpp::network::tcp::Connection>(client);
+  sockaddr_in address{};
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  address.sin_port = htons(static_cast<uint16_t>(std::stoi(base_url_.substr(base_url_.rfind(':') + 1))));
+  ASSERT_EQ(::connect(client, reinterpret_cast<sockaddr*>(&address), sizeof(address)), 0);
+  timeval timeout{5, 0};
+  ASSERT_EQ(::setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)), 0);
+  const json body = {
+      {"model", std::string(kResponseStoreTestModelAlias) + ":1"},
+      {"messages", json::array({{{"role", "user"}, {"content", "Hello"}}})},
+      {"max_tokens", 4},
+  };
+  const std::string payload = body.dump();
+  const std::string message =
+      "POST /v1/chat/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+      "Content-Type: application/json\r\nContent-Length: " +
+      std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
+  ASSERT_EQ(::send(client, message.data(), message.size(), 0), static_cast<ssize_t>(message.size()));
+  ASSERT_EQ(::shutdown(client, SHUT_WR), 0);
+  std::string response;
+  char buffer[4096];
+  ssize_t received;
+  while ((received = ::recv(client, buffer, sizeof(buffer), 0)) > 0) {
+    response.append(buffer, static_cast<size_t>(received));
+  }
+
+  EXPECT_EQ(received, 0) << "Timed out reading the completion";
+  EXPECT_EQ(response.find("HTTP/1.1 200 "), 0u) << response;
+  const auto body_start = response.find("\r\n\r\n");
+  ASSERT_NE(body_start, std::string::npos) << response;
+  EXPECT_TRUE(json::parse(response.substr(body_start + 4)).contains("choices")) << response;
+  const auto unload_result = Get(std::string("/models/unload/") + kResponseStoreTestModelAlias);
+  EXPECT_EQ(unload_result["status"], "unloaded") << unload_result.dump(2);
+}
+
 TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndReleasesSession) {
   const auto load_result = Get(std::string("/models/load/") + kResponseStoreTestModelAlias);
   ASSERT_EQ(load_result["status"], "loaded") << load_result.dump(2);
@@ -1173,9 +1241,10 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
       {"max_tokens", 512},
   };
   const std::string payload = body.dump();
-  const std::string message = "POST /v1/chat/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                              "Content-Type: application/json\r\nContent-Length: " +
-                              std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
+  const std::string message =
+      "POST /v1/chat/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+      "Content-Type: application/json\r\nContent-Length: " +
+      std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
   ASSERT_EQ(::send(client, message.data(), message.size(), 0), static_cast<ssize_t>(message.size()));
 
   const auto start_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -1183,7 +1252,8 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   const bool started = session_manager_->ActiveCount() > 0;
-  ::shutdown(client, SHUT_RDWR);
+  linger abortive_close{1, 0};
+  ASSERT_EQ(::setsockopt(client, SOL_SOCKET, SO_LINGER, &abortive_close, sizeof(abortive_close)), 0);
   ::close(client);
   ASSERT_TRUE(started) << "The non-streaming request did not begin inference";
 
