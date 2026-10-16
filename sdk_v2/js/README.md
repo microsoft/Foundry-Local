@@ -311,6 +311,9 @@ await localCatalog.unregisterModel(model.info.id);
 Model IDs use `<name>:<version>`. `registerModel()` and `unregisterModel()` dispatch file work off the event loop.
 Explicit `registerModelSync()` and `unregisterModelSync()` variants are available for legacy synchronous workflows.
 
+Models registered with task `coding` use the existing text-only `ChatSession` interface. See
+[coding models](../INFERENCING.md#coding-models) for capability and compatibility details.
+
 ---
 
 ## 5. Testing
