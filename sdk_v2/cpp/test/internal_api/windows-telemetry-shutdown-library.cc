@@ -15,20 +15,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
 #include <string_view>
-#include <thread>
-
-namespace fl {
-
-struct WindowsTelemetryShutdownTestPeer {
-  static std::mutex& ManagerMutex() { return Manager::s_mutex_; }
-  static std::shared_mutex& TelemetryMutex(OneDsTelemetry& telemetry) { return telemetry.mutex_; }
-};
-
-}  // namespace fl
 
 namespace {
 namespace sdk = Microsoft::Applications::Events;
@@ -68,7 +56,6 @@ class MockLogManager final : public sdk::NullLogManager {
 
 struct State {
   HANDLE verified = nullptr;
-  HANDLE lock_held = nullptr;
   bool process_exit = false;
   int creations = 0;
   int releases = 0;
@@ -96,24 +83,11 @@ struct Verification {
     CheckCleanup();
     if (!SetEvent(state->verified)) Fail("cannot signal verified DLL teardown");
     if (!state->process_exit) {
-      CloseHandle(state->lock_held);
       delete state;
       state = nullptr;
     }
   }
 } verification;
-
-template <typename Mutex>
-void HoldUntilProcessExit(Mutex& mutex) {
-  std::thread([&mutex] {
-    std::unique_lock lock(mutex);
-    if (!SetEvent(state->lock_held)) Fail("cannot signal held teardown lock");
-    Sleep(INFINITE);
-  }).detach();
-  if (WaitForSingleObject(state->lock_held, 5000) != WAIT_OBJECT_0) {
-    Fail("test thread did not acquire the teardown lock");
-  }
-}
 
 }  // namespace
 
@@ -150,14 +124,11 @@ extern "C" __declspec(dllexport) void WindowsTelemetryShutdownTest(const char* c
   state = new State;
   state->verified = verified;
   state->process_exit = std::string_view{mode} == "process-exit";
-  state->lock_held = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-  if (state->lock_held == nullptr) Fail("cannot create fixture event");
   state->uploader = std::make_unique<MockLogManager>(state->process_exit);
 
   const auto home = fl::TelemetryEnvironment::GetEnv("TELEMETRY_TEST_HOME");
   if (home.empty()) Fail("expected an isolated test home");
   const bool manager = std::string_view{component} == "manager";
-  fl::OneDsTelemetry* telemetry = nullptr;
   if (manager) {
     fl::Configuration config;
     config.app_name = "windows-telemetry-shutdown";
@@ -168,19 +139,13 @@ extern "C" __declspec(dllexport) void WindowsTelemetryShutdownTest(const char* c
   } else {
     // Register the owner after construction initializes the SDK's static dependencies, just like Manager.
     static auto owned = std::make_unique<fl::OneDsTelemetry>("windows-telemetry-shutdown", state->logger);
-    telemetry = owned.get();
+    auto* telemetry = owned.get();
     if (!telemetry->IsUploadEnabled()) Fail("standalone production telemetry was not enabled");
     telemetry->RecordAction(fl::Action::kCoreInitialize, fl::ActionStatus::kSuccess, {}, 0);
     if (std::string_view{mode} == "normal-destruction") owned.reset();
   }
 
-  if (state->process_exit) {
-    if (manager) {
-      HoldUntilProcessExit(fl::WindowsTelemetryShutdownTestPeer::ManagerMutex());
-    } else {
-      HoldUntilProcessExit(fl::WindowsTelemetryShutdownTestPeer::TelemetryMutex(*telemetry));
-    }
-  } else if (std::string_view{mode} == "normal-destruction") {
+  if (std::string_view{mode} == "normal-destruction") {
     if (manager) fl::Manager::Destroy();
     CheckCleanup();
     if (!SetEvent(verified)) Fail("cannot signal verified ordinary destruction");

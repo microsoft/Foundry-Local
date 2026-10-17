@@ -219,9 +219,9 @@ holds encoding until process exit after a CI-suppressed first Manager.
 Windows also runs five DLL lifecycle cases for the Manager owner and standalone
 telemetry. A mock provider avoids the real SDK workers' DLL pinning so the
 fixture can exercise actual `FreeLibrary` teardown. Process-termination cases
-retain a pending mock uploader callback and a lock held by a thread that Windows
-terminates before DLL detach. Normal destruction and explicit `FreeLibrary`
-must each flush, tear down, and release the uploader exactly once. Only Windows
+retain a pending mock uploader callback; they do not access private locks or
+reproduce lock ownership by terminated threads. Normal destruction and explicit
+`FreeLibrary` must each flush, tear down, and release the uploader exactly once. Only Windows
 process termination abandons cleanup; pending telemetry is not flushed there.
 The standalone bridge covers teardown inside `FreeLibrary`; active Manager
 runtime resources can retain the DLL, so Manager coverage explicitly destroys

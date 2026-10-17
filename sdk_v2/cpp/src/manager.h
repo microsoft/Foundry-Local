@@ -113,7 +113,6 @@ class Manager {
 
   // unique_ptr<Manager> needs access to the private destructor for cleanup.
   friend struct std::default_delete<Manager>;
-  friend struct WindowsTelemetryShutdownTestPeer;
 
   // Member ordering matters: C++ destroys in reverse declaration order.
   // Providers (destroyed last) must be declared before consumers (destroyed first).
