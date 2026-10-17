@@ -88,7 +88,7 @@ async function resolveToolCalls(session, request) {
             return collectText(response.output);
         }
 
-        const followUp = new Request().setOptions({ toolChoice: 'none' });
+        const followUp = new Request().setOptions({ toolChoice: 'auto' });
         for (const toolCall of toolCalls) {
             const args = JSON.parse(toolCall.arguments || '{}');
             console.log(`  Tool call: ${toolCall.name}(${JSON.stringify(args)})`);

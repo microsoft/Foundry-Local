@@ -13,6 +13,7 @@ async fn summarize_file(
     system_prompt: &str,
 ) -> anyhow::Result<()> {
     let content = fs::read_to_string(file_path)?;
+    session.undo_turns(session.turn_count()).await?;
     let response = session
         .process_request(Request::from_items(vec![
             Item::system_message(vec![Item::text(system_prompt)]),

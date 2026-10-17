@@ -93,12 +93,11 @@ if (listModels) {
 }
 
 // <model_setup>
-let model = await manager.catalog.getModel(modelIdentifier);
+const allModels = await manager.catalog.getModels();
+const identifier = modelIdentifier.toLowerCase();
+const model = allModels.find((m) => m.alias.toLowerCase() === identifier)
+    ?? allModels.flatMap((m) => m.variants).find((v) => v.id.toLowerCase() === identifier);
 if (!model) {
-    model = await manager.catalog.getModelVariant(modelIdentifier);
-}
-if (!model) {
-    const allModels = await manager.catalog.getModels();
     console.error(`\nModel '${modelIdentifier}' not found in catalog (tried alias and variant id).`);
     console.error(`Available aliases: ${allModels.map((m) => m.alias).join(', ')}`);
     console.error('Run with --list-models to see variant ids.');

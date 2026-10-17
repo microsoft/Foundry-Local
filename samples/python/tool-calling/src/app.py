@@ -67,7 +67,7 @@ def process_tool_calls(session: ChatSession, response) -> str:
             follow_up.set_options(
                 RequestOptions(
                     search=SearchOptions(max_output_tokens=512),
-                    tool_choice=ToolChoice.NONE,
+                    tool_choice=ToolChoice.AUTO,
                 )
             )
             for tool_call in tool_calls:
