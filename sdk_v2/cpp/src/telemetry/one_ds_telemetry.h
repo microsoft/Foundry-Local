@@ -56,6 +56,7 @@ class OneDsTelemetry : public ITelemetry {
   }
 
  private:
+  friend struct WindowsTelemetryShutdownTestPeer;
   struct Impl;
 
   std::shared_lock<std::shared_mutex> LockForLogging(bool require_upload = true) const;
