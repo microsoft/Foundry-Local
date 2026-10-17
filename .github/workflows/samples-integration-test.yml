@@ -46,17 +46,30 @@ jobs:
           pip config set global.extra-index-url https://pypi.org/simple/
           pip config set global.pre true
 
-      - name: Build and install SDK v2 from source
-        working-directory: sdk_v2/python
+      - name: Configure SDK v2 source and install its dependencies
         shell: pwsh
         run: |
-          python -m pip install build
-          if ($LASTEXITCODE -ne 0) { throw "Installing Python build tooling failed" }
-          python -m build --wheel --outdir dist/
-          if ($LASTEXITCODE -ne 0) { throw "Building the Python SDK wheel failed" }
-          $wheel = (Get-ChildItem dist/*.whl | Select-Object -First 1).FullName
-          python -m pip install $wheel
-          if ($LASTEXITCODE -ne 0) { throw "Installing the Python SDK wheel failed" }
+          # Sample import/syntax checks use SDK source; native wheels need the packaging pipeline's C++ artifacts.
+          $source = (Resolve-Path sdk_v2/python/src).Path
+          "PYTHONPATH=$source" >> $env:GITHUB_ENV
+          $dependencies = @'
+          import json
+          import pathlib
+          import tomllib
+
+          metadata = tomllib.loads(pathlib.Path("sdk_v2/python/pyproject.toml").read_text(encoding="utf-8"))
+          versions = json.loads(pathlib.Path("sdk_v2/deps_versions.json").read_text(encoding="utf-8"))
+          for dependency in metadata["project"]["dependencies"]:
+              dependency = dependency.replace(
+                  "onnxruntime==0.0.0", "onnxruntime==" + versions["onnxruntime"]["version"]
+              ).replace(
+                  "onnxruntime-genai-core==0.0.0", "onnxruntime-genai-core==" + versions["onnxruntime-genai"]["version"]
+              )
+              print(dependency)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Reading SDK dependency manifests failed" }
+          python -m pip install @dependencies
+          if ($LASTEXITCODE -ne 0) { throw "Installing Python SDK dependencies failed" }
 
       - name: Import-check Python v2 APIs
         shell: pwsh
@@ -68,8 +81,16 @@ jobs:
         run: |
           Get-ChildItem samples/python/*/requirements.txt -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "Installing dependencies for $($_.Directory.Name)..."
-            python -m pip install -r $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Installing dependencies failed: $($_.Directory.Name)" }
+            # The SDK is supplied by PYTHONPATH, not a published package.
+            $requirements = @(Get-Content $_.FullName | Where-Object {
+              $_.Trim() -and $_ -notmatch '^\s*(#|foundry-local-sdk(?:[<>=!~;\s\[]|$))'
+            })
+            if ($requirements.Count -gt 0) {
+              $manifest = Join-Path $env:RUNNER_TEMP "$($_.Directory.Name)-requirements.txt"
+              $requirements | Set-Content $manifest
+              python -m pip install -r $manifest
+              if ($LASTEXITCODE -ne 0) { throw "Installing dependencies failed: $($_.Directory.Name)" }
+            }
           }
 
       - name: Syntax check Python samples
