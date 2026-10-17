@@ -18,9 +18,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FOUNDRY_PACKAGE_FEED: https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/
-
 jobs:
   # ── Python Samples ──────────────────────────────────────────────────
   python-samples:
@@ -41,21 +38,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Authenticate private Python feed
-        shell: pwsh
-        env:
-          FEED_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
+      - name: Configure pip for Azure Artifacts
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:FEED_TOKEN)) {
-            throw "The AI_FOUNDRY_LOCAL_PAT secret is required to read the private package feed."
-          }
-          $token = [uri]::EscapeDataString($env:FEED_TOKEN)
-          $index = $env:FOUNDRY_PACKAGE_FEED.Replace('https://', "https://AzureDevOps:$token@") + 'pypi/simple/'
-          Write-Output "::add-mask::$index"
-          "PIP_INDEX_URL=$index" >> $env:GITHUB_ENV
-          "PIP_EXTRA_INDEX_URL=" >> $env:GITHUB_ENV
-          "PIP_PRE=1" >> $env:GITHUB_ENV
-          "PIP_NO_INPUT=1" >> $env:GITHUB_ENV
+          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
+          pip config set global.extra-index-url https://pypi.org/simple/
+          pip config set global.pre true
 
       - name: Build and install SDK v2 from source
         working-directory: sdk_v2/python
@@ -123,32 +110,18 @@ jobs:
         with:
           node-version: '20.x'
 
-      - name: Authenticate private npm feed
+      - name: Remove .npmrc (use public registry)
+        working-directory: sdk_v2/js
         shell: pwsh
-        env:
-          FEED_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:FEED_TOKEN)) {
-            throw "The AI_FOUNDRY_LOCAL_PAT secret is required to read the private package feed."
-          }
-          $registry = $env:FOUNDRY_PACKAGE_FEED + 'npm/registry/'
-          $authority = $registry.Replace('https:', '')
-          $password = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($env:FEED_TOKEN))
-          Write-Output "::add-mask::$password"
-          $config = Join-Path $env:RUNNER_TEMP 'samples-feed.npmrc'
-          @(
-            "registry=$registry"
-            "$($authority):username=AzureDevOps"
-            "$($authority):_password=$password"
-            "$($authority):email=unused@example.com"
-          ) | Set-Content $config
-          "npm_config_userconfig=$config" >> $env:GITHUB_ENV
-          "npm_config_registry=$registry" >> $env:GITHUB_ENV
+          if (Test-Path .npmrc) { Remove-Item .npmrc -Force; Write-Host "Removed .npmrc" }
 
       - name: Build SDK v2 TypeScript from source
         working-directory: sdk_v2/js
+        shell: pwsh
         run: |
-          npm install --ignore-scripts
+          npm install --ignore-scripts --registry https://registry.npmjs.org
+          if ($LASTEXITCODE -ne 0) { throw "Installing JavaScript SDK dependencies failed" }
           npm run build:ts
 
       - name: Import-check JS v2 APIs
@@ -167,7 +140,7 @@ jobs:
             # foundry-local-sdk to the in-repo sdk_v2/js source via file: path.
             Push-Location $dir.FullName
             if (Test-Path "package.json") {
-              npm install --ignore-scripts
+              npm install --ignore-scripts --registry https://registry.npmjs.org
               if ($LASTEXITCODE -ne 0) {
                 Pop-Location
                 throw "Dependency installation failed: $name"
@@ -237,36 +210,13 @@ jobs:
 
       - name: Build C# samples
         shell: pwsh
-        env:
-          FEED_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:FEED_TOKEN)) {
-            throw "The AI_FOUNDRY_LOCAL_PAT secret is required to read the private package feed."
-          }
-          $env:NuGetPackageSourceCredentials_AIFoundryLocal_PublicPackages =
-            "Username=AzureDevOps;Password=$($env:FEED_TOKEN);ValidAuthenticationTypes=Basic"
-          $nugetConfig = Join-Path $env:RUNNER_TEMP 'samples-NuGet.config'
-          @"
-          <?xml version="1.0" encoding="utf-8"?>
-          <configuration>
-            <packageSources>
-              <clear />
-              <add key="AIFoundryLocal_PublicPackages" value="$($env:FOUNDRY_PACKAGE_FEED)nuget/v3/index.json" />
-            </packageSources>
-          </configuration>
-          "@ | Set-Content $nugetConfig
           $failed = @()
           $projects = Get-ChildItem samples/cs -Recurse -Filter "*.csproj"
           foreach ($proj in $projects) {
             $name = $proj.BaseName
             Write-Host "`n=== Building: $name ==="
-            dotnet restore $proj.FullName --configfile $nugetConfig
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "RESTORE FAILED: $name"
-              $failed += $name
-              continue
-            }
-            dotnet build $proj.FullName --no-restore --configuration Debug -warnaserror:CS0618 2>&1
+            dotnet build $proj.FullName --configuration Debug -warnaserror:CS0618 2>&1
             if ($LASTEXITCODE -ne 0) {
               Write-Host "BUILD FAILED: $name"
               $failed += $name
@@ -304,29 +254,21 @@ jobs:
         with:
           workspaces: samples/rust -> target
 
-      - name: Authenticate private Cargo feed
+      - name: Use crates.io directly
         shell: pwsh
-        env:
-          FEED_TOKEN: ${{ secrets.AI_FOUNDRY_LOCAL_PAT }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:FEED_TOKEN)) {
-            throw "The AI_FOUNDRY_LOCAL_PAT secret is required to read the private package feed."
+          # Remove crates-io redirect in SDK (points to Azure Artifacts)
+          $configPath = "sdk_v2/rust/.cargo/config.toml"
+          if (Test-Path $configPath) {
+            Remove-Item $configPath
+            Write-Host "Removed sdk_v2/rust/.cargo/config.toml"
           }
-          $registry = 'sparse+' + $env:FOUNDRY_PACKAGE_FEED + 'Cargo/index/'
-          New-Item -ItemType Directory -Force '.cargo' | Out-Null
-          @"
-          [source.crates-io]
-          replace-with = "AIFoundryLocal_PublicPackages"
-          [source.AIFoundryLocal_PublicPackages]
-          registry = "$registry"
-          [registries.AIFoundryLocal_PublicPackages]
-          index = "$registry"
-          [registry]
-          global-credential-providers = ["cargo:token"]
-          "@ | Set-Content '.cargo/config.toml'
-          $token = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("AzureDevOps:$($env:FEED_TOKEN)"))
-          Write-Output "::add-mask::$token"
-          "CARGO_REGISTRIES_AIFOUNDRYLOCAL_PUBLICPACKAGES_TOKEN=$token" >> $env:GITHUB_ENV
+          # Remove crates-io redirect in samples
+          $configPath = "samples/rust/.cargo/config.toml"
+          if (Test-Path $configPath) {
+            Remove-Item $configPath
+            Write-Host "Removed samples/rust/.cargo/config.toml"
+          }
 
       - name: Build Rust samples workspace
         working-directory: samples/rust
