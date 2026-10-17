@@ -22,6 +22,8 @@ jobs:
   # ── Python Samples ──────────────────────────────────────────────────
   python-samples:
     runs-on: ${{ matrix.platform }}-latest
+    env:
+      PIP_NO_INPUT: '1'
     strategy:
       fail-fast: false
       matrix:
