@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -64,19 +65,59 @@ std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t 
 }
 
 void ValidateCompletedChunks(BlobDownloadState& state, ILogger& logger) {
-  std::ifstream file(state.local_file_path, std::ios::binary);
+  std::vector<int32_t> completed;
+  completed.reserve(static_cast<size_t>(state.completed_count));
   for (int32_t i = 0; i < state.total_chunks; ++i) {
-    if (!state.IsChunkComplete(i)) {
-      continue;
+    if (state.IsChunkComplete(i)) {
+      completed.push_back(i);
+    }
+  }
+
+  if (completed.empty()) {
+    return;
+  }
+
+  // Readers own their streams and contiguous partitions; bitmap updates and logging stay on the caller thread.
+  auto verify_range = [&](size_t begin, size_t end) {
+    std::ifstream file(state.local_file_path, std::ios::binary);
+    std::vector<int32_t> mismatched;
+    for (auto index = begin; index < end; ++index) {
+      const auto chunk = completed[index];
+      const auto offset = static_cast<int64_t>(chunk) * state.chunk_size;
+      const auto digest = HashFileRange(file, offset, std::min<int64_t>(state.chunk_size, state.blob_size - offset));
+      if (!std::equal(digest.begin(), digest.end(), state.chunk_md5[static_cast<size_t>(chunk)].begin())) {
+        mismatched.push_back(chunk);
+      }
     }
 
-    const auto offset = static_cast<int64_t>(i) * state.chunk_size;
-    const auto digest = HashFileRange(file, offset, std::min<int64_t>(state.chunk_size, state.blob_size - offset));
-    if (!std::equal(digest.begin(), digest.end(), state.chunk_md5[static_cast<size_t>(i)].begin())) {
-      logger.Log(LogLevel::Warning, "Model download checksum mismatch in chunk " + std::to_string(i) +
-                                        " of blob '" + state.blob_name + "'; chunk will be downloaded again");
-      state.MarkChunkIncomplete(i);
+    return mismatched;
+  };
+
+  const auto concurrency = std::min<size_t>(
+      {4, std::max(1u, std::thread::hardware_concurrency()), (completed.size() + 3) / 4});
+  std::vector<int32_t> mismatched;
+  if (concurrency == 1) {
+    mismatched = verify_range(0, completed.size());
+  } else {
+    std::vector<std::future<std::vector<int32_t>>> workers;
+    workers.reserve(concurrency);
+    const auto per_worker = (completed.size() + concurrency - 1) / concurrency;
+    for (size_t worker = 0; worker < concurrency; ++worker) {
+      const auto begin = worker * per_worker;
+      workers.push_back(std::async(std::launch::async, verify_range, begin,
+                                   std::min(completed.size(), begin + per_worker)));
     }
+
+    for (auto& worker : workers) {
+      const auto failed = worker.get();
+      mismatched.insert(mismatched.end(), failed.begin(), failed.end());
+    }
+  }
+
+  for (const auto chunk : mismatched) {
+    logger.Log(LogLevel::Warning, "Model download checksum mismatch in chunk " + std::to_string(chunk) +
+                                      " of blob '" + state.blob_name + "'; chunk will be downloaded again");
+    state.MarkChunkIncomplete(chunk);
   }
 }
 
@@ -481,9 +522,21 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       }
     }
 
-    // Release the OS handle before persisting / deleting the sidecar so any
-    // observer that watches the data file sees a fully-closed handle.
-    writer.Finish();
+    std::exception_ptr verification_error;
+    if (first_error || (cancelled && cancelled->load(std::memory_order_relaxed))) {
+      writer.Finish();
+    } else {
+      // No writers remain: overlap cached readback with flush, but await both before publishing the receipt.
+      auto finish = std::async(std::launch::async, [&]() { writer.Finish(); });
+      try {
+        ValidateCompletedChunks(*state, logger_);
+      } catch (...) {
+        verification_error = std::current_exception();
+      }
+
+      // Join even if verification failed; a flush/close failure takes precedence over a readback failure.
+      finish.get();
+    }
 
     const bool was_cancelled = cancelled && cancelled->load(std::memory_order_relaxed);
     if (first_error || was_cancelled) {
@@ -498,7 +551,10 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       std::rethrow_exception(first_error);
     }
 
-    ValidateCompletedChunks(*state, logger_);
+    if (verification_error) {
+      std::rethrow_exception(verification_error);
+    }
+
     if (!state->IsComplete()) {
       state->SaveState(logger_);
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model download failed on-disk checksum verification for blob '" +
