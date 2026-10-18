@@ -170,7 +170,7 @@ bool AzureBlobDownloader::IsCancellationRequested(const ChunkContext& ctx) const
   return ctx.azure_ctx.IsCancelled();
 }
 
-void AzureBlobDownloader::DownloadChunkStreaming(
+std::vector<uint8_t> AzureBlobDownloader::DownloadChunkStreaming(
     ChunkContext& ctx, int64_t offset, int64_t size, std::vector<uint8_t>& scratch,
     const std::function<void(const uint8_t*, size_t)>& sink) {
   Azure::Storage::Blobs::DownloadBlobOptions range_opts;
@@ -201,11 +201,14 @@ void AzureBlobDownloader::DownloadChunkStreaming(
     remaining -= static_cast<int64_t>(got);
   }
 
+  auto digest = hash.Final();
   const auto& expected = result.Value.TransactionalContentHash;
   if (!expected.HasValue() || expected.Value().Algorithm != Azure::Storage::HashAlgorithm::Md5 ||
-      expected.Value().Value != hash.Final()) {
+      expected.Value().Value != digest) {
     FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download range checksum mismatch at offset " + std::to_string(offset));
   }
+
+  return digest;
 }
 
 namespace {
@@ -395,21 +398,24 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         // the file writer. The writer is responsible for any synchronization
         // needed across concurrent workers; we don't take a mutex here.
         int64_t written = 0;
-        Azure::Core::Cryptography::Md5Hash chunk_hash;
+        std::vector<uint8_t> digest;
         auto sink = [&](const uint8_t* data, size_t len) {
           if (len > static_cast<uint64_t>(size - written)) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned more bytes than the requested chunk");
           }
 
           writer.WriteAt(offset + written, data, len);
-          chunk_hash.Append(data, len);
           written += static_cast<int64_t>(len);
         };
 
         try {
-          DownloadChunkStreaming(chunk_ctx, offset, size, scratch, sink);
+          digest = DownloadChunkStreaming(chunk_ctx, offset, size, scratch, sink);
           if (written != size) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned an incomplete chunk");
+          }
+
+          if (digest.size() != state->chunk_md5[static_cast<size_t>(chunk_idx)].size()) {
+            FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned an invalid chunk checksum");
           }
 
           // Account for this chunk and fire the progress callback within the same
@@ -439,7 +445,6 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         bool should_save = false;
         {
           std::lock_guard<std::mutex> lock(state->mutex());
-          const auto digest = chunk_hash.Final();
           std::copy(digest.begin(), digest.end(), state->chunk_md5[static_cast<size_t>(chunk_idx)].begin());
           state->MarkChunkComplete(chunk_idx);
           int32_t inc = chunks_since_save.fetch_add(1, std::memory_order_relaxed) + 1;

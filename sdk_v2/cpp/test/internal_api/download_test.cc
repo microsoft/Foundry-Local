@@ -27,6 +27,7 @@
 #include <foundry_local/foundry_local_c.h>
 #include <nlohmann/json.hpp>
 #include <gtest/gtest.h>
+#include <azure/core/base64.hpp>
 #include <azure/core/cryptography/hash.hpp>
 #include <azure/core/http/transport.hpp>
 #include <azure/core/io/body_stream.hpp>
@@ -2290,7 +2291,8 @@ class BlobIntegrityTransport final : public Azure::Core::Http::HttpTransport {
       saw_checksum_request = checksum_header != headers.end() && checksum_header->second == "true";
       const auto etag_header = headers.find("if-match");
       saw_etag_condition = etag_header != headers.end() && etag_header->second == "\"test-etag\"";
-      response->SetHeader("content-range", "bytes 0-31/32");
+      response->SetHeader("content-range", "bytes 0-" + std::to_string(payload.size() - 1) + "/" +
+                                               std::to_string(payload.size()));
       if (include_checksum) {
         response->SetHeader("content-md5", checksum);
       }
@@ -2332,17 +2334,22 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
  protected:
   int64_t GetBlobSize(ChunkContext& /*ctx*/) override { return blob_size; }
 
-  void DownloadChunkStreaming(ChunkContext& ctx, int64_t offset, int64_t size,
-                              std::vector<uint8_t>& scratch,
-                              const std::function<void(const uint8_t*, size_t)>& sink) override {
+  std::vector<uint8_t> DownloadChunkStreaming(ChunkContext& ctx, int64_t offset, int64_t size,
+                                              std::vector<uint8_t>& scratch,
+                                              const std::function<void(const uint8_t*, size_t)>& sink) override {
     chunk_call_count.fetch_add(1);
     {
       std::lock_guard<std::mutex> lock(offsets_mutex);
       requested_offsets.push_back(offset);
     }
+    Azure::Core::Cryptography::Md5Hash hash;
+    auto hashing_sink = [&](const uint8_t* data, size_t count) {
+      hash.Append(data, count);
+      sink(data, count);
+    };
     if (chunk_hook) {
-      chunk_hook(offset, size, sink, [this, &ctx]() { return IsCancellationRequested(ctx); });
-      return;
+      chunk_hook(offset, size, hashing_sink, [this, &ctx]() { return IsCancellationRequested(ctx); });
+      return hash.Final();
     }
     // Default: stream the chunk to the sink in scratch-sized pieces, filled
     // with the low byte of the offset for verification.
@@ -2354,9 +2361,11 @@ class FakeChunkAzureDownloader : public AzureBlobDownloader {
       size_t to_emit =
           static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(scratch.size())));
       std::fill_n(scratch.begin(), to_emit, static_cast<uint8_t>(offset & 0xFF));
-      sink(scratch.data(), to_emit);
+      hashing_sink(scratch.data(), to_emit);
       remaining -= static_cast<int64_t>(to_emit);
     }
+
+    return hash.Final();
   }
 };
 
@@ -2389,6 +2398,28 @@ TEST(AzureBlobDownloaderIntegrityTest, RejectsMissingAndMismatchedServiceChecksu
     ASSERT_NE(state, nullptr);
     EXPECT_EQ(state->completed_count, 0);
   }
+}
+
+TEST(AzureBlobDownloaderIntegrityTest, PersistsVerifiedDigestAcrossStreamingBuffers) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const auto local = tmpdir.path() / "blob.bin";
+  auto transport = std::make_shared<BlobIntegrityTransport>();
+  transport->payload.resize(2 * 64 * 1024 + 17);
+  for (size_t i = 0; i < transport->payload.size(); ++i) {
+    transport->payload[i] = static_cast<uint8_t>(i);
+  }
+
+  Azure::Core::Cryptography::Md5Hash hash;
+  const auto digest = hash.Final(transport->payload.data(), transport->payload.size());
+  transport->checksum = Azure::Core::Convert::Base64Encode(digest);
+  AzureBlobDownloader downloader(fl::test::NullLog(), transport);
+  downloader.DownloadBlob("https://test.blob.core.windows.net/container", "blob", local.string(), 1);
+
+  auto state = BlobDownloadState::LoadState("blob", local, static_cast<int64_t>(transport->payload.size()),
+                                            2 * 1024 * 1024, 1, fl::test::NullLog(), true);
+  ASSERT_NE(state, nullptr);
+  ASSERT_TRUE(state->IsComplete());
+  EXPECT_TRUE(std::equal(digest.begin(), digest.end(), state->chunk_md5[0].begin()));
 }
 
 TEST(AzureBlobDownloaderIntegrityTest, ReusesVerifiedFilesAndRepairsSameLengthCorruption) {

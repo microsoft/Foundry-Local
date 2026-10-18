@@ -111,11 +111,12 @@ class AzureBlobDownloader : public IBlobDownloader {
   ///
   /// Must throw on failure. Implementations should observe the cancellation
   /// flag accessible via `ctx` and exit promptly when cancellation is requested.
-  virtual void DownloadChunkStreaming(ChunkContext& ctx,
-                                      int64_t offset,
-                                      int64_t size,
-                                      std::vector<uint8_t>& scratch,
-                                      const std::function<void(const uint8_t*, size_t)>& sink);
+  /// Returns the 16-byte MD5 of the delivered bytes after checking the service checksum.
+  virtual std::vector<uint8_t> DownloadChunkStreaming(ChunkContext& ctx,
+                                                      int64_t offset,
+                                                      int64_t size,
+                                                      std::vector<uint8_t>& scratch,
+                                                      const std::function<void(const uint8_t*, size_t)>& sink);
 
   /// Reports whether cooperative cancellation has been requested for this
   /// download. The orchestrator calls `Azure::Core::Context::Cancel()` after a
