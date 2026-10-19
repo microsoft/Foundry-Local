@@ -23,6 +23,7 @@ applyTo: "sdk_v2/cpp/src/inferencing/generative/{chat,toolcalling}/**"
 - Recovery replaces only an uncommitted suffix, preserving already streamed tokens exactly. Permit at most one retry,
   include a bounded literal diagnostic, and share the remaining output budget. Never retry published calls or
   canceled/truncated turns. Explicit raw framing is a separate protocol, not an XML fallback.
+  Recovery requires a shared schema plan and no stop sequences; always use the prepared-prompt generation path.
 - Engine capacity timeouts measure stalled execution, not queue duration while resident turns make progress.
   Process the complete event batch before expiry decisions and preserve cancellation of queued requests.
 - Tiny Engine tests prove native grammar/control behavior, not trained-model argument fidelity. Qualification also

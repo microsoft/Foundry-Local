@@ -1316,27 +1316,19 @@ TEST(ChatSessionDecisionTest, PreAppendRebuildTracksBackendBakedSettings) {
   using chat_session_internal::ShouldRebuildRetainedGeneratorBeforeAppend;
 
   // A dynamic Engine or classic generator may continue when nothing that is baked into retained state changed.
-  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
-                                                          /*guidance_requirement_changed=*/false,
-                                                          /*guidance_payload_changed=*/false,
-                                                          /*retained_generation_settings_changed=*/false));
-  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kEngine,
-                                                          /*guidance_requirement_changed=*/false,
+  EXPECT_FALSE(ShouldRebuildRetainedGeneratorBeforeAppend(/*guidance_requirement_changed=*/false,
                                                           /*guidance_payload_changed=*/false,
                                                           /*retained_generation_settings_changed=*/false));
 
   // The caller reports only options baked into the selected backend. These changes rebuild a classic Generator;
   // dynamic Engine settings are per-turn and therefore reach this helper as unchanged.
-  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
-                                                         /*guidance_requirement_changed=*/true,
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(/*guidance_requirement_changed=*/true,
                                                          /*guidance_payload_changed=*/false,
                                                          /*retained_generation_settings_changed=*/false));
-  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
-                                                         /*guidance_requirement_changed=*/false,
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(/*guidance_requirement_changed=*/false,
                                                          /*guidance_payload_changed=*/true,
                                                          /*retained_generation_settings_changed=*/false));
-  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind::kGenerator,
-                                                         /*guidance_requirement_changed=*/false,
+  EXPECT_TRUE(ShouldRebuildRetainedGeneratorBeforeAppend(/*guidance_requirement_changed=*/false,
                                                          /*guidance_payload_changed=*/false,
                                                          /*retained_generation_settings_changed=*/true));
 }
@@ -1349,37 +1341,33 @@ TEST(ChatSessionDecisionTest, RetainedStateInvalidationMatchesSuccessfulTurnSema
   // A manually supplied region helper is separate from automatic shared-plan whole-turn guidance.
   context.tool_body_grammar = "start: \"canonical body\"";
   EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
-      /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
-      /*host_output_limit_reached=*/false));
-  EXPECT_FALSE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
       /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
 
   context.guidance_type = "json_schema";
   context.guidance_data = R"({"type":"object"})";
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
       /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   context.guidance_type.clear();
   context.guidance_data.clear();
 
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/true,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/true,
       /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
       /*reasoning_was_active=*/false, /*stop_sequence_matched=*/true,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kEngine, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
       /*reasoning_was_active=*/true, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/false));
   EXPECT_TRUE(ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(
-      ChatBackendKind::kGenerator, context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
+      context, /*prompt_opens_reasoning=*/false, /*recovered_tool_output=*/false,
       /*reasoning_was_active=*/false, /*stop_sequence_matched=*/false,
       /*host_output_limit_reached=*/true));
 }

@@ -113,16 +113,11 @@ flFinishReason ResolveGeneratedFinishReason(bool has_tool_calls,
                                             std::optional<int> max_output_tokens);
 bool DidHostOutputLimitTruncate(int output_tokens, int max_output_tokens, bool backend_finished);
 bool ShouldEnforceHostOutputLimit(ChatBackendKind backend_kind, bool media_turn);
-bool ShouldRebuildRetainedGeneratorBeforeAppend(ChatBackendKind backend_kind,
-                                                bool guidance_requirement_changed,
-                                                bool guidance_payload_changed,
+bool ShouldRebuildRetainedGeneratorBeforeAppend(bool guidance_requirement_changed, bool guidance_payload_changed,
                                                 bool retained_generation_settings_changed);
-bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(ChatBackendKind backend_kind,
-                                                                const ToolCallContext& tool_ctx,
-                                                                bool prompt_opens_reasoning,
-                                                                bool recovered_tool_output,
-                                                                bool reasoning_was_active,
-                                                                bool stop_sequence_matched,
+bool ShouldInvalidateRetainedGenerationStateAfterSuccessfulTurn(const ToolCallContext& tool_ctx,
+                                                                bool prompt_opens_reasoning, bool recovered_tool_output,
+                                                                bool reasoning_was_active, bool stop_sequence_matched,
                                                                 bool host_output_limit_reached);
 bool ShouldInvalidateRetainedGeneratorForUndo(bool undo_all, bool has_pre_turn_boundary, bool can_rewind);
 std::vector<ToolDefinition> BuildJsonRequestToolDefinitions(
