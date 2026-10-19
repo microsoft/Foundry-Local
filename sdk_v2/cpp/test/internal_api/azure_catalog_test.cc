@@ -183,6 +183,72 @@ TEST(AzureCatalogClientTest, UsesOneFilterSetPerDeviceAndProvider) {
   EXPECT_EQ(requests[2]["filters"][5]["values"], nlohmann::json({"npu"}));
 }
 
+TEST(AzureCatalogClientTest, FiltersFoundryLocalTagsAcrossCatalogQueries) {
+  CpuOnlyEpDetector ep;
+  StderrLogger logger;
+  const std::vector<std::pair<std::string, nlohmann::json>> tags{
+      {"empty", ""}, {"hide", "hide"}, {"test", "test"}, {"outlook", "outlook_test"},
+      {"finetuned", "pp_finetuned"}, {"unknown", "other"}, {"null", nullptr},
+  };
+
+  for (const bool full_service : {false, true}) {
+    SCOPED_TRACE(full_service ? "full-service response" : "flat response");
+    auto response = nlohmann::json::parse(MakeSummaryResponse({{"missing", 1}}));
+    auto& records = response["summaries"];
+    for (const auto& [name, tag] : tags) {
+      auto record = nlohmann::json::parse(MakeSummaryResponse({{name, 1}}))["summaries"][0];
+      record["foundryLocal"] = tag;
+      records.push_back(std::move(record));
+    }
+
+    std::vector<std::string> model_ids;
+    for (auto& record : records) {
+      record["alias"] = "shared-alias";
+      model_ids.push_back(record["name"].get<std::string>() + ":1");
+      if (full_service) {
+        nlohmann::json metadata = {{"alias", "shared-alias"}};
+        if (record.contains("foundryLocal")) {
+          metadata["foundryLocal"] = record["foundryLocal"];
+        }
+        record = {
+            {"assetId", record["assetId"]},
+            {"annotations", {{"tags", std::move(metadata)}}},
+            {"properties", {
+                               {"name", record["name"]},
+                               {"version", 1},
+                               {"variantInfo", record["variantInformation"]},
+                           }},
+        };
+      }
+    }
+    response["totalCount"] = records.size();
+    if (full_service) {
+      response["value"] = std::move(response["summaries"]);
+      response.erase("summaries");
+    }
+
+    AzureCatalogClient client("https://test.com", "", ep, logger,
+                              [&](const std::string&, const std::string&) {
+                                return MakeOkResponse(response.dump());
+                              });
+    for (const std::string query : {"list", "ids", "versions"}) {
+      SCOPED_TRACE(query);
+      std::vector<ModelInfo> models;
+      if (query == "list") {
+        models = client.FetchAllModelInfos();
+      } else if (query == "ids") {
+        models = client.FetchModelsByIds(model_ids);
+      } else {
+        models = client.FetchAllVersionsByAlias("shared-alias");
+      }
+
+      ASSERT_EQ(models.size(), 2u);
+      EXPECT_EQ(models[0].model_id, "empty:1");
+      EXPECT_EQ(models[1].model_id, "hide:1");
+    }
+  }
+}
+
 TEST(AzureCatalogClientTest, ParsesFlatAssetGalleryResponse) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;

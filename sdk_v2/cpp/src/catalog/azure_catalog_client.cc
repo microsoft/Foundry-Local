@@ -163,6 +163,9 @@ std::string ExtractRegionFromResponse(const http::HttpResponse& response) {
 std::vector<ModelInfo> ToModelInfos(const std::vector<CatalogLocalModel>& raw_models) {
   std::vector<ModelInfo> infos;
   for (const auto& model : raw_models) {
+    if (!model.foundry_local || (!model.foundry_local->empty() && *model.foundry_local != "hide")) {
+      continue;
+    }
     if (auto info = CatalogModelToModelInfo(model)) {
       infos.push_back(std::move(*info));
     }
