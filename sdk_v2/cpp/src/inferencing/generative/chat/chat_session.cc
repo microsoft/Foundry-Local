@@ -1349,17 +1349,20 @@ std::unique_ptr<PreparedChatRequest> PrepareChatRequest(
   }
 
   const auto effective_kvp = MergeKeyValuePairs(base_session_options, request.options);
+  prepared->media = CollectMediaInput(request);
+  const bool media_turn = !prepared->media.Empty();
+  if (media_turn) {
+    ToolCallContext declarations;
+    chat_session_internal::PopulateToolDefinitions(tool_definitions, declarations);
+    ValidateMediaTurn(prepared->media, BuildTranscriptMessages(request.items),
+                      {.session_has_history = !transcript.Empty(), .tools_declared = declarations.HasTools()});
+  }
+
   prepared->tool_context = BuildToolCallContextForRequest(request, effective_kvp, tool_definitions,
                                                           model_info, model, logger);
   prepared->ingest = IngestRequestItems(request.items, request.item_segment_starts,
                                         prepared->tool_context.tool_kinds);
   transcript.ValidateInputs(prepared->ingest.messages);
-  prepared->media = CollectMediaInput(request);
-  const bool media_turn = !prepared->media.Empty();
-  ValidateMediaTurn(prepared->media, prepared->ingest.messages,
-                    {.session_has_history = !transcript.Empty(),
-                     .tools_declared = prepared->tool_context.HasTools()});
-
   prepared->options = SearchOptions::FromParameters(effective_kvp);
   prepared->backend_kind = model.GetGenAIConfig().GetChatBackendKind();
   prepared->system_prompt = GetOptionOrEmpty(effective_kvp, kSystemPromptOption);

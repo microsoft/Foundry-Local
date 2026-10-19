@@ -384,12 +384,14 @@ TEST_F(DynamicEngineChatTest, CanonicalToolGrammarAcceptsWhitespaceAtStructuralB
   };
 
   // Narrow legal alternatives so this untrained decoder exercises whitespace rather than extending strings forever.
-  ASSERT_TRUE(replace_rule("tool_json_ws", R"(" \n")"));
+  const std::string whitespace_rule = R"(" \n")";
+  const std::string string_rule = R"("\"x\"")";
+  const std::string object_rule = R"("{" tool_json_ws tool_json_member tool_json_comma )"
+                                  R"("\"other\"" tool_json_colon TOOL_JSON_STRING tool_json_ws "}")";
+  ASSERT_TRUE(replace_rule("tool_json_ws", whitespace_rule));
   ASSERT_TRUE(replace_rule("tool_json_value", "TOOL_JSON_STRING"));
-  ASSERT_TRUE(replace_rule("TOOL_JSON_STRING", R"("\"x\"")"));
-  ASSERT_TRUE(replace_rule("tool_json_object",
-                           R"("{" tool_json_ws tool_json_member tool_json_comma )"
-                           R"("\"other\"" tool_json_colon TOOL_JSON_STRING tool_json_ws "}")"));
+  ASSERT_TRUE(replace_rule("TOOL_JSON_STRING", string_rule));
+  ASSERT_TRUE(replace_rule("tool_json_object", object_rule));
   const auto prompt = EncodeUserPrompt("Try it.", ModelInstance());
   SearchOptions options;
   options.max_output_tokens = 256;

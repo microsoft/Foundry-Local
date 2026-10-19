@@ -5159,30 +5159,20 @@ TEST_F(ChatSessionTest, ConstructWithModelOnly) {
   EXPECT_EQ(session.TurnCount(), 0u);
 }
 
-TEST_F(ChatSessionTest, AdditionalPropertyRequirementsRemainAcceptedAcrossSharedToolChoicePaths) {
-  ASSERT_FALSE(GetModel().HasNativeQwenXmlToolCalls());
-  const std::string parameters =
-      R"({"type":"object","properties":{)"
-      R"("name":{"type":"string","pattern":"^[a-z]+$"},)"
-      R"("timestamp":{"type":"string","format":"date-time"},)"
-      R"("anything":true},)"
-      R"("required":["dynamic"]})";
+TEST_F(QwenNativeProductionIntegrationTest, AdditionalPropertyRequirementsRemainAcceptedAcrossSharedToolChoicePaths) {
+  const std::string parameters = R"({"type":"object","properties":{)"
+                                 R"("name":{"type":"string","pattern":"^[a-z]+$"},)"
+                                 R"("timestamp":{"type":"string","minLength":1},)"
+                                 R"("anything":true},)"
+                                 R"("required":["dynamic"]})";
   const std::vector<std::string> modes = {"auto", "required", "forced"};
 
   for (const auto& mode : modes) {
     SCOPED_TRACE(mode);
-    bool generator_created = false;
-    TextChatGeneratorFactory factory =
-        [&](const auto&, const auto&, auto&, const ToolCallContext& context, bool) {
-          generator_created = true;
-          EXPECT_FALSE(context.guidance_disabled);
-          EXPECT_FALSE(context.tools_json.empty());
-          return std::make_unique<FixedOutputGenerator>(
-              "[]", BackendTerminationCause::kNaturalEnd,
-              /*prompt_opens_reasoning=*/false);
-        };
-    ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_,
-                        {}, std::move(factory));
+    const std::string output = R"(<tool_call>[{"name":"lookup","parameters":)"
+                               R"({"name":"entry","timestamp":"2026-10-19","anything":true,"dynamic":7}}]</tool_call>)";
+    auto catalog_model = MakeCatalogModel();
+    ChatSession session(catalog_model, *model_, *logger_, telemetry_, {}, OutputFactory(output));
     session.AddToolDefinition(
         {"lookup", "Look up a value.", parameters, ToolKind::kFunction});
 
@@ -5197,13 +5187,13 @@ TEST_F(ChatSessionTest, AdditionalPropertyRequirementsRemainAcceptedAcrossShared
     }
 
     Response response;
-    EXPECT_NO_THROW(session.ProcessRequest(request, response));
-    EXPECT_TRUE(generator_created);
+    ASSERT_NO_THROW(session.ProcessRequest(request, response));
+    ASSERT_EQ(Calls(response).size(), 1u);
+    EXPECT_EQ(nlohmann::json::parse(Calls(response).front()->arguments).at("dynamic"), 7);
   }
 }
 
-TEST_F(ChatSessionTest, ReferenceBearingSchemasFailClosedAcrossSharedToolChoicePaths) {
-  ASSERT_FALSE(GetModel().HasNativeQwenXmlToolCalls());
+TEST_F(QwenNativeProductionIntegrationTest, LocalReferencesRemainValidatedAcrossSharedToolChoicePaths) {
   const std::vector<std::string> schemas = {
       R"({"type":"object","properties":{"value":{"$ref":"#/$defs/value"}},"$defs":{"value":{"type":"string"}}})",
       R"({"type":"object","properties":{"values":{"type":"array","items":{"$ref":"#/$defs/value"}}},)"
@@ -5217,13 +5207,20 @@ TEST_F(ChatSessionTest, ReferenceBearingSchemasFailClosedAcrossSharedToolChoiceP
       TextChatGeneratorFactory factory =
           [&](const auto&, const auto&, auto&, const ToolCallContext& context, bool) {
             generator_created = true;
-            EXPECT_TRUE(context.guidance_disabled);
-            return std::make_unique<FixedOutputGenerator>(
-                "ordinary text", BackendTerminationCause::kNaturalEnd,
-                /*prompt_opens_reasoning=*/false);
+            EXPECT_FALSE(context.guidance_disabled);
+            EXPECT_NE(context.tool_plan, nullptr);
+            const auto parameters = schema.find("\"values\"") != std::string::npos
+                                        ? nlohmann::json{{"values", {"entry"}}}
+                                        : nlohmann::json{{"value", "entry"}};
+            const auto output = "<tool_call>" +
+                                nlohmann::json::array({{{"name", "lookup"}, {"parameters", parameters}}}).dump() +
+                                "</tool_call>";
+            auto generator = std::make_unique<FixedOutputGenerator>(output, BackendTerminationCause::kNaturalEnd);
+            generator->EnableAuthoritativeControls(kClassicControlOffset);
+            return generator;
           };
-      ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_,
-                          {}, std::move(factory));
+      auto catalog_model = MakeCatalogModel();
+      ChatSession session(catalog_model, *model_, *logger_, telemetry_, {}, std::move(factory));
       session.AddToolDefinition(
           {"lookup", "Look up a value.", schema, ToolKind::kFunction});
 
@@ -5238,22 +5235,44 @@ TEST_F(ChatSessionTest, ReferenceBearingSchemasFailClosedAcrossSharedToolChoiceP
       }
 
       Response response;
-      if (mode == std::string_view("auto")) {
-        EXPECT_NO_THROW(session.ProcessRequest(request, response));
-        EXPECT_TRUE(generator_created);
-      } else {
-        try {
-          session.ProcessRequest(request, response);
-          FAIL() << "expected reference-bearing tool-only output to be rejected";
-        } catch (const fl::Exception& ex) {
-          EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
-          EXPECT_NE(std::string(ex.what()).find("valid tool definitions"),
-                    std::string::npos)
-              << ex.what();
-        }
+      ASSERT_NO_THROW(session.ProcessRequest(request, response));
+      EXPECT_TRUE(generator_created);
+      ASSERT_EQ(Calls(response).size(), 1u);
+    }
+  }
+}
 
-        EXPECT_FALSE(generator_created);
+TEST_F(QwenNativeProductionIntegrationTest, UnsupportedSchemasFailAdmissionAcrossSharedToolChoicePaths) {
+  const std::vector<std::string> schemas{
+      R"({"type":"object","properties":{"timestamp":{"type":"string","format":"date-time"}}})",
+      R"({"type":"object","properties":{"value":{"$ref":"https://example.invalid/schema"}}})",
+      R"({"type":"object","properties":{"value":{"$ref":"#/$defs/missing"}}})",
+      R"({"type":"object","properties":{"value":{"$ref":"#"}}})"};
+  for (const auto& schema : schemas) {
+    for (const auto& mode : {"auto", "required", "forced"}) {
+      SCOPED_TRACE(std::string(mode) + ": " + schema);
+      bool generator_created = false;
+      TextChatGeneratorFactory factory = [&](const auto&, const auto&, auto&, const auto&, bool) {
+        generator_created = true;
+        return std::make_unique<FixedOutputGenerator>("MESSAGE\nunexpected", BackendTerminationCause::kNaturalEnd);
+      };
+      auto catalog_model = MakeCatalogModel();
+      ChatSession session(catalog_model, *model_, *logger_, telemetry_, {}, std::move(factory));
+      session.AddToolDefinition({"lookup", "Look up a value.", schema, ToolKind::kFunction});
+      auto request = MakeStatefulRequest("route this");
+      request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, mode == std::string_view("forced") ? "auto" : mode);
+      if (mode == std::string_view("forced")) {
+        request.forced_tool_choice = ForcedToolChoice{"lookup", ToolKind::kFunction};
       }
+      Response response;
+      try {
+        session.ProcessRequest(request, response);
+        FAIL() << "expected unsupported tool schema to be rejected";
+      } catch (const fl::Exception& ex) {
+        EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+      }
+
+      EXPECT_FALSE(generator_created);
     }
   }
 }
@@ -5445,7 +5464,7 @@ TEST_F(ChatSessionTest, SuppliedCallsDoNotCloseTheGeneratedTurnsVisibleText) {
   }
 }
 
-TEST_F(ChatSessionTest, HostEndedTurnsCancelBeforeWaitingForBackendUsage) {
+TEST_F(QwenNativeProductionIntegrationTest, HostEndedTurnsCancelBeforeWaitingForBackendUsage) {
   enum class End { kPostCallText,
                    kStopString,
                    kCallback,
@@ -5476,22 +5495,23 @@ TEST_F(ChatSessionTest, HostEndedTurnsCancelBeforeWaitingForBackendUsage) {
     // instead of blocking, so a missing cancellation fails deterministically rather than hanging the test.
     GenerationTrace trace;
     trace.requires_cancellation = test.end != End::kCallback;
-    TextChatGeneratorFactory factory =
-        [&](const auto&, const auto&, auto&, const ToolCallContext& tools, bool) {
-          std::string output = "Visible.";
-          if (test.end == End::kPostCallText) {
-            EXPECT_FALSE(tools.tool_call_start.empty());
-            EXPECT_FALSE(tools.tool_call_end.empty());
-            output += tools.tool_call_start + R"({"name":"lookup","arguments":{}})" +
-                      tools.tool_call_end + "Discarded.";
-          } else if (test.end == End::kStopString) {
-            output += "STOPDiscarded.";
-          }
+    TextChatGeneratorFactory factory = [&](const auto&, const auto&, auto&, const ToolCallContext& tools, bool) {
+      std::string output = "MESSAGE\nVisible.";
+      if (test.end == End::kPostCallText) {
+        EXPECT_FALSE(tools.tool_call_start.empty());
+        EXPECT_FALSE(tools.tool_call_end.empty());
+        output += tools.tool_call_start + R"([{"name":"lookup","parameters":{}}])" + tools.tool_call_end + "Discarded.";
+      } else if (test.end == End::kStopString) {
+        output += "STOPDiscarded.";
+      }
 
-          return std::make_unique<FixedOutputGenerator>(
-              output, BackendTerminationCause::kNaturalEnd, false, &trace);
-        };
-    ChatSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_, {}, std::move(factory));
+      auto generator =
+          std::make_unique<FixedOutputGenerator>(output, BackendTerminationCause::kNaturalEnd, false, &trace);
+      generator->EnableAuthoritativeControls(kClassicControlOffset);
+      return generator;
+    };
+    auto catalog_model = MakeCatalogModel();
+    ChatSession session(catalog_model, *model_, *logger_, telemetry_, {}, std::move(factory));
     if (!test.json) {
       session.AddToolDefinition({"lookup", "Look up a value", R"({"type":"object","properties":{}})"});
     }
@@ -5505,7 +5525,7 @@ TEST_F(ChatSessionTest, HostEndedTurnsCancelBeforeWaitingForBackendUsage) {
             streamed += static_cast<const TextItem&>(*item).text;
           }
         }
-        return test.end == End::kCallback ? 1 : 0;
+        return test.end == End::kCallback && streamed.find("Visible.") != std::string::npos ? 1 : 0;
       });
     }
 
@@ -5550,7 +5570,7 @@ TEST_F(ChatSessionTest, HostEndedTurnsCancelBeforeWaitingForBackendUsage) {
       continue;
     }
 
-    EXPECT_EQ(trace.generated_tokens, 1);
+    EXPECT_EQ(trace.generated_tokens, test.end == End::kPostCallText ? 5 : 1);
     EXPECT_FALSE(request.IsCancellationRequested());
     const auto expected_finish = test.end == End::kPostCallText ? FOUNDRY_LOCAL_FINISH_TOOL_CALLS
                                  : test.end == End::kTokenLimit ? FOUNDRY_LOCAL_FINISH_LENGTH
@@ -5714,6 +5734,93 @@ TEST_F(ChatSessionTest, ChatCompletionsForcedRawCallPreservesJsonShapedPayloadAn
   EXPECT_EQ(message.at("tool_calls").at(0).at("custom").at("name"), "edit");
   EXPECT_EQ(message.at("tool_calls").at(0).at("custom").at("input"), envelope);
   EXPECT_EQ(completion.at("choices").at(0).at("finish_reason"), "tool_calls");
+}
+
+TEST_F(QwenNativeProductionIntegrationTest, MediaWithDeclaredToolsIsRejectedBeforeSchemaAdmission) {
+  for (const bool image : {false, true}) {
+    for (const auto& choice : {"auto", "none"}) {
+      SCOPED_TRACE(image);
+      SCOPED_TRACE(choice);
+      auto counters = std::make_shared<GeneratorCounters>();
+      ModelInfo info;
+      info.task = "vision-language-chat";
+      auto catalog_model =
+          Model::FromModelInfo(std::move(info), "", services_.download_manager, services_.model_load_manager);
+      ChatSession session(catalog_model, *model_, *logger_, telemetry_, {},
+                          OutputFactory("MESSAGE\nunexpected", counters));
+      session.AddToolDefinition(
+          {"lookup", "Look up a value.",
+           R"({"type":"object","properties":{"timestamp":{"type":"string","format":"date-time"}}})"});
+      std::vector<std::unique_ptr<Item>> parts;
+      if (image) {
+        parts.push_back(std::make_unique<ImageItem>(std::vector<std::uint8_t>{1}, "image/png"));
+      } else {
+        parts.push_back(std::make_unique<AudioItem>(std::vector<std::uint8_t>{1}, "pcm"));
+      }
+      Request request;
+      request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, std::move(parts)));
+      request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, choice);
+      Response response;
+      try {
+        session.ProcessRequest(request, response);
+        FAIL() << "Expected media with declared tools to be rejected before schema admission";
+      } catch (const fl::Exception& ex) {
+        EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+        EXPECT_NE(std::string(ex.what()).find("cannot be combined with tool definitions"), std::string::npos)
+            << ex.what();
+      }
+      EXPECT_EQ(counters->created, 0);
+      EXPECT_TRUE(session.Transcript().Empty());
+    }
+  }
+}
+
+TEST_F(QwenNativeProductionIntegrationTest, MediaPolicyUsesExpandedLegacyToolDeclarations) {
+  for (const bool declares_tool : {false, true}) {
+    for (const auto& choice : {"auto", "none"}) {
+      SCOPED_TRACE(declares_tool);
+      SCOPED_TRACE(choice);
+      bool reached_media_preparation = false;
+      ChatMessagePreparer preparer = [&](auto, bool) -> chat_internal::PreparedChatMessages {
+        reached_media_preparation = true;
+        throw std::logic_error("Reached media preparation after admission");
+      };
+
+      ModelInfo info;
+      info.task = "vision-language-chat";
+      auto catalog_model =
+          Model::FromModelInfo(std::move(info), "", services_.download_manager, services_.model_load_manager);
+      auto counters = std::make_shared<GeneratorCounters>();
+      ChatSession session(catalog_model, *model_, *logger_, telemetry_, {},
+                          OutputFactory("MESSAGE\nunexpected", counters), std::move(preparer));
+      session.AddToolDefinition(
+          {"", "", declares_tool
+                       ? R"([{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}])"
+                       : "[]"});
+      std::vector<std::unique_ptr<Item>> parts;
+      parts.push_back(std::make_unique<ImageItem>(std::vector<std::uint8_t>{1}, "image/png"));
+      Request request;
+      request.AddOwnedItem(std::make_unique<MessageItem>(FOUNDRY_LOCAL_ROLE_USER, std::move(parts)));
+      request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE, choice);
+      Response response;
+      if (declares_tool) {
+        try {
+          session.ProcessRequest(request, response);
+          FAIL() << "Expected nonempty legacy tools to reject media";
+        } catch (const fl::Exception& ex) {
+          EXPECT_EQ(ex.code(), FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT);
+          EXPECT_NE(std::string(ex.what()).find("cannot be combined with tool definitions"), std::string::npos)
+              << ex.what();
+        }
+      } else {
+        EXPECT_THROW(session.ProcessRequest(request, response), std::logic_error);
+      }
+
+      EXPECT_EQ(reached_media_preparation, !declares_tool);
+      EXPECT_EQ(counters->created, 0);
+      EXPECT_TRUE(session.Transcript().Empty());
+    }
+  }
 }
 
 TEST_F(ChatSessionTest, ChatCompletionRejectsAudioInput) {
