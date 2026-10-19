@@ -344,7 +344,9 @@ they do not download models in CI or certify an unchanged release package.
 An `edit` qualifies only with a successful correlated CLI completion and exact
 full-file original and replacement arguments, including terminal LF; a failed edit
 followed by shell repair is insufficient. Protocol checks require a successful
-terminal choice, with `[DONE]` following it for streaming responses.
+terminal choice, with `[DONE]` following it for streaming Chat Completions.
+The protocol gate also checks optional-property ordering through nonstreaming
+`/responses`, requiring a completed response and completed function calls.
 Qualification applies to the model, backend, platform, and exact native binaries
 recorded for the run. Scripted Generator regressions do not substitute for a
 trained Generator model gate, and these text-only workflows do not qualify

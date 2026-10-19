@@ -106,8 +106,10 @@ ResponsesHandler::ResponsesHandler(ServiceContext& ctx) : ctx_(ctx) {}
 std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAndValidateRequest(
     const std::string& body, nlohmann::json& req_json, ResponseCreateParams& params,
     Request& prepared_request, std::vector<fl::ToolDefinition>& tool_definitions) {
+  nlohmann::ordered_json ordered_request;
   try {
-    req_json = ParseJsonStrict(body);
+    ordered_request = ParseJsonStrict(body);
+    req_json = ordered_request;
   } catch (const nlohmann::json::parse_error& ex) {
     return ErrorResponse(Status::CODE_400, "Invalid JSON", ex.what());
   }
@@ -149,7 +151,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
   }
 
   try {
-    params = req_json.get<ResponseCreateParams>();
+    params = ordered_request.get<ResponseCreateParams>();
     tool_definitions =
         ResponseConverter::ExtractResponsesToolDefinitions(params, prepared_request);
   } catch (const fl::Exception& ex) {

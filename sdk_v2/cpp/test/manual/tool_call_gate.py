@@ -57,6 +57,15 @@ def cases():
     )
     yield "optional_property_order", request, [{"city": "Paris", "initial_wait": 30, "mode": "sync"}], None
 
+    yield "responses_optional_property_order", {
+        "temperature": 0,
+        "max_output_tokens": 2048,
+        "store": False,
+        "input": request["messages"][0]["content"],
+        "tools": [{"type": "function", **request["tools"][0]["function"]}],
+        "tool_choice": "required",
+    }, [{"city": "Paris", "initial_wait": 30, "mode": "sync"}], None
+
     request = copy.deepcopy(base)
     request["tools"][0]["function"]["parameters"]["properties"]["city"] = {
         "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
@@ -212,13 +221,30 @@ def parse_stream(response):
     return message, chunks
 
 
+def parse_responses_completion(result):
+    if not isinstance(result, dict) or result.get("status") != "completed" or result.get("error"):
+        raise RuntimeError("Responses request did not complete successfully: " + json.dumps(result))
+    calls = []
+    for item in result["output"]:
+        if item["type"] == "function_call":
+            if item.get("status") != "completed":
+                raise RuntimeError("Responses function call did not complete")
+            calls.append({"id": item["call_id"], "type": "function",
+                          "function": {"name": item["name"], "arguments": item["arguments"]}})
+    validate_tool_calls(calls)
+    return {"tool_calls": calls}, result
+
+
 def complete(endpoint, request, timeout):
+    responses = "input" in request
     wire = urllib.request.Request(
-        endpoint.rstrip("/") + "/chat/completions",
+        endpoint.rstrip("/") + ("/responses" if responses else "/chat/completions"),
         data=json.dumps(request, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(wire, timeout=timeout) as response:
+        if responses:
+            return parse_responses_completion(json.load(response))
         return parse_stream(response) if request["stream"] else parse_completion(json.load(response))
 
 
@@ -247,6 +273,17 @@ def self_test():
     tool_call = {"id": "call_lookup", "type": "function", "function": function}
     tool = {"tool_calls": [tool_call]}
     tool_delta = {"tool_calls": [dict(tool_call, index=0)]}
+    response = {"status": "completed", "output": [
+        {"type": "function_call", "status": "completed", "call_id": "call_lookup", **function},
+    ]}
+    require("valid_responses_completion", lambda: parse_responses_completion(response)[0] == tool)
+    for status in (None, "failed", "incomplete", "in_progress"):
+        require("reject_responses_status_" + str(status), lambda s=status: parse_responses_completion(
+            dict(response, status=s)), rejects=True)
+    require("reject_responses_error", lambda: parse_responses_completion(
+        dict(response, error={"message": "failed"})), rejects=True)
+    require("reject_responses_incomplete_call", lambda: parse_responses_completion(
+        dict(response, output=[dict(response["output"][0], status="in_progress")])), rejects=True)
     for name, message, reason in (("text", text, "stop"), ("tool", tool, "tool_calls")):
         require("valid_completion_" + name, lambda m=message, r=reason: parse_completion(
             {"choices": [{"message": m, "finish_reason": r}]})[0] == m)
@@ -349,7 +386,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=False)
     results = []
     for name, source, expected_calls, expected_text in selected:
-        for stream in (False, True):
+        for stream in ((False,) if "input" in source else (False, True)):
             request = dict(source, model=args.model, stream=stream)
             result = {"case": name, "stream": stream, "passed": False}
             start = time.perf_counter()
