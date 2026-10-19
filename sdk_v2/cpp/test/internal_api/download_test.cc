@@ -625,8 +625,9 @@ TEST(BlobDownloadTest, ReportsSkippedBytesInInitialProgress) {
   DownloadBlobsToDirectoryForTest(mock, "https://test.blob/c?sig=x", tmpdir.string(), opts);
 
   ASSERT_FALSE(progress_values.empty());
-  // First emitted progress reflects the already-on-disk bytes (500/2000 = 25%).
-  EXPECT_NEAR(progress_values.front(), 100.0f * 500.0f / 2000.0f, 0.5f);
+  // Verification polls cancellation without counting the file until its checksum is verified.
+  EXPECT_FLOAT_EQ(progress_values.front(), 0.0f);
+  EXPECT_NE(std::find(progress_values.begin(), progress_values.end(), 25.0f), progress_values.end());
   // Final progress must hit 100%.
   EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
 }
@@ -653,7 +654,84 @@ TEST(BlobDownloadTest, EmitsHundredPercentWhenEverythingIsCached) {
 
   EXPECT_TRUE(mock.downloaded_blobs.empty());
   ASSERT_FALSE(progress_values.empty());
-  EXPECT_FLOAT_EQ(progress_values.front(), 100.0f);
+  EXPECT_FLOAT_EQ(progress_values.back(), 100.0f);
+}
+
+TEST(BlobDownloadTest, CancelsDuringCachedFileVerification) {
+  for (const bool published_checksum : {false, true}) {
+    auto tmpdir = TempPath::CreateTempDir();
+    const auto local = tmpdir.path() / "blob.bin";
+    const std::string payload(128 * 1024, 'X');
+    std::ofstream(local, std::ios::binary) << payload;
+    const auto digest = Md5(payload);
+    if (!published_checksum) {
+      auto state = BlobDownloadState::CreateNew("blob.bin", local, payload.size(), 2 * 1024 * 1024, 1);
+      std::copy(digest.begin(), digest.end(), state->chunk_md5[0].begin());
+      state->MarkChunkComplete(0);
+      ASSERT_TRUE(state->SaveState(fl::test::NullLog()));
+      fs::rename(BlobDownloadState::GetStateFilePath(local), BlobDownloadState::GetVerifiedStateFilePath(local));
+    }
+
+    MockBlobDownloader mock;
+    mock.blobs_to_return = {{"blob.bin", static_cast<int64_t>(payload.size()),
+                             published_checksum ? digest : std::vector<uint8_t>{}}};
+    BlobDownloadOptions opts;
+    opts.progress = [](float percent) {
+      EXPECT_FLOAT_EQ(percent, 0.0f);
+      return 1;
+    };
+
+    try {
+      DownloadBlobsToDirectoryForTest(mock, "", tmpdir.string(), opts);
+      FAIL() << "Expected verification cancellation";
+    } catch (const fl::Exception& e) {
+      EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+    }
+
+    EXPECT_TRUE(mock.downloaded_blobs.empty());
+    EXPECT_EQ(ReadFile(local), payload);
+  }
+}
+
+TEST(BlobDownloadTest, HonorsCancellationBeforeReturningCachedSuccess) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const std::string payload(32, 'X');
+  std::ofstream(tmpdir.path() / "blob.bin", std::ios::binary) << payload;
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {{"blob.bin", 32, Md5(payload)}};
+  BlobDownloadOptions opts;
+  opts.progress = [](float percent) { return percent == 100.0f ? 1 : 0; };
+
+  try {
+    DownloadBlobsToDirectoryForTest(mock, "", tmpdir.string(), opts);
+    FAIL() << "Expected final progress cancellation";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+  }
+
+  EXPECT_TRUE(mock.downloaded_blobs.empty());
+}
+
+TEST(BlobDownloadTest, CancelsDuringDownloadedFileVerification) {
+  auto tmpdir = TempPath::CreateTempDir();
+  MockBlobDownloader mock;
+  mock.download_content = std::string(128 * 1024, 'X');
+  mock.blobs_to_return = {{"blob.bin", static_cast<int64_t>(mock.download_content.size()), Md5(mock.download_content)}};
+  int completed_callbacks = 0;
+  BlobDownloadOptions opts;
+  opts.progress = [&](float percent) {
+    return percent == 100.0f && ++completed_callbacks == 2 ? 1 : 0;
+  };
+
+  try {
+    DownloadBlobsToDirectoryForTest(mock, "", tmpdir.string(), opts);
+    FAIL() << "Expected downloaded-file verification cancellation";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+  }
+
+  EXPECT_EQ(completed_callbacks, 2);
+  EXPECT_EQ(mock.downloaded_blobs, std::vector<std::string>{"blob.bin"});
 }
 
 TEST(BlobDownloadTest, RedownloadsFullSizeFilesWithoutProofOfIntegrity) {
@@ -2651,6 +2729,62 @@ TEST(AzureBlobDownloaderResumeTest, RepairsSameLengthCorruptionInCompletedChunk)
   EXPECT_EQ(downloader.requested_offsets, std::vector<int64_t>{kChunkSize});
   EXPECT_FALSE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
   EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
+}
+
+TEST(AzureBlobDownloaderResumeTest, CancelsParallelVerificationWithoutPublishingReceipt) {
+  for (const bool use_flag : {false, true}) {
+    auto tmpdir = TempPath::CreateTempDir();
+    const auto local = tmpdir.path() / "blob.bin";
+    FakeChunkAzureDownloader downloader;
+    downloader.blob_size = 12 * int64_t{2 * 1024 * 1024};
+    downloader.DownloadBlob("", "blob", local.string(), 4);
+    fs::rename(BlobDownloadState::GetVerifiedStateFilePath(local), BlobDownloadState::GetStateFilePath(local));
+    downloader.chunk_call_count = 0;
+    std::atomic<bool> cancelled{false};
+    auto cancel_verification = [&](int64_t bytes) {
+      EXPECT_EQ(bytes, 0);
+      if (use_flag) {
+        cancelled = true;
+      } else {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "cancelled during resume verification");
+      }
+    };
+
+    try {
+      downloader.DownloadBlob("", "blob", local.string(), 4, cancel_verification, use_flag ? &cancelled : nullptr);
+      FAIL() << "Expected resume verification cancellation";
+    } catch (const fl::Exception& e) {
+      EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+    }
+
+    EXPECT_EQ(downloader.chunk_call_count.load(), 0);
+    EXPECT_FALSE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+    EXPECT_TRUE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
+    EXPECT_NO_THROW(downloader.DownloadBlob("", "blob", local.string(), 4));
+    EXPECT_EQ(downloader.chunk_call_count.load(), 0);
+    EXPECT_TRUE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+  }
+}
+
+TEST(AzureBlobDownloaderResumeTest, ChecksCancellationAfterVerifiedProgressBeforePublishingReceipt) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const auto local = tmpdir.path() / "blob.bin";
+  FakeChunkAzureDownloader downloader;
+  downloader.blob_size = 32;
+  downloader.DownloadBlob("", "blob", local.string(), 1);
+  fs::rename(BlobDownloadState::GetVerifiedStateFilePath(local), BlobDownloadState::GetStateFilePath(local));
+  std::atomic<bool> cancelled{false};
+
+  try {
+    downloader.DownloadBlob("", "blob", local.string(), 1, [&](int64_t bytes) { cancelled = bytes == downloader.blob_size; }, &cancelled);
+    FAIL() << "Expected cancellation before receipt publication";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+  }
+
+  EXPECT_TRUE(cancelled.load());
+  EXPECT_FALSE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+  EXPECT_TRUE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
 }
 
 TEST(AzureBlobDownloaderResumeTest, ChangedETagDiscardsCompletedChunks) {

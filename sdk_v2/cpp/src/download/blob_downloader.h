@@ -56,6 +56,7 @@ class IBlobDownloader {
   /// Download a single blob to a local file path.
   /// The sas_uri is the container SAS URI; blob_name identifies the blob within it.
   /// If bytes_written_cb is provided, it is called after each chunk with the cumulative byte count.
+  /// Verification also polls it without advancing the byte count, so callbacks can request cancellation.
   /// If cancelled is non-null, the download checks the flag and aborts promptly when set.
   virtual void DownloadBlob(const std::string& sas_uri,
                             const std::string& blob_name,

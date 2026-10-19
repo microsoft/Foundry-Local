@@ -40,7 +40,50 @@ namespace {
 /// Scratch space for streamed reads and integrity verification.
 constexpr size_t kStreamingBufferBytes = 64 * 1024;
 
-std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t size) {
+void ThrowIfCancelled(const std::atomic<bool>* cancelled) {
+  if (cancelled && cancelled->load(std::memory_order_relaxed)) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled");
+  }
+}
+
+class VerificationCancellation {
+ public:
+  VerificationCancellation(const std::atomic<bool>* cancelled, std::function<void()> poll_progress)
+      : cancelled_(cancelled), poll_progress_(std::move(poll_progress)) {}
+
+  void Check() {
+    ThrowIfCancelled(cancelled_);
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (error_) {
+      std::rethrow_exception(error_);
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= next_poll_) {
+      next_poll_ = now + std::chrono::milliseconds{100};
+      try {
+        poll_progress_();
+      } catch (...) {
+        // Every reader must stop and propagate the same callback error, even without an external cancel flag.
+        error_ = std::current_exception();
+        throw;
+      }
+    }
+
+    ThrowIfCancelled(cancelled_);
+  }
+
+ private:
+  const std::atomic<bool>* cancelled_;
+  std::function<void()> poll_progress_;
+  std::mutex mutex_;
+  std::exception_ptr error_;
+  std::chrono::steady_clock::time_point next_poll_{};
+};
+
+std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t size,
+                                   const std::function<void()>& check_cancelled) {
+  check_cancelled();
   file.clear();
   file.seekg(offset);
   if (!file) {
@@ -50,6 +93,7 @@ std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t 
   Azure::Core::Cryptography::Md5Hash hash;
   std::array<uint8_t, kStreamingBufferBytes> buffer;
   while (size > 0) {
+    check_cancelled();
     const auto count = static_cast<std::streamsize>(std::min<int64_t>(size, buffer.size()));
     if (!file.read(reinterpret_cast<char*>(buffer.data()), count)) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to read model download while verifying integrity");
@@ -59,10 +103,13 @@ std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t 
     size -= count;
   }
 
+  check_cancelled();
   return hash.Final();
 }
 
-void ValidateCompletedChunks(BlobDownloadState& state, ILogger& logger) {
+void ValidateCompletedChunks(BlobDownloadState& state, ILogger& logger,
+                             const std::function<void()>& check_cancelled) {
+  check_cancelled();
   std::vector<int32_t> completed;
   completed.reserve(static_cast<size_t>(state.completed_count));
   for (int32_t i = 0; i < state.total_chunks; ++i) {
@@ -82,7 +129,8 @@ void ValidateCompletedChunks(BlobDownloadState& state, ILogger& logger) {
     for (auto index = begin; index < end; ++index) {
       const auto chunk = completed[index];
       const auto offset = static_cast<int64_t>(chunk) * state.chunk_size;
-      const auto digest = HashFileRange(file, offset, std::min<int64_t>(state.chunk_size, state.blob_size - offset));
+      const auto digest =
+          HashFileRange(file, offset, std::min<int64_t>(state.chunk_size, state.blob_size - offset), check_cancelled);
       if (!std::equal(digest.begin(), digest.end(), state.chunk_md5[static_cast<size_t>(chunk)].begin())) {
         mismatched.push_back(chunk);
       }
@@ -113,10 +161,13 @@ void ValidateCompletedChunks(BlobDownloadState& state, ILogger& logger) {
   }
 
   for (const auto chunk : mismatched) {
+    check_cancelled();
     logger.Log(LogLevel::Warning, "Model download checksum mismatch in chunk " + std::to_string(chunk) +
                                       " of blob '" + state.blob_name + "'; chunk will be downloaded again");
     state.MarkChunkIncomplete(chunk);
   }
+
+  check_cancelled();
 }
 
 void CommitVerifiedState(BlobDownloadState& state, ILogger& logger) {
@@ -304,13 +355,17 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     // or by external cancellation; checked by workers between iterations.
     std::atomic<bool> internal_cancel{false};
 
+    ThrowIfCancelled(cancelled);
     ChunkContext chunk_ctx{blob_client, azure_ctx, {}};
 
     int64_t blob_size = GetBlobSize(chunk_ctx);
+    ThrowIfCancelled(cancelled);
 
     if (blob_size == 0) {
       EnsureEmptyBlobFile(local_path);
+      ThrowIfCancelled(cancelled);
       BlobDownloadState::DeleteState(local_path, logger_);
+      ThrowIfCancelled(cancelled);
       return;
     }
 
@@ -342,7 +397,12 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
                         "' has no matching data file or blob ETag; starting fresh");
         state.reset();
       } else {
-        ValidateCompletedChunks(*state, logger_);
+        VerificationCancellation verification(cancelled, [&]() {
+          if (bytes_written_cb) {
+            bytes_written_cb(0);
+          }
+        });
+        ValidateCompletedChunks(*state, logger_, [&]() { verification.Check(); });
       }
     }
 
@@ -358,16 +418,19 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     if (bytes_written_cb && bytes_completed.load() > 0) {
       bytes_written_cb(bytes_completed.load());
     }
+    ThrowIfCancelled(cancelled);
 
     auto pending = state->GetPendingChunks();
     if (pending.empty()) {
       FileWriter writer(logger_);
       writer.Open(local_path, blob_size);
       writer.Finish();
-      CommitVerifiedState(*state, logger_);
       if (bytes_written_cb) {
         bytes_written_cb(blob_size);
       }
+      ThrowIfCancelled(cancelled);
+      CommitVerifiedState(*state, logger_);
+      ThrowIfCancelled(cancelled);
       return;
     }
 
@@ -529,7 +592,9 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model download has incomplete chunks for blob '" + blob_name + "'");
     }
 
+    ThrowIfCancelled(cancelled);
     CommitVerifiedState(*state, logger_);
+    ThrowIfCancelled(cancelled);
   } catch (const Azure::Core::OperationCancelledException&) {
     if (cancelled && cancelled->load(std::memory_order_relaxed)) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled");
@@ -568,7 +633,8 @@ std::string ComputeRelativePath(const std::string& prefix, const std::string& bl
 }
 
 /// Size alone is not proof of completion: require a published checksum or a verified, ETag-matched receipt.
-bool IsDownloadNeeded(const BlobItemInfo& blob, const std::string& local_path, ILogger& logger) {
+bool IsDownloadNeeded(const BlobItemInfo& blob, const std::string& local_path, ILogger& logger,
+                      const std::function<void()>& check_cancelled) {
   std::error_code ec;
   auto status = std::filesystem::status(local_path, ec);
   if (ec || !std::filesystem::exists(status) || !std::filesystem::is_regular_file(status)) {
@@ -596,12 +662,12 @@ bool IsDownloadNeeded(const BlobItemInfo& blob, const std::string& local_path, I
       return true;
     }
 
-    ValidateCompletedChunks(*state, logger);
+    ValidateCompletedChunks(*state, logger, check_cancelled);
     return !state->IsComplete();
   }
 
   std::ifstream file(local_path, std::ios::binary);
-  return HashFileRange(file, 0, blob.content_length) != blob.content_md5;
+  return HashFileRange(file, 0, blob.content_length, check_cancelled) != blob.content_md5;
 }
 
 }  // anonymous namespace
@@ -695,10 +761,29 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   // resume of a partially-completed download.
   int64_t skipped_bytes = 0;
   int32_t skipped_file_count = 0;
+  std::atomic<bool> cancelled{false};
+  std::mutex progress_mutex;
+  auto report_progress = [&](int64_t bytes) {
+    ThrowIfCancelled(&cancelled);
+    if (options.progress) {
+      std::lock_guard<std::mutex> lock(progress_mutex);
+      ThrowIfCancelled(&cancelled);
+      const float percent =
+          total_size > 0 ? static_cast<float>(std::min(bytes, total_size)) / static_cast<float>(total_size) * 100.0f
+                         : 100.0f;
+      if (options.progress(percent) != 0) {
+        cancelled.store(true, std::memory_order_relaxed);
+        FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
+      }
+    }
+
+    ThrowIfCancelled(&cancelled);
+  };
+  VerificationCancellation reuse_verification(&cancelled, [&]() { report_progress(skipped_bytes); });
   blobs_to_download.erase(
       std::remove_if(blobs_to_download.begin(), blobs_to_download.end(),
-                     [&skipped_bytes, &skipped_file_count, &logger](const auto& pair) {
-                       if (IsDownloadNeeded(pair.first, pair.second, logger)) {
+                     [&](const auto& pair) {
+                       if (IsDownloadNeeded(pair.first, pair.second, logger, [&]() { reuse_verification.Check(); })) {
                          return false;
                        }
                        skipped_bytes += pair.first.content_length;
@@ -713,35 +798,18 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   // Step 6: Emit initial progress reflecting any already-on-disk bytes.
   // If everything was skipped, emit 100% directly and return.
   if (blobs_to_download.empty()) {
-    if (options.progress) {
-      options.progress(100.0f);
-    }
+    report_progress(total_size);
     return;
   }
 
-  if (options.progress) {
-    float initial_percent =
-        total_size > 0 ? static_cast<float>(skipped_bytes) / static_cast<float>(total_size) * 100.0f : 0.0f;
-    int result = options.progress(initial_percent);
-    if (result != 0) {
-      FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
-    }
-  }
+  report_progress(skipped_bytes);
 
   // Step 7: Download each blob with per-chunk progress.
   // The cancellation flag is set when the progress callback returns non-zero.
   // It is shared with chunk download threads so they can exit promptly.
-  std::atomic<bool> cancelled{false};
   // Seed with skipped bytes so per-chunk progress callbacks compute the right
   // overall percentage.
   std::atomic<int64_t> total_downloaded_bytes{skipped_bytes};
-
-  // The user progress callback can be reached from up to max_concurrency chunk
-  // worker threads at once (per_chunk_progress below). Serialize it so a
-  // caller's callback (UI handle, counter, logger, IPC) is never entered
-  // concurrently — the public download progress API does not require callers to
-  // be thread-safe.
-  std::mutex progress_mutex;
 
   for (const auto& [blob, local_path] : blobs_to_download) {
     // Check cancellation between blobs
@@ -762,20 +830,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
     BlobBytesWrittenFn per_chunk_progress;
     if (options.progress && total_size > 0) {
       per_chunk_progress = [&](int64_t blob_bytes_so_far) {
-        int64_t overall = blob_base_bytes + blob_bytes_so_far;
-        // Don't exceed total_size (may happen if blob sizes changed between list and download)
-        overall = std::min(overall, total_size);
-
-        float percent = static_cast<float>(overall) / static_cast<float>(total_size) * 100.0f;
-        int result;
-        {
-          std::lock_guard<std::mutex> lock(progress_mutex);
-          result = options.progress(percent);
-        }
-        if (result != 0) {
-          cancelled.store(true, std::memory_order_relaxed);
-          FL_THROW(FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED, "download cancelled by user callback return value");
-        }
+        report_progress(blob_base_bytes + blob_bytes_so_far);
       };
     }
 
@@ -783,8 +838,10 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
                             per_chunk_progress, &cancelled);
 
     if (!blob.content_md5.empty()) {
+      VerificationCancellation verification(
+          &cancelled, [&]() { report_progress(blob_base_bytes + blob.content_length); });
       std::ifstream file(local_path, std::ios::binary);
-      if (HashFileRange(file, 0, blob.content_length) != blob.content_md5) {
+      if (HashFileRange(file, 0, blob.content_length, [&]() { verification.Check(); }) != blob.content_md5) {
         FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download checksum mismatch for blob '" + blob.name + "'");
       }
     }
@@ -793,9 +850,7 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
   }
 
   // Final progress
-  if (options.progress) {
-    options.progress(100.0f);
-  }
+  report_progress(total_size);
 }
 
 }  // namespace fl
