@@ -37,10 +37,10 @@ namespace fl {
 
 namespace {
 
-/// Streaming buffer size used by the production chunk downloader. Matches the
-/// 64 KB-ish granularity Stream.CopyTo uses in .NET, capping per-worker peak
-/// memory at this many bytes regardless of chunk size.
+/// Scratch space for streamed reads and integrity verification.
 constexpr size_t kStreamingBufferBytes = 64 * 1024;
+constexpr size_t kWriteBlockBytes = 256 * 1024;
+constexpr size_t kWriteBufferBudgetBytes = 16 * 1024 * 1024;
 
 std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t size) {
   file.clear();
@@ -384,10 +384,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     FileWriter writer(logger_);
     writer.Open(local_path, blob_size);
 
-    // Flush the resume sidecar roughly every 16 MB of completed chunks, so a
-    // hard crash re-downloads at most that much on resume — a fixed bound,
-    // independent of blob size. Checked only at chunk completion, so it never
-    // flushes faster than chunks arrive.
+    // Checkpoint roughly every 16 MB of completed chunks. A crash can also require re-downloading in-flight chunks.
     constexpr int64_t kBytesPerSidecarSave = 16 * 1024 * 1024;
     const int32_t save_interval =
         std::max(1, static_cast<int32_t>(kBytesPerSidecarSave / kChunkSize));
@@ -405,15 +402,17 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
     if (worker_count < 1) {
       worker_count = 1;
     }
+
+    // Keep network concurrency unchanged while bounding extra write buffers across this blob's workers.
+    const auto write_block_bytes =
+        std::min(kWriteBlockBytes, kWriteBufferBudgetBytes / static_cast<size_t>(worker_count));
+    const auto write_buffer_bytes = write_block_bytes > kStreamingBufferBytes ? write_block_bytes : 0;
     std::vector<std::future<void>> workers;
     workers.reserve(static_cast<size_t>(worker_count));
 
     auto worker_body = [&]() {
-      // Per-worker scratch buffer reused across every chunk this worker
-      // handles. Streaming downloads fill the scratch in 64 KB pieces and
-      // forward each piece to the sink, so total transient memory is bounded
-      // by `worker_count * kStreamingBufferBytes` regardless of chunk size.
       std::vector<uint8_t> scratch(kStreamingBufferBytes);
+      std::vector<uint8_t> write_buffer(write_buffer_bytes);
 
       while (true) {
         // External cancellation drains the pool as fast as the SDK can unwind.
@@ -435,28 +434,49 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         int64_t offset = static_cast<int64_t>(chunk_idx) * kChunkSize;
         int64_t size = std::min<int64_t>(kChunkSize, blob_size - offset);
 
-        // Sink advances a per-chunk write cursor and forwards each piece to
-        // the file writer. The writer is responsible for any synchronization
-        // needed across concurrent workers; we don't take a mutex here.
+        // Buffered bytes belong only to this chunk; failed chunks are never marked complete.
+        int64_t received = 0;
         int64_t written = 0;
+        size_t buffered = 0;
         std::vector<uint8_t> digest;
         auto sink = [&](const uint8_t* data, size_t len) {
-          if (len > static_cast<uint64_t>(size - written)) {
+          if (len > static_cast<uint64_t>(size - received)) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned more bytes than the requested chunk");
           }
 
-          writer.WriteAt(offset + written, data, len);
-          written += static_cast<int64_t>(len);
+          received += static_cast<int64_t>(len);
+          if (write_buffer.empty()) {
+            writer.WriteAt(offset + written, data, len);
+            written += static_cast<int64_t>(len);
+            return;
+          }
+
+          while (len > 0) {
+            const auto count = std::min(len, write_buffer.size() - buffered);
+            std::copy_n(data, count, write_buffer.data() + buffered);
+            buffered += count;
+            data += count;
+            len -= count;
+            if (buffered == write_buffer.size()) {
+              writer.WriteAt(offset + written, write_buffer.data(), buffered);
+              written += static_cast<int64_t>(buffered);
+              buffered = 0;
+            }
+          }
         };
 
         try {
           digest = DownloadChunkStreaming(chunk_ctx, offset, size, scratch, sink);
-          if (written != size) {
+          if (received != size) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned an incomplete chunk");
           }
 
           if (digest.size() != state->chunk_md5[static_cast<size_t>(chunk_idx)].size()) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned an invalid chunk checksum");
+          }
+
+          if (buffered > 0) {
+            writer.WriteAt(offset + written, write_buffer.data(), buffered);
           }
 
           // Account for this chunk and fire the progress callback within the same

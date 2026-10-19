@@ -2445,6 +2445,82 @@ TEST(AzureBlobDownloaderIntegrityTest, ReusesVerifiedFilesAndRepairsSameLengthCo
   EXPECT_TRUE(listing.downloaded_blobs.empty());
 }
 
+TEST(AzureBlobDownloaderIntegrityTest, CoalescesSmallReadsBeforeWriting) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const auto local = tmpdir.path() / "blob.bin";
+  FakeChunkAzureDownloader d;
+  d.blob_size = 256 * 1024 + 17;
+  d.chunk_hook = [&](int64_t, int64_t size, const auto& sink, const auto&) {
+    const std::vector<uint8_t> piece(64 * 1024, 42);
+    sink(piece.data(), piece.size());
+    EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(size), '\0'));
+    for (int i = 0; i < 3; ++i) {
+      sink(piece.data(), piece.size());
+    }
+
+    EXPECT_EQ(ReadFile(local), std::string(256 * 1024, '*') + std::string(17, '\0'));
+    sink(piece.data(), 17);
+  };
+
+  int callbacks = 0;
+  d.DownloadBlob("", "blob", local.string(), 1, [&](int64_t bytes) {
+    ++callbacks;
+    EXPECT_EQ(bytes, d.blob_size);
+    EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(d.blob_size), '*'));
+  });
+  EXPECT_EQ(callbacks, 1);
+}
+
+TEST(AzureBlobDownloaderIntegrityTest, KeepsIrregularBlocksWithinTheirChunks) {
+  for (const int concurrency : {1, 3}) {
+    auto tmpdir = TempPath::CreateTempDir();
+    const auto local = tmpdir.path() / "blob.bin";
+    FakeChunkAzureDownloader d;
+    constexpr int64_t kChunkSize = 2 * 1024 * 1024;
+    d.blob_size = 2 * kChunkSize + 256 * 1024 + 17;
+    d.chunk_hook = [&](int64_t offset, int64_t size, const auto& sink, const auto&) {
+      const std::vector<uint8_t> piece(100003, static_cast<uint8_t>(offset / kChunkSize + 1));
+      while (size > 0) {
+        const auto count = static_cast<size_t>(std::min<int64_t>(size, piece.size()));
+        sink(piece.data(), count);
+        size -= static_cast<int64_t>(count);
+      }
+    };
+
+    d.DownloadBlob("", "blob", local.string(), concurrency);
+    EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(kChunkSize), '\1') +
+                                   std::string(static_cast<size_t>(kChunkSize), '\2') +
+                                   std::string(256 * 1024 + 17, '\3'));
+    EXPECT_TRUE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+  }
+}
+
+TEST(AzureBlobDownloaderIntegrityTest, DiscardsBufferedTailOnFailedChunkAndRetries) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const auto local = tmpdir.path() / "blob.bin";
+  FakeChunkAzureDownloader d;
+  d.blob_size = 256 * 1024 + 17;
+  d.chunk_hook = [](int64_t, int64_t size, const auto& sink, const auto&) {
+    const std::vector<uint8_t> bytes(static_cast<size_t>(size), 42);
+    sink(bytes.data(), bytes.size());
+    FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "simulated checksum failure after streaming");
+  };
+
+  int callbacks = 0;
+  EXPECT_THROW(d.DownloadBlob("", "blob", local.string(), 1, [&](int64_t) { ++callbacks; }), fl::Exception);
+  EXPECT_EQ(callbacks, 0);
+  EXPECT_EQ(ReadFile(local), std::string(256 * 1024, '*') + std::string(17, '\0'));
+  EXPECT_FALSE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+  auto state = BlobDownloadState::LoadState("blob", local, d.blob_size, 2 * 1024 * 1024, 1, fl::test::NullLog());
+  ASSERT_NE(state, nullptr);
+  EXPECT_EQ(state->completed_count, 0);
+
+  d.chunk_hook = {};
+  d.DownloadBlob("", "blob", local.string(), 1);
+  EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(d.blob_size), '\0'));
+  EXPECT_TRUE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
+}
+
 TEST(AzureBlobDownloaderResumeTest, SkipsChunksAlreadyMarkedCompleteInSidecar) {
   auto tmpdir = TempPath::CreateTempDir();
   auto local = tmpdir.path() / "blob.bin";
