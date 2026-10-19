@@ -183,68 +183,83 @@ TEST(AzureCatalogClientTest, UsesOneFilterSetPerDeviceAndProvider) {
   EXPECT_EQ(requests[2]["filters"][5]["values"], nlohmann::json({"npu"}));
 }
 
-TEST(AzureCatalogClientTest, FiltersFoundryLocalTagsAcrossCatalogQueries) {
+TEST(AzureCatalogClientTest, FiltersOutFoundryLocalTestModels) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
-  const std::vector<std::pair<std::string, nlohmann::json>> tags{
-      {"empty", ""}, {"hide", "hide"}, {"test", "test"}, {"outlook", "outlook_test"},
-      {"finetuned", "pp_finetuned"}, {"unknown", "other"}, {"null", nullptr},
-  };
-
-  for (const bool full_service : {false, true}) {
-    SCOPED_TRACE(full_service ? "full-service response" : "flat response");
-    auto response = nlohmann::json::parse(MakeSummaryResponse({{"missing", 1}}));
-    auto& records = response["summaries"];
-    for (const auto& [name, tag] : tags) {
-      auto record = nlohmann::json::parse(MakeSummaryResponse({{name, 1}}))["summaries"][0];
-      record["foundryLocal"] = tag;
-      records.push_back(std::move(record));
-    }
-
-    std::vector<std::string> model_ids;
-    for (auto& record : records) {
-      record["alias"] = "shared-alias";
-      model_ids.push_back(record["name"].get<std::string>() + ":1");
-      if (full_service) {
-        nlohmann::json metadata = {{"alias", "shared-alias"}};
-        if (record.contains("foundryLocal")) {
-          metadata["foundryLocal"] = record["foundryLocal"];
+  const char* response = R"({
+    "value": [{
+      "assetId": "azureml://registries/azureml/models/test-model/versions/1",
+      "annotations": {
+        "tags": {"alias": "test-model", "foundryLocal": "test"},
+        "systemCatalogData": {
+          "deploymentOptions": ["Foundry Local on Devices"]
         }
-        record = {
-            {"assetId", record["assetId"]},
-            {"annotations", {{"tags", std::move(metadata)}}},
-            {"properties", {
-                               {"name", record["name"]},
-                               {"version", 1},
-                               {"variantInfo", record["variantInformation"]},
-                           }},
-        };
+      },
+      "properties": {
+        "name": "test-model", "version": 1,
+        "variantInfo": {
+          "variantMetadata": {"modelType": "ONNX", "device": "cpu", "executionProvider": "CPUExecutionProvider"}
+        }
       }
-    }
-    response["totalCount"] = records.size();
-    if (full_service) {
-      response["value"] = std::move(response["summaries"]);
-      response.erase("summaries");
-    }
+    }]
+  })";
+  AzureCatalogClient client("https://test.com", "", ep, logger,
+                            [&](const std::string&, const std::string&) { return MakeOkResponse(response); });
 
-    AzureCatalogClient client("https://test.com", "", ep, logger,
-                              [&](const std::string&, const std::string&) {
-                                return MakeOkResponse(response.dump());
-                              });
+  const auto raw_models = client.FetchAllModels();
+  ASSERT_EQ(raw_models.size(), 1u);
+  EXPECT_EQ(raw_models.front().foundry_local, "test");
+  ASSERT_TRUE(CatalogModelToModelInfo(raw_models.front()).has_value());
+  EXPECT_TRUE(client.FetchAllModelInfos().empty());
+}
+
+TEST(AzureCatalogClientTest, LegacyTagOverridesBypassDefaultAllowlistAcrossCatalogQueries) {
+  CpuOnlyEpDetector ep;
+  StderrLogger logger;
+  auto response = nlohmann::json::parse(
+      MakeSummaryResponse({{"matching", 3}, {"different", 2}, {"legacy", 1}}));
+  for (auto& record : response["summaries"]) {
+    record["alias"] = "shared-alias";
+  }
+  response["summaries"][0]["foundryLocal"] = "Private Ring";
+  response["summaries"][1]["foundryLocal"] = "Other Ring";
+
+  for (const auto* filter_override : {"foundryLocal=Private Ring", "Private Ring"}) {
+    SCOPED_TRACE(filter_override);
     for (const std::string query : {"list", "ids", "versions"}) {
       SCOPED_TRACE(query);
+      AzureCatalogClient client("https://test.com", filter_override, ep, logger,
+                                [&](const std::string&, const std::string& body) {
+                                  if (query == "list") {
+                                    const auto request = nlohmann::json::parse(body);
+                                    EXPECT_EQ(request["filters"][2]["field"], "annotations/tags/foundryLocal");
+                                    EXPECT_EQ(request["filters"][2]["values"], nlohmann::json({"Private Ring"}));
+                                    auto filtered_response = response;
+                                    filtered_response["summaries"] = nlohmann::json::array({response["summaries"][0]});
+                                    filtered_response["totalCount"] = 1;
+                                    return MakeOkResponse(filtered_response.dump());
+                                  }
+                                  return MakeOkResponse(response.dump());
+                                });
+
       std::vector<ModelInfo> models;
       if (query == "list") {
         models = client.FetchAllModelInfos();
       } else if (query == "ids") {
-        models = client.FetchModelsByIds(model_ids);
+        models = client.FetchModelsByIds({"matching:3", "different:2", "legacy:1"});
       } else {
         models = client.FetchAllVersionsByAlias("shared-alias");
       }
 
-      ASSERT_EQ(models.size(), 2u);
-      EXPECT_EQ(models[0].model_id, "empty:1");
-      EXPECT_EQ(models[1].model_id, "hide:1");
+      std::vector<std::string> actual_ids;
+      for (const auto& model : models) {
+        actual_ids.push_back(model.model_id);
+      }
+      std::sort(actual_ids.begin(), actual_ids.end());
+      const std::vector<std::string> expected_ids = query == "list"
+                                                       ? std::vector<std::string>{"matching:3"}
+                                                       : std::vector<std::string>{"legacy:1", "matching:3"};
+      EXPECT_EQ(actual_ids, expected_ids);
     }
   }
 }
