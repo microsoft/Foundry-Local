@@ -183,11 +183,15 @@ if(WinMLEpCatalog_FOUND)
     )
 endif()
 
+# CUDA/WebGPU EP bootstrappers are compiled for Windows, macOS, and Linux
+# x64/ARM64. On other platforms (e.g. Android, other Linux archs) they are
+# excluded, so GetDiscoverableEps() returns an empty list; per-platform
+# IsSupportedPlatform() further gates runtime instantiation.
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" FOUNDRY_LOCAL_SYSTEM_PROCESSOR)
 set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS ON)
 if(ANDROID OR
    (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
-    NOT FOUNDRY_LOCAL_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$"))
+    NOT FOUNDRY_LOCAL_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|aarch64|arm64)$"))
     set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS OFF)
 endif()
 
