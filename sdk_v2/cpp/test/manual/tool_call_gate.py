@@ -113,6 +113,23 @@ def validate_finish_reason(reason, has_calls):
         raise RuntimeError(f"Expected terminal finish_reason {expected!r}, received {reason!r}")
 
 
+def validate_tool_calls(calls):
+    if calls is None:
+        return
+    if not isinstance(calls, list):
+        raise RuntimeError("Expected tool_calls to be an array")
+    ids = set()
+    for call in calls:
+        if not isinstance(call, dict):
+            raise RuntimeError("Expected a tool-call object")
+        call_id = call.get("id")
+        if not isinstance(call_id, str) or not call_id.strip() or call_id in ids:
+            raise RuntimeError("Tool-call IDs must be nonempty unique strings")
+        if call.get("type") != "function":
+            raise RuntimeError("Expected tool-call type 'function'")
+        ids.add(call_id)
+
+
 def parse_completion(result):
     if not isinstance(result, dict):
         raise RuntimeError("Expected a JSON completion object")
@@ -123,6 +140,7 @@ def parse_completion(result):
         raise RuntimeError("Expected exactly one completion choice")
     choice = choices[0]
     message = choice["message"]
+    validate_tool_calls(message.get("tool_calls", []))
     validate_finish_reason(choice.get("finish_reason"), bool(message.get("tool_calls")))
     return message, result
 
@@ -161,16 +179,25 @@ def parse_stream(response):
         delta = choice.get("delta", {})
         message["content"] += delta.get("content") or ""
         for part in delta.get("tool_calls") or []:
-            call = calls.setdefault(part["index"], {"name": "", "arguments": ""})
-            call["name"] += part.get("function", {}).get("name", "")
-            call["arguments"] += part.get("function", {}).get("arguments", "")
+            index = part["index"]
+            if type(index) is not int or index < 0:
+                raise RuntimeError("Expected a nonnegative integer tool-call index")
+            call = calls.setdefault(index, {"function": {"name": "", "arguments": ""}})
+            for key in ("id", "type"):
+                if key in part:
+                    if key in call and call[key] != part[key]:
+                        raise RuntimeError(f"Conflicting streamed tool-call {key}")
+                    call[key] = part[key]
+            call["function"]["name"] += part.get("function", {}).get("name", "")
+            call["function"]["arguments"] += part.get("function", {}).get("arguments", "")
         reason = choice.get("finish_reason")
         if reason is not None:
             validate_finish_reason(reason, bool(calls))
             terminal = True
     if not done:
         raise RuntimeError("Streaming response ended without [DONE]")
-    message["tool_calls"] = [{"function": calls[index]} for index in sorted(calls)]
+    message["tool_calls"] = [calls[index] for index in sorted(calls)]
+    validate_tool_calls(message["tool_calls"])
     return message, chunks
 
 
@@ -185,7 +212,7 @@ def complete(endpoint, request, timeout):
 
 
 def self_test():
-    """Offline terminal-protocol checks only; never qualify an endpoint."""
+    """Offline protocol and tool-metadata checks only; never qualify an endpoint."""
     checks = {}
 
     def choice(delta, reason=None):
@@ -206,8 +233,9 @@ def self_test():
 
     text = {"content": "READY"}
     function = {"name": "lookup", "arguments": '{"city":"Paris"}'}
-    tool = {"tool_calls": [{"function": function}]}
-    tool_delta = {"tool_calls": [{"index": 0, "function": function}]}
+    tool_call = {"id": "call_lookup", "type": "function", "function": function}
+    tool = {"tool_calls": [tool_call]}
+    tool_delta = {"tool_calls": [dict(tool_call, index=0)]}
     for name, message, reason in (("text", text, "stop"), ("tool", tool, "tool_calls")):
         require("valid_completion_" + name, lambda m=message, r=reason: parse_completion(
             {"choices": [{"message": m, "finish_reason": r}]})[0] == m)
@@ -223,7 +251,8 @@ def self_test():
     require("valid_stream_final_content_and_usage", lambda: parse_stream(
         stream(choice(text, "stop"), {"choices": [], "usage": {"total_tokens": 1}}))[0] == expected_text)
     require("valid_stream_fragmented_tool", lambda: parse_stream(stream(
-        choice({"tool_calls": [{"index": 0, "function": {"name": "look", "arguments": '{"city":'}}]}),
+        choice({"tool_calls": [{"index": 0, "id": "call_lookup", "type": "function",
+                                "function": {"name": "look", "arguments": '{"city":'}}]}),
         choice({"tool_calls": [{"index": 0, "function": {"name": "up", "arguments": '"Paris"}'}}]}),
         choice({}, "tool_calls")))[0] == expected_tool)
     invalid = {
@@ -242,6 +271,48 @@ def self_test():
     }
     for name, response in invalid.items():
         require("reject_stream_" + name, lambda r=response: parse_stream(r), rejects=True)
+    metadata_cases = {
+        "missing_id": {"type": "function", "function": function},
+        "empty_id": dict(tool_call, id=""),
+        "blank_id": dict(tool_call, id=" \t"),
+        "nonstring_id": dict(tool_call, id=7),
+        "missing_type": {"id": "call_lookup", "function": function},
+        "incorrect_type": dict(tool_call, type="custom"),
+        "null_type": dict(tool_call, type=None),
+    }
+    for name, call in metadata_cases.items():
+        require("reject_completion_" + name, lambda c=call: parse_completion(
+            {"choices": [{"message": {"tool_calls": [c]}, "finish_reason": "tool_calls"}]}), rejects=True)
+        require("reject_stream_" + name, lambda c=call: parse_stream(stream(
+            choice({"tool_calls": [dict(c, index=0)]}), choice({}, "tool_calls"))), rejects=True)
+    duplicate = {"tool_calls": [tool_call, copy.deepcopy(tool_call)]}
+    require("reject_completion_duplicate_ids", lambda: parse_completion(
+        {"choices": [{"message": duplicate, "finish_reason": "tool_calls"}]}), rejects=True)
+    require("reject_stream_duplicate_ids", lambda: parse_stream(stream(choice(
+        {"tool_calls": [dict(tool_call, index=0), dict(tool_call, index=1)]}),
+        choice({}, "tool_calls"))), rejects=True)
+    for key, value in (("id", "call_other"), ("type", "custom"), ("id", None)):
+        require("reject_stream_conflicting_" + key + "_" + str(value), lambda k=key, v=value: parse_stream(
+            stream(choice(tool_delta), choice({"tool_calls": [{"index": 0, k: v}]}),
+                   choice({}, "tool_calls"))), rejects=True)
+    require("valid_stream_repeated_metadata", lambda: parse_stream(stream(
+        choice(tool_delta), choice({"tool_calls": [{"index": 0, "id": "call_lookup", "type": "function"}]}),
+        choice({}, "tool_calls")))[0] == expected_tool)
+    require("valid_stream_delayed_metadata", lambda: parse_stream(stream(
+        choice({"tool_calls": [{"index": 0, "function": function}]}),
+        choice({"tool_calls": [{"index": 0, "id": "call_lookup", "type": "function"}]}),
+        choice({}, "tool_calls")))[0] == expected_tool)
+    parallel = {"tool_calls": [tool_call, dict(tool_call, id="call_second")]}
+    require("valid_completion_parallel_ids", lambda: parse_completion(
+        {"choices": [{"message": parallel, "finish_reason": "tool_calls"}]})[0] == parallel)
+    require("valid_stream_parallel_ids", lambda: parse_stream(stream(choice(
+        {"tool_calls": [dict(call, index=index) for index, call in enumerate(parallel["tool_calls"])]}),
+        choice({}, "tool_calls")))[0] == dict(parallel, content=""))
+    require("valid_completion_null_tool_calls", lambda: parse_completion(
+        {"choices": [{"message": {"content": "READY", "tool_calls": None}, "finish_reason": "stop"}]}))
+    for index in (-1, True, "0"):
+        require("reject_stream_invalid_index_" + str(index), lambda i=index: parse_stream(stream(
+            choice({"tool_calls": [dict(tool_call, index=i)]}), choice({}, "tool_calls"))), rejects=True)
     passed = all(checks.values())
     print(json.dumps({"self_test_passed": passed, "endpoint_qualification_performed": False,
                       "checks": checks}, indent=2))
