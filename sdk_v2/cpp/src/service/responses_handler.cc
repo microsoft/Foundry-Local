@@ -17,6 +17,7 @@
 #include "items/tool_call_item.h"
 #include "service/web_service.h"
 #include "telemetry/telemetry_action_tracker.h"
+#include "util/json_helpers.h"
 
 #include <chrono>
 #include <fmt/format.h>
@@ -106,7 +107,7 @@ std::shared_ptr<HttpRequestHandler::OutgoingResponse> ResponsesHandler::ParseAnd
     const std::string& body, nlohmann::json& req_json, ResponseCreateParams& params,
     Request& prepared_request, std::vector<fl::ToolDefinition>& tool_definitions) {
   try {
-    req_json = nlohmann::json::parse(body.c_str());
+    req_json = ParseJsonStrict(body);
   } catch (const nlohmann::json::parse_error& ex) {
     return ErrorResponse(Status::CODE_400, "Invalid JSON", ex.what());
   }

@@ -143,6 +143,9 @@ add_executable(foundry_local_tests
     internal_api/toolcalling/tool_call_stream_accumulator_test.cc
     internal_api/toolcalling/raw_envelope_detector_test.cc
     internal_api/toolcalling/tool_call_utils_test.cc
+    internal_api/toolcalling/tool_call_plan_test.cc
+    internal_api/toolcalling/json_tool_call_payload_parser_test.cc
+    internal_api/toolcalling/tool_call_recovery_checkpoint_test.cc
     internal_api/toolcalling/custom_tools_chat_test.cc
     internal_api/toolcalling/custom_tools_responses_test.cc
     internal_api/toolcalling/tool_definition_abi_test.cc

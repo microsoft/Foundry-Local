@@ -43,17 +43,29 @@ using ChatMessagePreparer = std::function<chat_internal::PreparedChatMessages(
 namespace chat_session_internal {
 
 template <typename SegmentProcessor>
+void DeliverDecodedFragment(std::string text, std::optional<int32_t> token_id, ReasoningStreamSplitter& splitter,
+                            SegmentProcessor&& process_segments, bool inside_tool_payload) {
+  if (inside_tool_payload) {
+    if (!text.empty()) {
+      process_segments(std::vector<ReasoningStreamSplitter::Segment>{{std::move(text),
+                                                                      FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT, token_id}});
+    }
+  } else if (token_id.has_value()) {
+    process_segments(splitter.Push(*token_id, std::move(text)));
+  } else if (!text.empty()) {
+    process_segments(splitter.Push(text));
+  }
+}
+
+template <typename SegmentProcessor>
 bool PushDecodedFragment(const std::string& fragment,
                          std::optional<int32_t> token_id,
                          StopStringFilter* stop_filter,
                          ReasoningStreamSplitter& splitter,
-                         SegmentProcessor&& process_segments) {
+                         SegmentProcessor&& process_segments,
+                         bool inside_tool_payload = false) {
   if (stop_filter == nullptr) {
-    if (token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, fragment));
-    } else if (!fragment.empty()) {
-      process_segments(splitter.Push(fragment));
-    }
+    DeliverDecodedFragment(fragment, token_id, splitter, process_segments, inside_tool_payload);
 
     return false;
   }
@@ -63,20 +75,15 @@ bool PushDecodedFragment(const std::string& fragment,
   }
 
   if (fragment.empty()) {
-    if (token_id.has_value()) {
-      process_segments(splitter.Push(*token_id, fragment));
-    }
+    DeliverDecodedFragment(fragment, token_id, splitter, process_segments, inside_tool_payload);
 
     return false;
   }
 
   auto filtered = stop_filter->PushWithTokenAlignment(fragment, token_id);
   for (auto& safe_fragment : filtered.fragments) {
-    if (safe_fragment.token_id.has_value()) {
-      process_segments(splitter.Push(*safe_fragment.token_id, std::move(safe_fragment.text)));
-    } else {
-      process_segments(splitter.Push(safe_fragment.text));
-    }
+    DeliverDecodedFragment(std::move(safe_fragment.text), safe_fragment.token_id, splitter, process_segments,
+                           inside_tool_payload);
   }
 
   return stop_filter->matched();
@@ -85,15 +92,13 @@ bool PushDecodedFragment(const std::string& fragment,
 template <typename SegmentProcessor>
 void FlushDecodedStream(StopStringFilter* stop_filter,
                         ReasoningStreamSplitter& splitter,
-                        SegmentProcessor&& process_segments) {
+                        SegmentProcessor&& process_segments,
+                        bool inside_tool_payload = false) {
   if (stop_filter != nullptr && !stop_filter->matched()) {
     auto tail = stop_filter->FlushWithTokenAlignment();
     for (auto& safe_fragment : tail.fragments) {
-      if (safe_fragment.token_id.has_value()) {
-        process_segments(splitter.Push(*safe_fragment.token_id, std::move(safe_fragment.text)));
-      } else {
-        process_segments(splitter.Push(safe_fragment.text));
-      }
+      DeliverDecodedFragment(std::move(safe_fragment.text), safe_fragment.token_id, splitter, process_segments,
+                             inside_tool_payload);
     }
   }
 
@@ -126,15 +131,15 @@ void PopulateToolDefinitions(const std::vector<ToolDefinition>& definitions, Too
 void ResolveBuiltInRawEnvelope(ToolCallContext& context);
 void ApplyRawEnvelopeGuidance(ToolCallContext& context, ILogger& logger);
 bool ShouldStartInsideReasoning(const ToolCallContext& context, bool prompt_opens_reasoning);
-bool ShouldUseQwenXmlToolCallParser(const ToolCallContext& context,
-                                    bool has_native_qwen_xml_tool_calls);
-ToolCallPayloadParser CreateToolCallPayloadParser(
-    const ToolCallContext& context, const GenAIModelInstance& model);
+ToolCallPayloadParser CreateToolCallPayloadParser(const ToolCallContext& context);
 void NormalizeToolOutputBatch(ToolCallStreamAccumulator::Output& output,
                               const ToolCallContext& tool_ctx);
 ToolCallStreamAccumulator::Output PushToolOutput(
     const std::string& text, RawEnvelopeDetector* raw_detector,
     ToolCallStreamAccumulator& structured_accumulator);
+ToolCallStreamAccumulator::Output PushToolOutputSegment(
+    const ReasoningStreamSplitter::Segment& segment, const ToolCallContext& context,
+    RawEnvelopeDetector* raw_detector, ToolCallStreamAccumulator& structured_accumulator);
 ToolCallStreamAccumulator::Output FlushToolOutput(
     RawEnvelopeDetector* raw_detector,
     ToolCallStreamAccumulator& structured_accumulator,

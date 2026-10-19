@@ -7,6 +7,7 @@
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/chat/stop_strings.h"
 #include "inferencing/generative/toolcalling/tool_call_context.h"
+#include "inferencing/generative/toolcalling/tool_call_plan.h"
 #include "exception.h"
 #include "inferencing/generative/genai_config.h"
 #include "inferencing/model_load_manager.h"
@@ -25,6 +26,30 @@
 #include <vector>
 
 using namespace fl;
+
+TEST(SearchOptionsParsingTest, CanonicalReasoningToolsUseWholeTurnGuidanceRatherThanScratchpadRegionGuidance) {
+  ToolCallContext context;
+  context.tools_json = R"([{"type":"function","function":{"name":"read","parameters":{"type":"object"}}}])";
+  context.tool_plan = ToolCallPlan::Create(context.tools_json);
+  context.tool_output = true;
+  context.supports_reasoning = true;
+  context.reasoning_start = "<think>";
+  context.reasoning_end = "</think>";
+  context.tool_call_start = "<tool_call>";
+  context.tool_call_end = "</tool_call>";
+  context.tool_call_start_token_id = 101;
+  context.tool_call_end_token_id = 102;
+  context.reasoning_start_token_id = 103;
+  context.reasoning_end_token_id = 104;
+  const auto whole_turn = ResolveTurnGuidanceOptions(context, /*prompt_opens_reasoning=*/true);
+  ASSERT_TRUE(whole_turn.has_value());
+  EXPECT_EQ(whole_turn->type, "lark_grammar");
+  EXPECT_FALSE(whole_turn->user_specified);
+
+  context.supports_reasoning = false;
+  context.tool_body_grammar = context.tool_plan->Grammar();
+  EXPECT_FALSE(ResolveTurnGuidanceOptions(context, false).has_value());
+}
 
 TEST(SearchOptionsParsingTest, TemperatureOutsideSupportedRangeThrows) {
   for (const char* temperature : {"-1", "2.1", "nan"}) {
@@ -390,7 +415,7 @@ TEST(EngineTurnOptionsPlanTest, RegionGuidanceDoesNotBecomeWholeTurnGuidance) {
   tool_ctx.tool_output = true;
   tool_ctx.tools_json = R"([{"type":"function","function":{"name":"grep",)"
                         R"("parameters":{"type":"object","properties":{"paths":{"type":"string"}}}}}])";
-  tool_ctx.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
+  tool_ctx.tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
 
   const auto plan = BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
   EXPECT_FALSE(plan.guidance.has_value());
@@ -409,13 +434,14 @@ TEST(EngineTurnOptionsPlanTest, GuidedRetryReplacesRegionGuidanceWithWholeTurnJs
                         R"("parameters":{"type":"object","properties":{"paths":{"type":"string"}}}}}])";
   tool_ctx.tool_call_start = "<tool_call>";
   tool_ctx.tool_call_end = "</tool_call>";
-  tool_ctx.qwen_xml_tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
+  tool_ctx.tool_plan = ToolCallPlan::Create(tool_ctx.tools_json);
+  tool_ctx.tool_body_grammar = "start: \"\\n<function=grep>\\n\"";
   EXPECT_FALSE(BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false).guidance);
 
   tool_ctx.ConfigureForGuidedToolRetry();
   EXPECT_FALSE(tool_ctx.text_output);
   EXPECT_TRUE(tool_ctx.tool_output);
-  EXPECT_FALSE(tool_ctx.qwen_xml_tool_body_grammar);
+  EXPECT_FALSE(tool_ctx.tool_body_grammar);
 
   const auto retry = BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
   ASSERT_TRUE(retry.guidance);
@@ -464,6 +490,10 @@ TEST(EngineTurnOptionsPlanTest, PromptOpenedReasoningOmitsTheGrammarOpener) {
   tool_ctx.reasoning_end = "</think>";
   tool_ctx.reasoning_start_token_id = 248058;
   tool_ctx.reasoning_end_token_id = 248059;
+  tool_ctx.tools_json = R"([{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}])";
+  tool_ctx.tool_plan = ToolCallPlan::Create(tool_ctx.tools_json);
+  tool_ctx.tool_call_start = "<tool_call>";
+  tool_ctx.tool_call_end = "</tool_call>";
 
   const auto closed_plan =
       BuildEngineTurnOptionsPlan(SearchOptions{}, tool_ctx, ChatBackendKind::kEngine, false);
@@ -474,8 +504,8 @@ TEST(EngineTurnOptionsPlanTest, PromptOpenedReasoningOmitsTheGrammarOpener) {
   ASSERT_TRUE(open_plan.guidance.has_value());
   EXPECT_FALSE(closed_plan.guidance->user_specified);
   EXPECT_FALSE(open_plan.guidance->user_specified);
-  EXPECT_NE(closed_plan.guidance->data.find("cot: <[248058]> THINK_TEXT"), std::string::npos);
-  EXPECT_NE(open_plan.guidance->data.find("cot: THINK_TEXT <[248059]>"), std::string::npos);
+  EXPECT_NE(closed_plan.guidance->data.find("cot: <[248058]> plain_token*"), std::string::npos);
+  EXPECT_NE(open_plan.guidance->data.find("cot: plain_token* <[248059]>"), std::string::npos);
   EXPECT_EQ(open_plan.guidance->data.find("cot: <[248058]>"), std::string::npos);
 }
 
