@@ -34,7 +34,7 @@ class FileWriter {
   /// concurrent calls targeting disjoint ranges.
   void WriteAt(int64_t offset, const uint8_t* data, size_t len);
 
-  /// Flush and close, surfacing deferred write errors rather than publishing incomplete data.
+  /// Close and surface close errors. Buffered writes are not explicitly synchronized to durable storage.
   void Finish();
 
   /// Release the underlying OS handle. Implicitly called by the destructor.

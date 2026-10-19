@@ -125,7 +125,7 @@ void BenchmarkIo(const std::filesystem::path& directory, int64_t bytes, int runs
 
     const auto written = Clock::now();
     writer.Finish();
-    const auto flushed = Clock::now();
+    const auto closed = Clock::now();
     std::ifstream input(file, std::ios::binary);
     std::array<uint8_t, 64 * 1024> buffer;
     for (int64_t offset = 0; offset < bytes; offset += kChunkSize) {
@@ -147,9 +147,9 @@ void BenchmarkIo(const std::filesystem::path& directory, int64_t bytes, int runs
     input.close();
     std::printf(
         "{\"mode\":\"io\",\"run\":%d,\"bytes\":%lld,\"concurrency\":%d,"
-        "\"write_s\":%.6f,\"flush_s\":%.6f,\"readback_s\":%.6f,\"total_s\":%.6f}\n",
-        run, static_cast<long long>(bytes), concurrency, Seconds(start, written), Seconds(written, flushed),
-        Seconds(flushed, end), Seconds(start, end));
+        "\"write_s\":%.6f,\"close_s\":%.6f,\"readback_s\":%.6f,\"total_s\":%.6f}\n",
+        run, static_cast<long long>(bytes), concurrency, Seconds(start, written), Seconds(written, closed),
+        Seconds(closed, end), Seconds(start, end));
     std::fflush(stdout);
     std::filesystem::remove(file);
   }

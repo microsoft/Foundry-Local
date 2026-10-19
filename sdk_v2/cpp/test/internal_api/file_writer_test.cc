@@ -65,7 +65,7 @@ TEST(FileWriterTest, OpenPreservesExistingFileAtSameSize) {
   EXPECT_EQ(byte, 0xAB);
 }
 
-TEST(FileWriterTest, FinishReportsInvalidHandleInsteadOfAcceptingUnflushedData) {
+TEST(FileWriterTest, FinishReportsInvalidHandle) {
   FileWriter writer(fl::test::NullLog());
   EXPECT_THROW(writer.Finish(), fl::Exception);
 }

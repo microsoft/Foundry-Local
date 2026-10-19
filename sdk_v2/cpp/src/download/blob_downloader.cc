@@ -39,8 +39,6 @@ namespace {
 
 /// Scratch space for streamed reads and integrity verification.
 constexpr size_t kStreamingBufferBytes = 64 * 1024;
-constexpr size_t kWriteBlockBytes = 256 * 1024;
-constexpr size_t kWriteBufferBudgetBytes = 16 * 1024 * 1024;
 
 std::vector<uint8_t> HashFileRange(std::ifstream& file, int64_t offset, int64_t size) {
   file.clear();
@@ -403,16 +401,11 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       worker_count = 1;
     }
 
-    // Keep network concurrency unchanged while bounding extra write buffers across this blob's workers.
-    const auto write_block_bytes =
-        std::min(kWriteBlockBytes, kWriteBufferBudgetBytes / static_cast<size_t>(worker_count));
-    const auto write_buffer_bytes = write_block_bytes > kStreamingBufferBytes ? write_block_bytes : 0;
     std::vector<std::future<void>> workers;
     workers.reserve(static_cast<size_t>(worker_count));
 
     auto worker_body = [&]() {
       std::vector<uint8_t> scratch(kStreamingBufferBytes);
-      std::vector<uint8_t> write_buffer(write_buffer_bytes);
 
       while (true) {
         // External cancellation drains the pool as fast as the SDK can unwind.
@@ -434,35 +427,15 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
         int64_t offset = static_cast<int64_t>(chunk_idx) * kChunkSize;
         int64_t size = std::min<int64_t>(kChunkSize, blob_size - offset);
 
-        // Buffered bytes belong only to this chunk; failed chunks are never marked complete.
         int64_t received = 0;
-        int64_t written = 0;
-        size_t buffered = 0;
         std::vector<uint8_t> digest;
         auto sink = [&](const uint8_t* data, size_t len) {
           if (len > static_cast<uint64_t>(size - received)) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned more bytes than the requested chunk");
           }
 
+          writer.WriteAt(offset + received, data, len);
           received += static_cast<int64_t>(len);
-          if (write_buffer.empty()) {
-            writer.WriteAt(offset + written, data, len);
-            written += static_cast<int64_t>(len);
-            return;
-          }
-
-          while (len > 0) {
-            const auto count = std::min(len, write_buffer.size() - buffered);
-            std::copy_n(data, count, write_buffer.data() + buffered);
-            buffered += count;
-            data += count;
-            len -= count;
-            if (buffered == write_buffer.size()) {
-              writer.WriteAt(offset + written, write_buffer.data(), buffered);
-              written += static_cast<int64_t>(buffered);
-              buffered = 0;
-            }
-          }
         };
 
         try {
@@ -473,10 +446,6 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
 
           if (digest.size() != state->chunk_md5[static_cast<size_t>(chunk_idx)].size()) {
             FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download returned an invalid chunk checksum");
-          }
-
-          if (buffered > 0) {
-            writer.WriteAt(offset + written, write_buffer.data(), buffered);
           }
 
           // Account for this chunk and fire the progress callback within the same
@@ -509,9 +478,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
           std::copy(digest.begin(), digest.end(), state->chunk_md5[static_cast<size_t>(chunk_idx)].begin());
           state->MarkChunkComplete(chunk_idx);
           int32_t inc = chunks_since_save.fetch_add(1, std::memory_order_relaxed) + 1;
-          // Skip the periodic save once every chunk is done: the finalization
-          // path below deletes the sidecar on success, so writing a fully
-          // complete sidecar here would just be undone microseconds later.
+          // Finalization publishes the complete receipt, so skip a redundant checkpoint once every chunk is done.
           if (inc >= save_interval && !state->IsComplete()) {
             chunks_since_save.store(0, std::memory_order_relaxed);
             should_save = true;
@@ -542,21 +509,7 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       }
     }
 
-    std::exception_ptr verification_error;
-    if (first_error || (cancelled && cancelled->load(std::memory_order_relaxed))) {
-      writer.Finish();
-    } else {
-      // No writers remain: overlap cached readback with flush, but await both before publishing the receipt.
-      auto finish = std::async(std::launch::async, [&]() { writer.Finish(); });
-      try {
-        ValidateCompletedChunks(*state, logger_);
-      } catch (...) {
-        verification_error = std::current_exception();
-      }
-
-      // Join even if verification failed; a flush/close failure takes precedence over a readback failure.
-      finish.get();
-    }
+    writer.Finish();
 
     const bool was_cancelled = cancelled && cancelled->load(std::memory_order_relaxed);
     if (first_error || was_cancelled) {
@@ -571,14 +524,9 @@ void AzureBlobDownloader::DownloadBlob(const std::string& sas_uri,
       std::rethrow_exception(first_error);
     }
 
-    if (verification_error) {
-      std::rethrow_exception(verification_error);
-    }
-
     if (!state->IsComplete()) {
       state->SaveState(logger_);
-      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model download failed on-disk checksum verification for blob '" +
-                                                 blob_name + "'; retry the download to repair it");
+      FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "model download has incomplete chunks for blob '" + blob_name + "'");
     }
 
     CommitVerifiedState(*state, logger_);

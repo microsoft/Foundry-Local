@@ -2445,7 +2445,7 @@ TEST(AzureBlobDownloaderIntegrityTest, ReusesVerifiedFilesAndRepairsSameLengthCo
   EXPECT_TRUE(listing.downloaded_blobs.empty());
 }
 
-TEST(AzureBlobDownloaderIntegrityTest, CoalescesSmallReadsBeforeWriting) {
+TEST(AzureBlobDownloaderIntegrityTest, WritesSmallReadsBeforeReportingProgress) {
   auto tmpdir = TempPath::CreateTempDir();
   const auto local = tmpdir.path() / "blob.bin";
   FakeChunkAzureDownloader d;
@@ -2453,7 +2453,8 @@ TEST(AzureBlobDownloaderIntegrityTest, CoalescesSmallReadsBeforeWriting) {
   d.chunk_hook = [&](int64_t, int64_t size, const auto& sink, const auto&) {
     const std::vector<uint8_t> piece(64 * 1024, 42);
     sink(piece.data(), piece.size());
-    EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(size), '\0'));
+    EXPECT_EQ(ReadFile(local), std::string(piece.size(), '*') +
+                                   std::string(static_cast<size_t>(size) - piece.size(), '\0'));
     for (int i = 0; i < 3; ++i) {
       sink(piece.data(), piece.size());
     }
@@ -2495,7 +2496,7 @@ TEST(AzureBlobDownloaderIntegrityTest, KeepsIrregularBlocksWithinTheirChunks) {
   }
 }
 
-TEST(AzureBlobDownloaderIntegrityTest, DiscardsBufferedTailOnFailedChunkAndRetries) {
+TEST(AzureBlobDownloaderIntegrityTest, DoesNotCompleteFailedChunkAfterWritesAndRetries) {
   auto tmpdir = TempPath::CreateTempDir();
   const auto local = tmpdir.path() / "blob.bin";
   FakeChunkAzureDownloader d;
@@ -2509,7 +2510,7 @@ TEST(AzureBlobDownloaderIntegrityTest, DiscardsBufferedTailOnFailedChunkAndRetri
   int callbacks = 0;
   EXPECT_THROW(d.DownloadBlob("", "blob", local.string(), 1, [&](int64_t) { ++callbacks; }), fl::Exception);
   EXPECT_EQ(callbacks, 0);
-  EXPECT_EQ(ReadFile(local), std::string(256 * 1024, '*') + std::string(17, '\0'));
+  EXPECT_EQ(ReadFile(local), std::string(static_cast<size_t>(d.blob_size), '*'));
   EXPECT_FALSE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
   auto state = BlobDownloadState::LoadState("blob", local, d.blob_size, 2 * 1024 * 1024, 1, fl::test::NullLog());
   ASSERT_NE(state, nullptr);
@@ -2732,49 +2733,6 @@ TEST(AzureBlobDownloaderResumeTest, ShortChunkCannotPublishPreallocatedFile) {
   ASSERT_NE(state, nullptr);
   EXPECT_EQ(state->completed_count, 0);
   EXPECT_EQ(fs::file_size(local), 32u);
-}
-
-TEST(AzureBlobDownloaderResumeTest, DetectsOnDiskCorruptionBeforeReportingSuccess) {
-  auto tmpdir = TempPath::CreateTempDir();
-  auto local = tmpdir.path() / "blob.bin";
-  FakeChunkAzureDownloader downloader;
-  downloader.blob_size = 32;
-  auto corrupt_after_write = [&](int64_t) {
-    std::fstream file(local, std::ios::binary | std::ios::in | std::ios::out);
-    file.put('X');
-  };
-
-  EXPECT_THROW(downloader.DownloadBlob("", "blob", local.string(), 1, corrupt_after_write), fl::Exception);
-
-  auto state = BlobDownloadState::LoadState("blob", local, 32, 2 * 1024 * 1024, 1, fl::test::NullLog());
-  ASSERT_NE(state, nullptr);
-  EXPECT_EQ(state->completed_count, 0);
-
-  downloader.DownloadBlob("", "blob", local.string(), 1);
-  EXPECT_FALSE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
-}
-
-TEST(AzureBlobDownloaderResumeTest, ParallelReadbackFailureDoesNotPublishReceiptAndCanRetry) {
-  auto tmpdir = TempPath::CreateTempDir();
-  const auto local = tmpdir.path() / "blob.bin";
-  constexpr int64_t kBlobSize = 12 * int64_t{2 * 1024 * 1024};
-  FakeChunkAzureDownloader downloader;
-  downloader.blob_size = kBlobSize;
-  std::atomic<bool> truncated{false};
-  auto truncate_after_writes = [&](int64_t bytes) {
-    if (bytes == kBlobSize && !truncated.exchange(true)) {
-      fs::resize_file(local, 1);
-    }
-  };
-
-  EXPECT_THROW(downloader.DownloadBlob("", "blob", local.string(), 4, truncate_after_writes), fl::Exception);
-  EXPECT_TRUE(truncated.load());
-  EXPECT_FALSE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
-  EXPECT_TRUE(fs::exists(BlobDownloadState::GetStateFilePath(local)));
-
-  EXPECT_NO_THROW(downloader.DownloadBlob("", "blob", local.string(), 4));
-  EXPECT_EQ(fs::file_size(local), static_cast<uintmax_t>(kBlobSize));
-  EXPECT_TRUE(fs::exists(BlobDownloadState::GetVerifiedStateFilePath(local)));
 }
 
 TEST(AzureBlobDownloaderResumeTest, PersistsSidecarOnChunkFailure) {
