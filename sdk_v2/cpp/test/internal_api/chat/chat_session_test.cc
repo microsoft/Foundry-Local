@@ -1674,7 +1674,8 @@ class QwenNativeProductionIntegrationTest : public ::testing::Test {
                                            std::vector<nlohmann::json>* chunks = nullptr,
                                            bool include_custom_tool = false,
                                            std::optional<bool> parallel_tool_calls = std::nullopt,
-                                           bool closed_schema = false) {
+                                           bool closed_schema = false,
+                                           const std::vector<std::string>& stop_sequences = {}) {
     if (chunks != nullptr) {
       session.SetStreamingCallback(
           [chunks](flStreamingCallbackData event, void*) {
@@ -1734,6 +1735,9 @@ class QwenNativeProductionIntegrationTest : public ::testing::Test {
     }
     if (parallel_tool_calls.has_value()) {
       body["parallel_tool_calls"] = *parallel_tool_calls;
+    }
+    if (!stop_sequences.empty()) {
+      body["stop"] = stop_sequences;
     }
 
     Request request;
@@ -1946,6 +1950,191 @@ TEST_F(QwenNativeProductionIntegrationTest,
         }
         EXPECT_EQ(counters->created, 1);
         EXPECT_EQ(streamed_text, visible);
+      }
+    }
+  }
+}
+
+TEST_F(QwenNativeProductionIntegrationTest,
+       AutomaticVisibleStopsMatchAfterFramingAcrossBackendsAndApis) {
+  struct Case {
+    std::string wire;
+    std::string stop;
+    std::string visible;
+    std::string reasoning;
+    std::string city;
+  };
+  const std::string call =
+      R"(<tool_call>[{"name":"lookup","parameters":{"city":"PASS"}}]</tool_call>)";
+  const std::vector<Case> cases{
+      {"MESSAGE\nREADY", "SS", "READY", "", ""},
+      {"MESSAGE\nREADY", "DY", "REA", "", ""},
+      {"MESSAGE\nREADY", "READY", "", "", ""},
+      {"MESSAGE\nREADY", "\nR", "READY", "", ""},
+      {"MESSAGE\nREADY", "MESSAGE\n", "READY", "", ""},
+      {"MESSAGE\nREADY PASS ignored", "SS", "READY PA", "", ""},
+      {"MESSAGE\nSSignored", "SS", "", "", ""},
+      {"MESSAGE\nREADY MESSAGE\nignored", "MESSAGE\n", "READY ", "", ""},
+      {"MESSAGE\nREADY S", "SS", "READY S", "", ""},
+      {"MESSAGE\nREADY S" + call, "SS", "READY S", "", "PASS"},
+      {call, "SS", "", "", "PASS"},
+      {call, "<tool_call>", "", "", "PASS"},
+      {"MESSAGE\nREADY SSignored" + call, "SS", "READY ", "", ""},
+      {call + "SSignored", "SS", "", "", "PASS"},
+      {"<think>ASSESS</think>MESSAGE\nREADY", "SS", "READY", "ASSESS", ""},
+      {"<think>ASSESS</think>MESSAGE\nSSignored", "SS", "", "ASSESS", ""},
+      {"<think>ASSESS</think>MESSAGE\nREADY S" + call, "SS", "READY S", "ASSESS", "PASS"},
+      {"<think>ASSESS</think>" + call, "<think>", "", "ASSESS", "PASS"},
+  };
+
+  for (auto* native_model : {engine_model_, model_}) {
+    SCOPED_TRACE(native_model == model_ ? "classic Generator" : "Engine");
+    for (const bool json_request : {false, true}) {
+      SCOPED_TRACE(json_request ? "chat completions" : "stateful");
+      for (const auto& test_case : cases) {
+        SCOPED_TRACE(test_case.wire);
+        SCOPED_TRACE(test_case.stop);
+        // Exercise every header split and a single ordinary-text chunk (including an immediate visible stop).
+        for (size_t first_chunk_size = 1; first_chunk_size <= ToolCallContext::kAssistantTextPrefix.size() + 1;
+             ++first_chunk_size) {
+          SCOPED_TRACE(first_chunk_size);
+          const auto chunk_size = first_chunk_size == ToolCallContext::kAssistantTextPrefix.size() + 1
+                                      ? std::string::npos
+                                      : size_t{1};
+          auto counters = std::make_shared<GeneratorCounters>();
+          auto catalog_model = MakeCatalogModel(!test_case.reasoning.empty());
+          ChatSession session(catalog_model, *native_model, *logger_, telemetry_, {},
+                              OutputFactory(test_case.wire, counters, BackendTerminationCause::kNaturalEnd,
+                                            chunk_size, chunk_size == 1 ? first_chunk_size : std::string::npos));
+          std::string streamed_text;
+          std::string streamed_reasoning;
+          std::vector<std::string> streamed_cities;
+          if (json_request) {
+            std::vector<nlohmann::json> chunks;
+            const auto completion = RunChatCompletions(session, "auto", &chunks, false, std::nullopt, false,
+                                                        {test_case.stop});
+            for (const auto& chunk : chunks) {
+              const auto& delta = chunk.at("choices").at(0).at("delta");
+              streamed_text += delta.value("content", "");
+              streamed_reasoning += delta.value("reasoning_content", "");
+              for (const auto& tool_call : delta.value("tool_calls", nlohmann::json::array())) {
+                EXPECT_EQ(streamed_text, test_case.visible);
+                streamed_cities.push_back(nlohmann::json::parse(
+                    tool_call.at("function").at("arguments").get<std::string>()).at("city"));
+              }
+            }
+
+            const auto& choice = completion.at("choices").at(0);
+            const auto& message = choice.at("message");
+            EXPECT_EQ(message.at("content").is_null() ? "" : message.at("content").get<std::string>(),
+                      test_case.visible);
+            EXPECT_EQ(message.value("reasoning_content", ""), test_case.reasoning);
+            const auto calls = message.value("tool_calls", nlohmann::json::array());
+            ASSERT_EQ(calls.size(), test_case.city.empty() ? 0u : 1u);
+            if (!calls.empty()) {
+              EXPECT_EQ(nlohmann::json::parse(calls[0].at("function").at("arguments").get<std::string>()).at("city"),
+                        test_case.city);
+            }
+            EXPECT_EQ(choice.at("finish_reason"), test_case.city.empty() ? "stop" : "tool_calls");
+            EXPECT_TRUE(session.Transcript().Empty());
+          } else {
+            AddFunctionTools(session);
+            session.SetStreamingCallback([&](flStreamingCallbackData event, void*) {
+              auto* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
+              while (auto item = queue->TryPop()) {
+                if (item->type == FOUNDRY_LOCAL_ITEM_TEXT) {
+                  const auto& segment = static_cast<const TextItem&>(*item);
+                  (segment.text_type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_REASONING ? streamed_reasoning : streamed_text) +=
+                      segment.text;
+                } else if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+                  EXPECT_EQ(streamed_text, test_case.visible);
+                  streamed_cities.push_back(nlohmann::json::parse(static_cast<const ToolCallItem&>(*item).arguments)
+                                                .at("city"));
+                } else {
+                  ADD_FAILURE() << "Unexpected streamed item type";
+                }
+              }
+              return 0;
+            });
+            auto request = MakeStatefulRequest("route this");
+            StoreStopStringsOption({test_case.stop}, request.options);
+            Response response;
+            session.ProcessRequest(request, response);
+            const auto calls = Calls(response);
+            ASSERT_EQ(calls.size(), test_case.city.empty() ? 0u : 1u);
+            if (!calls.empty()) {
+              EXPECT_EQ(nlohmann::json::parse(calls[0]->arguments).at("city"), test_case.city);
+            }
+            EXPECT_EQ(response.finish_reason, test_case.city.empty() ? FOUNDRY_LOCAL_FINISH_STOP
+                                                                    : FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+            EXPECT_EQ(session.TurnCount(), 1u);
+            ASSERT_FALSE(session.Transcript().Messages().empty());
+            EXPECT_EQ(session.Transcript().Messages().back().VisibleText(), test_case.visible);
+            EXPECT_EQ(session.Transcript().Messages().back().ReasoningText(), test_case.reasoning);
+          }
+          EXPECT_EQ(counters->created, 1);
+          EXPECT_EQ(streamed_text, test_case.visible);
+          EXPECT_EQ(streamed_reasoning, test_case.reasoning);
+          EXPECT_EQ(streamed_cities, test_case.city.empty() ? std::vector<std::string>{}
+                                                          : std::vector<std::string>{test_case.city});
+        }
+      }
+    }
+  }
+}
+
+TEST_F(QwenNativeProductionIntegrationTest,
+       AutomaticVisibleStopAndFlushedSuffixCallbacksCancelWithoutCommittingAcrossBackendsAndApis) {
+  for (auto* native_model : {engine_model_, model_}) {
+    SCOPED_TRACE(native_model == model_ ? "classic Generator" : "Engine");
+    for (const bool json_request : {false, true}) {
+      SCOPED_TRACE(json_request ? "chat completions" : "stateful");
+      for (const auto& visible : {std::string("READY SSignored"), std::string("S")}) {
+        SCOPED_TRACE(visible);
+        const auto expected = visible == "S" ? "S" : "READY ";
+        auto counters = std::make_shared<GeneratorCounters>();
+        auto catalog_model = MakeCatalogModel();
+        ChatSession session(catalog_model, *native_model, *logger_, telemetry_, {},
+                            OutputFactory("MESSAGE\n" + visible, counters));
+        std::string streamed;
+        session.SetStreamingCallback([&](flStreamingCallbackData event, void*) {
+          auto* queue = reinterpret_cast<fl::ItemQueue*>(event.item_queue);
+          while (auto item = queue->TryPop()) {
+            EXPECT_EQ(item->type, FOUNDRY_LOCAL_ITEM_TEXT);
+            if (item->type != FOUNDRY_LOCAL_ITEM_TEXT) {
+              return 1;
+            }
+
+            const auto& text = static_cast<const TextItem&>(*item).text;
+            if (json_request) {
+              const auto chunk = nlohmann::json::parse(text);
+              const auto& choice = chunk.at("choices").at(0);
+              EXPECT_TRUE(choice.at("finish_reason").is_null());
+              streamed += choice.at("delta").value("content", "");
+            } else {
+              streamed += text;
+            }
+          }
+          return streamed.empty() ? 0 : 1;
+        });
+        if (json_request) {
+          ExpectOperationCancelled([&] {
+            RunChatCompletions(session, "auto", nullptr, false, std::nullopt, false, {"SS"});
+          });
+        } else {
+          AddFunctionTools(session);
+          auto request = MakeStatefulRequest("route this");
+          StoreStopStringsOption({"SS"}, request.options);
+          Response response;
+          ExpectOperationCancelled([&] { session.ProcessRequest(request, response); });
+          EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_NONE);
+          EXPECT_TRUE(response.items.empty());
+        }
+        EXPECT_EQ(streamed, expected);
+        EXPECT_EQ(counters->created, 1);
+        EXPECT_GT(counters->canceled, 0);
+        EXPECT_TRUE(session.Transcript().Empty());
+        EXPECT_EQ(session.TurnCount(), 0u);
       }
     }
   }

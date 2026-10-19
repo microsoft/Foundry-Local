@@ -386,6 +386,55 @@ TEST(EngineTurnOptionsPlanTest, NegativeSeedIsOmitted) {
   }
 }
 
+TEST(EngineTurnOptionsPlanTest, SuppressesNativeStopsOnlyForAssistantTextFraming) {
+  SearchOptions options;
+  options.stop_sequences = {"SS", "STOP"};
+  ToolCallContext automatic;
+  automatic.tools_json =
+      R"([{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}])";
+  automatic.tool_plan = ToolCallPlan::Create(automatic.tools_json);
+  automatic.tool_call_start = "<tool_call>";
+  automatic.tool_call_end = "</tool_call>";
+  automatic.tool_call_start_token_id = 99;
+  automatic.tool_call_end_token_id = 100;
+  automatic.text_output = true;
+  automatic.tool_output = true;
+  ASSERT_TRUE(automatic.UsesAssistantTextFraming());
+
+  auto required = automatic;
+  required.text_output = false;
+  auto disabled_tools = automatic;
+  disabled_tools.tool_output = false;
+  auto explicit_guidance = automatic;
+  explicit_guidance.guidance_type = "json_schema";
+  explicit_guidance.guidance_data = R"({"type":"object"})";
+  auto raw = automatic;
+  raw.raw_envelope = RawEnvelopeDescriptor{"lookup", "BEGIN", "END"};
+  raw.tool_kinds.emplace("lookup", ToolKind::kCustom);
+  ASSERT_NE(raw.ActiveRawEnvelope(), nullptr);
+
+  const std::vector<std::pair<ToolCallContext, bool>> cases{
+      {ToolCallContext{}, false}, {automatic, true}, {required, false},
+      {disabled_tools, false}, {explicit_guidance, false}, {raw, false}};
+  for (const auto& [context, framed] : cases) {
+    for (const bool reasoning : {false, true}) {
+      auto turn_context = context;
+      turn_context.supports_reasoning = reasoning;
+      turn_context.reasoning_start = "<think>";
+      turn_context.reasoning_end = "</think>";
+      turn_context.reasoning_start_token_id = 101;
+      turn_context.reasoning_end_token_id = 102;
+      for (const bool prompt_opens_reasoning : {false, true}) {
+        const auto plan = BuildEngineTurnOptionsPlan(options, turn_context, ChatBackendKind::kEngine,
+                                                     prompt_opens_reasoning);
+        EXPECT_EQ(turn_context.UsesAssistantTextFraming(), framed);
+        EXPECT_EQ(plan.stop_sequences, framed ? std::vector<std::string>{} : options.stop_sequences);
+      }
+    }
+  }
+  EXPECT_EQ(options.stop_sequences, (std::vector<std::string>{"SS", "STOP"}));
+}
+
 TEST(EngineTurnOptionsPlanTest, ZeroSeedIsForwarded) {
   SearchOptions options;
   options.seed = 0;

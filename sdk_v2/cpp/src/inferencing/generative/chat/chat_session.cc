@@ -111,6 +111,39 @@ std::unique_ptr<ChatGenerator> CreatePreparedTextChatGenerator(
 
 using TextSegment = ReasoningStreamSplitter::Segment;
 
+// Framed turns match stops only after protocol removal and tool/reasoning classification. Validate the original
+// visible bytes before filtering so a stop at the first visible byte is not mistaken for an empty model frame.
+class AssistantTextOutputFilter {
+ public:
+  AssistantTextOutputFilter(const ToolCallContext& context, const SearchOptions& options)
+      : framer_(context),
+        stop_filter_(context.UsesAssistantTextFraming() ? options.stop_sequences : std::vector<std::string>{}) {}
+
+  std::string Push(std::string_view text) {
+    return stop_filter_.Push(framer_.Push(text));
+  }
+
+  std::string Flush() {
+    return stop_filter_.Flush();
+  }
+
+  bool Matched() const {
+    return stop_filter_.matched();
+  }
+
+  void ValidateBoundary() const {
+    framer_.ValidateBoundary();
+  }
+
+  void ValidateCompletion(bool has_tool_calls) const {
+    framer_.ValidateCompletion(has_tool_calls);
+  }
+
+ private:
+  AssistantTextFramer framer_;
+  StopStringFilter stop_filter_;
+};
+
 /// Value of `key` in `options`, or an empty string when it is absent.
 std::string GetOptionOrEmpty(const KeyValuePairs& options, const char* key) {
   auto it = options.find(key);
@@ -1680,7 +1713,8 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
   auto streaming_callback = CreateCallbackHandler(request);
   int output_tokens = 0;
   StopStringFilter stop_filter(effective_options.stop_sequences);
-  auto* active_stop_filter = effective_options.stop_sequences.empty() ? nullptr : &stop_filter;
+  auto* active_stop_filter =
+      effective_options.stop_sequences.empty() || cached_tool_ctx_.UsesAssistantTextFraming() ? nullptr : &stop_filter;
   bool stop_sequence_matched = false;
   bool host_output_limit_reached = false;
   std::vector<GeneratedOutputEvent> generated_events;
@@ -1690,7 +1724,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   // The template opens a new assistant turn, so only calls generated in this reply close its visible text.
   AssistantTurnGuard turn_guard(cached_tool_ctx_.parallel_tool_calls);
-  AssistantTextFramer text_framer(cached_tool_ctx_);
+  AssistantTextOutputFilter text_framer(cached_tool_ctx_, effective_options);
 
   // Marker IDs are derived from the configured strings with the model tokenizer. This detects special markers even
   // when their decoded chunks are empty, while non-reasoning models retain the DEFAULT passthrough. The splitter is
@@ -1720,8 +1754,20 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
         segment, cached_tool_ctx_, active_raw_detector, tool_accumulator);
   };
 
+  auto emit_visible_text = [&](std::string text) {
+    if (text.empty()) {
+      return;
+    }
+
+    semantic_output_seen = true;
+    AppendGeneratedSegment(generated_events, text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+    if (streaming_callback) {
+      streaming_callback->PushItem(std::make_unique<TextItem>(std::move(text), FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
+    }
+  };
+
   auto emit_tool_output = [&](ToolCallStreamAccumulator::Output out) {
-    if (malformed_tool_output_seen) {
+    if (malformed_tool_output_seen || text_framer.Matched()) {
       return;
     }
 
@@ -1730,6 +1776,10 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
     chat_session_internal::NormalizeToolOutputBatch(out, cached_tool_ctx_);
 
     for (auto& event : out.events) {
+      if (text_framer.Matched()) {
+        break;
+      }
+
       if (auto* text = std::get_if<std::string>(&event)) {
         // A structured tool call is the end of the turn's visible text: a chat template renders an assistant turn as
         // content followed by its tool calls, so text produced after a call could only be replayed as though it came
@@ -1738,20 +1788,12 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
           continue;
         }
 
-        *text = text_framer.Push(*text);
-        if (text->empty()) {
-          continue;
-        }
-
-        semantic_output_seen = true;
-        AppendGeneratedSegment(generated_events, *text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
-        if (streaming_callback) {
-          streaming_callback->PushItem(
-              std::make_unique<TextItem>(*text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT));
-        }
+        emit_visible_text(text_framer.Push(*text));
+        stop_sequence_matched |= text_framer.Matched();
         continue;
       }
 
+      emit_visible_text(text_framer.Flush());
       text_framer.ValidateBoundary();
       semantic_output_seen = true;
       if (!turn_guard.RecordToolCall()) {
@@ -1767,7 +1809,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
       }
       generated_events.push_back(std::move(call));
     }
-    malformed_tool_output_seen = out.malformed && !turn_guard.TurnEnded();
+    malformed_tool_output_seen = out.malformed && !turn_guard.TurnEnded() && !text_framer.Matched();
     if (malformed_tool_output_seen) {
       malformed_tool_error = std::move(out.error);
     }
@@ -1775,7 +1817,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
   auto emit_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
-      if (malformed_tool_output_seen || turn_guard.TurnEnded()) {
+      if (malformed_tool_output_seen || text_framer.Matched() || turn_guard.TurnEnded()) {
         break;
       }
 
@@ -1790,10 +1832,11 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
           emit_tool_output(tool_accumulator.Flush());
         }
 
-        if (malformed_tool_output_seen) {
+        if (malformed_tool_output_seen || text_framer.Matched()) {
           break;
         }
 
+        emit_visible_text(text_framer.Flush());
         // REASONING goes straight through — never feed it to the tool-call accumulator.
         semantic_output_seen |= !seg.text.empty();
         AppendGeneratedSegment(generated_events, seg.text, seg.type);
@@ -1823,7 +1866,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
 
     if (chat_session_internal::PushDecodedFragment(
             token, token_id, active_stop_filter, splitter, emit_segments,
-            cached_tool_ctx_.tool_plan && inside_payload)) {
+            cached_tool_ctx_.tool_plan && inside_payload) || stop_sequence_matched) {
       stop_sequence_matched = true;
       break;
     }
@@ -1875,6 +1918,7 @@ void ChatSession::ProcessRequestImpl(const Request& request, Response& response)
                                      request.IsCancellationRequested(), stop_sequence_matched,
                                      host_output_limit_reached, backend_termination);
   flush_accumulator(natural_tool_output_end);
+  emit_visible_text(text_framer.Flush());
   if (natural_tool_output_end && cached_tool_ctx_.tool_plan && !cached_tool_ctx_.text_output &&
       !cached_tool_ctx_.ActiveRawEnvelope() && !malformed_tool_output_seen &&
       std::ranges::none_of(generated_events, [](const auto& event) {
@@ -2097,13 +2141,20 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
   std::string malformed_tool_error;
 
   AssistantTurnGuard turn_guard(tool_ctx.parallel_tool_calls);
-  AssistantTextFramer text_framer(tool_ctx);
+  AssistantTextOutputFilter text_framer(tool_ctx, options);
+  bool stop_sequence_matched = false;
 
   // Use the same typed segments for streaming and final response construction.
   auto splitter = CreateReasoningSplitter(tool_ctx, Model(), generator->PromptOpensReasoning());
 
   auto emit_visible_text = [&](std::string visible) {
-    if (visible.empty() || !is_streaming) {
+    if (visible.empty()) {
+      return;
+    }
+
+    semantic_output_seen = true;
+    AppendGeneratedSegment(generated_events, visible, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
+    if (!is_streaming) {
       return;
     }
 
@@ -2113,7 +2164,7 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
   };
 
   auto process_tool_output = [&](ToolCallStreamAccumulator::Output out) {
-    if (malformed_tool_output_seen) {
+    if (malformed_tool_output_seen || text_framer.Matched()) {
       return;
     }
 
@@ -2122,6 +2173,10 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
     chat_session_internal::NormalizeToolOutputBatch(out, tool_ctx);
 
     for (auto& event : out.events) {
+      if (text_framer.Matched()) {
+        break;
+      }
+
       if (auto* text = std::get_if<std::string>(&event)) {
         // A chat completion carries the assistant reply as `content` plus a `tool_calls` array — the same schema the
         // transcript projection uses, with the same limitation. Text produced after a call would be reported in
@@ -2131,17 +2186,12 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
           continue;
         }
 
-        *text = text_framer.Push(*text);
-        if (text->empty()) {
-          continue;
-        }
-
-        semantic_output_seen = true;
-        AppendGeneratedSegment(generated_events, *text, FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT);
-        emit_visible_text(*text);
+        emit_visible_text(text_framer.Push(*text));
+        stop_sequence_matched |= text_framer.Matched();
         continue;
       }
 
+      emit_visible_text(text_framer.Flush());
       text_framer.ValidateBoundary();
       semantic_output_seen = true;
       if (!turn_guard.RecordToolCall()) {
@@ -2160,7 +2210,7 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
       }
       generated_events.push_back(std::move(call));
     }
-    malformed_tool_output_seen = out.malformed && !turn_guard.TurnEnded();
+    malformed_tool_output_seen = out.malformed && !turn_guard.TurnEnded() && !text_framer.Matched();
     if (malformed_tool_output_seen) {
       malformed_tool_error = std::move(out.error);
     }
@@ -2168,7 +2218,7 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
 
   auto process_segments = [&](const std::vector<ReasoningStreamSplitter::Segment>& segments) {
     for (const auto& seg : segments) {
-      if (malformed_tool_output_seen || turn_guard.TurnEnded()) {
+      if (malformed_tool_output_seen || text_framer.Matched() || turn_guard.TurnEnded()) {
         break;
       }
 
@@ -2185,10 +2235,11 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
           process_tool_output(tool_accumulator.Flush());
         }
 
-        if (malformed_tool_output_seen) {
+        if (malformed_tool_output_seen || text_framer.Matched()) {
           break;
         }
 
+        emit_visible_text(text_framer.Flush());
         semantic_output_seen |= !seg.text.empty();
         AppendGeneratedSegment(generated_events, seg.text, seg.type);
 
@@ -2207,8 +2258,8 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
 
   // Generate token-by-token.
   StopStringFilter stop_filter(options.stop_sequences);
-  auto* active_stop_filter = options.stop_sequences.empty() ? nullptr : &stop_filter;
-  bool stop_sequence_matched = false;
+  auto* active_stop_filter =
+      options.stop_sequences.empty() || tool_ctx.UsesAssistantTextFraming() ? nullptr : &stop_filter;
   while (!generator->IsDone() && !original_request.IsCancellationRequested() && !turn_guard.TurnEnded()) {
     generator->GenerateNextToken();
     const auto token_id = generator->CurrentTokenId();
@@ -2219,7 +2270,7 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
 
     if (chat_session_internal::PushDecodedFragment(
             token, token_id, active_stop_filter, splitter, process_segments,
-            tool_ctx.tool_plan && inside_payload)) {
+            tool_ctx.tool_plan && inside_payload) || stop_sequence_matched) {
       stop_sequence_matched = true;
       break;
     }
@@ -2263,6 +2314,7 @@ void ChatSession::ProcessChatCompletionsJson(PreparedChatRequest& prepared, cons
                                      /*host_output_limit_reached=*/false, backend_termination);
   process_tool_output(chat_session_internal::FlushToolOutput(
       active_raw_detector, tool_accumulator, natural_tool_output_end));
+  emit_visible_text(text_framer.Flush());
   if (natural_tool_output_end && tool_ctx.tool_plan && !tool_ctx.text_output &&
       !tool_ctx.ActiveRawEnvelope() && !malformed_tool_output_seen &&
       std::ranges::none_of(generated_events, [](const auto& event) {

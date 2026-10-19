@@ -248,7 +248,8 @@ EngineTurnOptionsPlan BuildEngineTurnOptionsPlan(const SearchOptions& options,
     plan.seed = *options.seed;
   }
 
-  if (ShouldForwardStopSequencesToEngine(backend_kind)) {
+  // Native stops see hidden MESSAGE framing too; framed turns instead match ordinary visible text on the host.
+  if (ShouldForwardStopSequencesToEngine(backend_kind) && !tool_ctx.UsesAssistantTextFraming()) {
     plan.stop_sequences = options.stop_sequences;
   }
 

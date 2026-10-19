@@ -106,6 +106,17 @@ def cases():
         request["messages"][0]["content"] = "Do not call any tools. Reply exactly READY."
         yield "plain_answer_" + choice, request, [], "READY"
 
+    for name, stop, expected in (
+        ("hidden_frame_stop", "SS", "READY"),
+        ("visible_text_stop", "DY", "REA"),
+        ("visible_initial_stop", "READY", ""),
+    ):
+        request = copy.deepcopy(base)
+        request["tool_choice"] = "auto"
+        request["stop"] = stop
+        request["messages"][0]["content"] = "Do not call any tools. Reply exactly READY."
+        yield name, request, [], expected
+
 
 def validate_finish_reason(reason, has_calls):
     expected = "tool_calls" if has_calls else "stop"
