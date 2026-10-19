@@ -838,6 +838,15 @@ void DownloadBlobsToDirectory(IBlobDownloader& downloader,
                             per_chunk_progress, &cancelled);
 
     if (!blob.content_md5.empty()) {
+      std::error_code ec;
+      const auto actual_size = std::filesystem::file_size(local_path, ec);
+      if (ec) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "failed to stat downloaded blob '" + blob.name + "': " + ec.message());
+      }
+      if (actual_size != static_cast<uintmax_t>(blob.content_length)) {
+        FL_THROW(FOUNDRY_LOCAL_ERROR_NETWORK, "model download size changed for blob '" + blob.name + "'; retry download");
+      }
+
       VerificationCancellation verification(
           &cancelled, [&]() { report_progress(blob_base_bytes + blob.content_length); });
       std::ifstream file(local_path, std::ios::binary);

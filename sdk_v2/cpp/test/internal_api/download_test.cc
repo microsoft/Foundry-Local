@@ -757,6 +757,23 @@ TEST(BlobDownloadTest, RedownloadsSameSizeFilesWithIncorrectChecksum) {
   EXPECT_EQ(mock.downloaded_blobs, std::vector<std::string>{"weights.bin"});
 }
 
+TEST(BlobDownloadTest, RejectsDownloadedFileWithMatchingPrefixChecksumAndAppendedData) {
+  auto tmpdir = TempPath::CreateTempDir();
+  const std::string listed_content(32, 'X');
+  MockBlobDownloader mock;
+  mock.blobs_to_return = {{"blob.bin", static_cast<int64_t>(listed_content.size()), Md5(listed_content)}};
+  mock.download_content = listed_content + "appended";
+
+  try {
+    DownloadBlobsToDirectoryForTest(mock, "", tmpdir.string(), {});
+    FAIL() << "Expected exact-size validation to reject a matching prefix checksum";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_NETWORK);
+  }
+
+  EXPECT_EQ(ReadFile(tmpdir.path() / "blob.bin"), mock.download_content);
+}
+
 TEST(BlobDownloadTest, RejectsDownloadedFileWithIncorrectPublishedChecksum) {
   auto tmpdir = TempPath::CreateTempDir();
   MockBlobDownloader mock;
