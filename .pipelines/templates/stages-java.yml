@@ -325,4 +325,7 @@ stages:
             -ArtifactDirectory '$(Build.ArtifactStagingDirectory)/java-sdk-v2' `
             -Version '$(javaSdkVersion)-preview' `
             -MavenDirectory '$(foundryMavenHome)' `
+            -MavenSettings '$(foundryMavenSettings)' `
             -JavaDirectory '$(foundryJavaHome)'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
