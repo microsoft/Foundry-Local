@@ -1,4 +1,4 @@
-# Install pinned Maven through the authenticated Maven Central upstream feed.
+# Install pinned Maven and configure the authenticated Maven Central upstream mirror.
 
 steps:
 - task: PowerShell@2
@@ -45,5 +45,26 @@ steps:
         }
       }
 
+      $settings = Join-Path $tools 'settings.xml'
+      @'
+      <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+        <servers>
+          <server>
+            <id>AIFoundryLocal_PublicPackages</id>
+            <username>AzureDevOps</username>
+            <password>${env.SYSTEM_ACCESSTOKEN}</password>
+          </server>
+        </servers>
+        <mirrors>
+          <mirror>
+            <id>AIFoundryLocal_PublicPackages</id>
+            <url>https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/maven/v1</url>
+            <mirrorOf>*</mirrorOf>
+          </mirror>
+        </mirrors>
+      </settings>
+      '@ | Set-Content -LiteralPath $settings -Encoding utf8
+
       Write-Host "##vso[task.setvariable variable=foundryMavenHome]$mavenHome"
+      Write-Host "##vso[task.setvariable variable=foundryMavenSettings]$settings"
       Write-Host "##vso[task.prependpath]$(Join-Path $mavenHome 'bin')"
