@@ -36,6 +36,13 @@ def cases():
 
     request = copy.deepcopy(base)
     request["tool_choice"] = "auto"
+    request["tools"][0]["function"]["parameters"]["properties"]["city"].update({
+        "format": "email", "x-ui-widget": "textarea",
+    })
+    yield "annotation_metadata", request, [{"city": "Paris"}], None
+
+    request = copy.deepcopy(base)
+    request["tool_choice"] = "auto"
     request["tools"].append({
         "type": "custom",
         "custom": {"name": "apply_patch", "description": "Apply a patch.", "format": {"type": "text"}},

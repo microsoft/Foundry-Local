@@ -104,7 +104,9 @@ void Validate(const Validator& validator, const ValidatorJson& value, flErrorCod
 
 Validator Compile(const Json& document) {
   // Without a resolver, jsoncons only resolves its bundled metaschemas; it never fetches a URI.
-  return schema::make_json_schema(ValidatorJson::parse(document.dump()));
+  schema::evaluation_options options;
+  options.require_format_validation(false);
+  return schema::make_json_schema(ValidatorJson::parse(document.dump()), options);
 }
 
 void ValidateMetaSchema(const Json& document, bool draft7, const std::string& context) {
@@ -159,16 +161,12 @@ void WalkSchema(Json& node, const std::string& path,
 }
 
 void CheckProfile(Json& document, bool draft7, const std::string& context) {
-  static const std::set<std::string> common = {
-      "$schema", "$ref", "$comment", "title", "description", "default", "examples", "readOnly",
-      "writeOnly", "deprecated", "type", "enum", "const", "multipleOf", "maximum", "exclusiveMaximum",
-      "minimum", "exclusiveMinimum", "maxLength", "minLength", "pattern", "maxItems", "minItems",
-      "uniqueItems", "contains", "maxProperties", "minProperties", "required", "properties",
-      "patternProperties", "additionalProperties", "propertyNames", "items", "allOf", "anyOf", "oneOf",
-      "not", "if", "then", "else"};
+  static const std::set<std::string> core = {"$schema", "$ref", "$comment"};
   static const std::set<std::string> modern = {
       "$defs", "prefixItems", "dependentRequired", "dependentSchemas", "unevaluatedProperties", "unevaluatedItems",
       "minContains", "maxContains"};
+  static const std::set<std::string> unsupported = {
+      "dependencies", "additionalItems", "contentEncoding", "contentMediaType", "contentSchema"};
 
   WalkSchema(document, "", [&](Json& node, const std::string& path) {
     if (node.is_boolean()) {
@@ -177,8 +175,9 @@ void CheckProfile(Json& document, bool draft7, const std::string& context) {
 
     for (const auto& [key, value] : node.items()) {
       const auto location = context + path + "/" + PointerToken(key);
-      if (!common.contains(key) && !(draft7 && key == "definitions") &&
-          !(!draft7 && modern.contains(key))) {
+      // Unknown non-reserved keywords are annotations in the admitted dialects, not extra assertions.
+      if ((key.starts_with('$') && !core.contains(key) && !(!draft7 && key == "$defs")) ||
+          unsupported.contains(key) || (draft7 && modern.contains(key)) || (!draft7 && key == "definitions")) {
         Fail(FOUNDRY_LOCAL_ERROR_INVALID_ARGUMENT, location, "keyword is outside the offline schema profile");
       }
 

@@ -283,10 +283,12 @@ Historical assistant text uses the same framing when projected back to the model
 The admitted schema profile supports Draft 2020-12 and supported Draft 7
 declarations, local JSON Pointer references, composition, string/numeric/array
 bounds, and open objects when the original schema permits them. Remote references,
-recursive references, anchors, custom vocabularies, and unsupported format/content
-features are rejected explicitly, not silently dropped. Schema input is limited to
-1 MiB, individual argument JSON to 4 MiB, a canonical batch to 16 MiB, and nesting
-to 64. Duplicate JSON members are rejected before DOM parsing can erase them.
+recursive references, anchors, custom vocabularies, reserved control keywords, and
+unsupported content features are rejected explicitly, not silently dropped.
+Unknown non-reserved keywords and `format` are treated as annotations; their original
+values remain in the schema for prompting and validation. Format assertions are not enabled.
+Schema input is limited to 1 MiB, individual argument JSON to 4 MiB, a canonical batch
+to 16 MiB, and nesting to 64. Duplicate JSON members are rejected before DOM parsing can erase them.
 
 Only model-published token identities delimit reasoning and executable tool
 regions. Marker spellings quoted in reasoning or in argument strings remain

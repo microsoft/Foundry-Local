@@ -339,8 +339,11 @@ TEST(ToolCallPlanTest, RejectsMalformedSchemasUnsupportedFeaturesExternalAndRecu
       {{"$id", "https://example.org/local"}},
       {{"$anchor", "a"}},
       {{"$vocabulary", Json::object()}},
-      {{"format", "email"}},
-      {{"unknownAssertion", true}},
+      {{"$vocabulary", {{"https://json-schema.org/draft/2020-12/vocab/format-assertion", true}}}},
+      {{"format", 1}},
+      {{"$dynamicRef", "#node"}},
+      {{"dependencies", {{"x", {"y"}}}}},
+      {{"contentEncoding", "base64"}},
       {{"$defs", {{"loop", {{"$ref", "#/$defs/loop"}}}}}, {"$ref", "#/$defs/loop"}},
       {{"default", {{"$ref", "https://example.org/escape"}}}, {"$ref", "#/default"}},
       {{"$defs", {{"nested", {{"$schema", "http://json-schema.org/draft-07/schema#"}}}}}},
@@ -357,6 +360,27 @@ TEST(ToolCallPlanTest, AnnotationObjectsAreNotMisinterpretedAsSchemas) {
   const Json literal = {{"$ref", "https://example.org/literal"}, {"unknown", "literal"}};
   const auto plan = Plan({{"properties", {{"x", {{"const", literal}, {"default", literal}}}}}});
   EXPECT_EQ(plan->ParseCalls(Batch({{"x", literal}})).size(), 1u);
+}
+
+TEST(ToolCallPlanTest, ExtensionAndFormatAnnotationsDoNotWeakenAssertionsOrResolveMetadata) {
+  for (const auto& dialect : {"https://json-schema.org/draft/2020-12/schema",
+                              "http://json-schema.org/draft-07/schema#"}) {
+    SCOPED_TRACE(dialect);
+    const Json parameters = {
+        {"$schema", dialect},
+        {"type", "object"},
+        {"uiMetadata", {{"$ref", "https://example.invalid/annotation"}, {"minLength", -1}}},
+        {"properties", {{"text", {{"type", "string"}, {"minLength", 3}, {"format", "email"},
+                                  {"x-ui-widget", "textarea"}}}}},
+        {"required", {"text"}}};
+    const auto plan = Plan(parameters);
+    const auto calls = plan->ParseCalls(Batch({{"text", "not an email"}}));
+    ASSERT_EQ(calls.size(), 1u);
+    EXPECT_EQ(Json::parse(calls.front().arguments), (Json{{"text", "not an email"}}));
+    ExpectError([&] { plan->ParseCalls(Batch({{"text", "ab"}})); }, FOUNDRY_LOCAL_ERROR_INTERNAL, "minLength");
+    ExpectError([&] { plan->ParseCalls(Batch({{"text", 123}})); }, FOUNDRY_LOCAL_ERROR_INTERNAL, "type");
+    ExpectError([&] { plan->ParseCalls(Batch(Json::object())); }, FOUNDRY_LOCAL_ERROR_INTERNAL, "required");
+  }
 }
 
 TEST(ToolCallPlanTest, ValidateCallRejectsInvalidArgumentsUtf8AndAbiNulWithoutCoercion) {

@@ -5299,9 +5299,43 @@ TEST_F(QwenNativeProductionIntegrationTest, LocalReferencesRemainValidatedAcross
   }
 }
 
+TEST_F(QwenNativeProductionIntegrationTest, AnnotatedUnusedToolsRemainAdmittedAcrossSharedToolChoicePaths) {
+  const std::string schema =
+      R"({"type":"object","properties":{"text":{"type":"string","minLength":3,)"
+      R"("format":"email","x-ui-widget":"textarea"}},"required":["text"]})";
+  for (const auto& mode : {"auto", "required", "forced", "text"}) {
+    SCOPED_TRACE(mode);
+    const bool text = mode == std::string_view("text");
+    auto counters = std::make_shared<GeneratorCounters>();
+    auto output_factory = OutputFactory(text ? "MESSAGE\nREADY" : std::string(kCanonicalLookupCall), counters);
+    TextChatGeneratorFactory factory =
+        [&](const auto& messages, const auto& options, auto& model, const ToolCallContext& context, bool reuse) {
+          const auto tools = nlohmann::json::parse(context.tools_json);
+          EXPECT_EQ(tools.back().at("function").at("parameters"), nlohmann::json::parse(schema));
+          return output_factory(messages, options, model, context, reuse);
+        };
+    auto catalog_model = MakeCatalogModel();
+    ChatSession session(catalog_model, *model_, *logger_, telemetry_, {}, std::move(factory));
+    AddFunctionTools(session);
+    session.AddToolDefinition({"note", "Record a note.", schema, ToolKind::kFunction});
+    auto request = MakeStatefulRequest(text ? "answer normally" : "look up Paris");
+    request.options.Add(FOUNDRY_LOCAL_PARAM_TOOL_CHOICE,
+                        mode == std::string_view("forced") || text ? "auto" : mode);
+    if (mode == std::string_view("forced")) {
+      request.forced_tool_choice = ForcedToolChoice{"lookup", ToolKind::kFunction};
+    }
+
+    Response response;
+    ASSERT_NO_THROW(session.ProcessRequest(request, response));
+    EXPECT_EQ(counters->created, 1);
+    EXPECT_EQ(Calls(response).size(), text ? 0u : 1u);
+    EXPECT_EQ(response.finish_reason, text ? FOUNDRY_LOCAL_FINISH_STOP : FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+  }
+}
+
 TEST_F(QwenNativeProductionIntegrationTest, UnsupportedSchemasFailAdmissionAcrossSharedToolChoicePaths) {
   const std::vector<std::string> schemas{
-      R"({"type":"object","properties":{"timestamp":{"type":"string","format":"date-time"}}})",
+      R"({"type":"object","properties":{"timestamp":{"type":"string","$anchor":"timestamp"}}})",
       R"({"type":"object","properties":{"value":{"$ref":"https://example.invalid/schema"}}})",
       R"({"type":"object","properties":{"value":{"$ref":"#/$defs/missing"}}})",
       R"({"type":"object","properties":{"value":{"$ref":"#"}}})"};
@@ -5807,7 +5841,7 @@ TEST_F(QwenNativeProductionIntegrationTest, MediaWithDeclaredToolsIsRejectedBefo
                           OutputFactory("MESSAGE\nunexpected", counters));
       session.AddToolDefinition(
           {"lookup", "Look up a value.",
-           R"({"type":"object","properties":{"timestamp":{"type":"string","format":"date-time"}}})"});
+           R"({"type":"object","properties":{"timestamp":{"type":"string","$anchor":"timestamp"}}})"});
       std::vector<std::unique_ptr<Item>> parts;
       if (image) {
         parts.push_back(std::make_unique<ImageItem>(std::vector<std::uint8_t>{1}, "image/png"));
