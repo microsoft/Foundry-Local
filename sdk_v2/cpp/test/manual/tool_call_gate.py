@@ -35,6 +35,29 @@ def cases():
         yield "minlength_" + choice, request, [{"city": "Paris"}], None
 
     request = copy.deepcopy(base)
+    request["tool_choice"] = "auto"
+    request["tools"].append({
+        "type": "custom",
+        "custom": {"name": "apply_patch", "description": "Apply a patch.", "format": {"type": "text"}},
+    })
+    request["metadata"] = {"tool_output_encoding": json.dumps({
+        "type": "raw_envelope", "tool_name": "apply_patch",
+        "start_marker": "*** Begin Patch", "end_marker": "*** End Patch",
+    })}
+    yield "function_with_raw_patch_descriptor", request, [{"city": "Paris"}], None
+
+    request = copy.deepcopy(request)
+    request["messages"] += [
+        {"role": "assistant", "tool_calls": [{
+            "id": "call_previous", "type": "function",
+            "function": {"name": "lookup", "arguments": '{"city":"Paris"}'},
+        }]},
+        {"role": "tool", "tool_call_id": "call_previous", "content": "Lookup failed."},
+        {"role": "user", "content": "Call lookup again, this time with city Rome."},
+    ]
+    yield "function_with_raw_patch_continuation", request, [{"city": "Rome"}], None
+
+    request = copy.deepcopy(base)
     request["tools"][0]["function"]["parameters"]["oneOf"] = [
         {"properties": {"city": {"const": "Paris"}}},
         {"properties": {"city": {"const": "Rome"}}},

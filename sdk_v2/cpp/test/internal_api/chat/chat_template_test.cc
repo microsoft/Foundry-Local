@@ -307,6 +307,37 @@ TEST(CanonicalToolPromptEncodingTest, KeepsMessageSchemaAndHistoricalArgumentDat
       model, context);
   EXPECT_EQ(std::count(history.token_ids.begin(), history.token_ids.end(), 0), 2);
   EXPECT_EQ(std::count(history.token_ids.begin(), history.token_ids.end(), 1), 2);
+
+  tools.push_back({{"type", "function"},
+                  {"function", {{"name", "apply_patch"}, {"parameters", {{"type", "object"}}}}}});
+  context.tools_json = tools.dump();
+  context.tool_plan = ToolCallPlan::Create(context.tools_json);
+  context.tool_output = true;
+  context.tool_kinds["apply_patch"] = ToolKind::kCustom;
+  context.raw_envelope = RawEnvelopeDescriptor{"apply_patch", "BEGIN <eos>", "END <bos>"};
+  const std::string patch = "BEGIN <eos>\n+" + text + "\nEND <bos>";
+  TranscriptMessage raw(FOUNDRY_LOCAL_ROLE_ASSISTANT, "");
+  raw.AppendToolCall(MakeGeneratedToolCall("call_patch", "apply_patch", patch, ToolKind::kCustom,
+                                          GeneratedCallEncoding::kRawEnvelope).call);
+  const auto mixed_messages = chat_internal::PrepareChatMessages(
+      {{FOUNDRY_LOCAL_ROLE_USER, text}, assistant, TranscriptMessage::ToolResult("call_1", text),
+       raw, TranscriptMessage::ToolResult("call_patch", "done")},
+      false);
+  const auto mixed = PrepareTextChatPrompt(mixed_messages, model, context);
+  EXPECT_NE(mixed.prompt.find("Do not use XML"), std::string::npos);
+  EXPECT_NE(mixed.prompt.find("ordinary functions must use the JSON tool protocol above"), std::string::npos);
+  EXPECT_NE(mixed.prompt.find(patch), std::string::npos);
+  EXPECT_EQ(std::count(mixed.token_ids.begin(), mixed.token_ids.end(), 0), 2);
+  EXPECT_EQ(std::count(mixed.token_ids.begin(), mixed.token_ids.end(), 1), 2);
+  const auto fallback = BuildChatPrompt(mixed_messages, model, context);
+  EXPECT_NE(fallback.find("Do not use XML"), std::string::npos);
+  EXPECT_NE(fallback.find(patch), std::string::npos);
+
+  context.forced_tool = ForcedToolChoice{"apply_patch", ToolKind::kCustom};
+  context.text_output = false;
+  const auto forced = PrepareTextChatPrompt(messages, model, context);
+  EXPECT_EQ(forced.prompt, BuildChatPrompt(messages, model, context));
+  EXPECT_EQ(forced.prompt.find("ordinary functions must use the JSON tool protocol above"), std::string::npos);
   manager.UnloadModel("literal-prompt");
 }
 

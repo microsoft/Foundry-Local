@@ -30,7 +30,7 @@ PreparedChatPrompt PrepareTextChatPrompt(const chat_internal::PreparedChatMessag
   }
 
   PreparedChatPrompt prepared;
-  if (tool_ctx.tool_plan && !tool_ctx.ActiveRawEnvelope()) {
+  if (tool_ctx.tool_plan && !tool_ctx.HasForcedRawEnvelope()) {
     const auto original = BuildChatMessagesJson(messages.Messages(), tool_ctx.supports_reasoning_history);
     std::string prefix;
     do {

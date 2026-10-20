@@ -4880,6 +4880,63 @@ TEST_F(QwenNativeProductionIntegrationTest,
 }
 
 TEST_F(QwenNativeProductionIntegrationTest,
+       MixedRawEnvelopeKeepsCanonicalFunctionPromptAndBothCallFormats) {
+  const std::string patch = "*** Begin Patch\n*** Add File: note.txt\n+literal <think>text</think>\n*** End Patch";
+  for (auto* native_model : {model_, engine_model_}) {
+    SCOPED_TRACE(native_model->GetGenAIConfig().GetChatBackendKind() == ChatBackendKind::kEngine);
+    for (const bool raw_call : {false, true}) {
+      SCOPED_TRACE(raw_call);
+      for (const bool streaming : {false, true}) {
+        SCOPED_TRACE(streaming);
+        auto counters = std::make_shared<GeneratorCounters>();
+        const auto output = raw_call ? patch : std::string(kCanonicalLookupCall);
+        auto output_factory = OutputFactory(output, counters);
+        TextChatGeneratorFactory factory =
+            [&](const auto& messages, const auto& options, auto& model, const ToolCallContext& context, bool reuse) {
+              EXPECT_NE(context.ActiveRawEnvelope(), nullptr);
+              EXPECT_TRUE(context.guidance_disabled);
+              const auto projected = BuildCanonicalToolMessagesJson(messages.Messages(), context);
+              EXPECT_NE(projected.find("Do not use XML"), std::string::npos);
+              EXPECT_NE(projected.find("ordinary functions must use the JSON tool protocol above"),
+                        std::string::npos);
+              return output_factory(messages, options, model, context, reuse);
+            };
+        auto catalog_model = MakeCatalogModel();
+        ChatSession session(catalog_model, *native_model, *logger_, telemetry_, {}, std::move(factory));
+        AddFunctionTools(session);
+        session.AddToolDefinition(tools::MakeCustomTool("apply_patch", "Apply a patch."));
+        size_t streamed_calls = 0;
+        if (streaming) {
+          session.SetStreamingCallback([&](flStreamingCallbackData event, void*) {
+            auto* queue = reinterpret_cast<ItemQueue*>(event.item_queue);
+            while (auto item = queue->TryPop()) {
+              if (item->type == FOUNDRY_LOCAL_ITEM_TOOL_CALL) {
+                ++streamed_calls;
+              }
+            }
+            return 0;
+          });
+        }
+
+        auto request = MakeStatefulRequest(raw_call ? "patch the file" : "look up Paris");
+        request.raw_envelope_descriptor = RawEnvelopeDescriptor{"apply_patch", "*** Begin Patch", "*** End Patch"};
+        Response response;
+        session.ProcessRequest(request, response);
+        const auto calls = Calls(response);
+        ASSERT_EQ(calls.size(), 1u);
+        EXPECT_EQ(calls.front()->name, raw_call ? "apply_patch" : "lookup");
+        EXPECT_EQ(calls.front()->arguments, raw_call ? patch : R"({"city":"Paris"})");
+        EXPECT_EQ(calls.front()->generated_encoding,
+                  raw_call ? GeneratedCallEncoding::kRawEnvelope : GeneratedCallEncoding::kStructured);
+        EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_TOOL_CALLS);
+        EXPECT_EQ(streamed_calls, streaming ? 1u : 0u);
+        EXPECT_EQ(counters->created, 1);
+      }
+    }
+  }
+}
+
+TEST_F(QwenNativeProductionIntegrationTest,
        OpenedApplyPatchEnvelopeWinsOverNestedNativeXml) {
   const std::string patch =
       "*** Begin Patch\n"

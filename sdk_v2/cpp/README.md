@@ -347,6 +347,8 @@ followed by shell repair is insufficient. Protocol checks require a successful
 terminal choice, with `[DONE]` following it for streaming Chat Completions.
 The protocol gate also checks optional-property ordering through nonstreaming
 `/responses`, requiring a completed response and completed function calls.
+It checks ordinary function calls with a raw patch descriptor enabled in both
+streaming and nonstreaming Chat Completions.
 Qualification applies to the model, backend, platform, and exact native binaries
 recorded for the run. Scripted Generator regressions do not substitute for a
 trained Generator model gate, and these text-only workflows do not qualify

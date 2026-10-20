@@ -278,6 +278,20 @@ std::string BuildCanonicalToolMessagesJson(const std::vector<TranscriptMessage>&
       "Preserve argument values exactly. JSON escaping, including Unicode escapes for literal angle brackets "
       "in strings, preserves the decoded value and is not substitution. "
       "If no tool is needed, answer normally.";
+  if (const auto* raw = tool_ctx.ActiveRawEnvelope()) {
+    const auto raw_instructions =
+        "\nThe custom tool \"" + raw->tool_name + "\" also accepts a raw envelope instead of a JSON call. "
+        "To call this tool in raw form, start with \"" + raw->start_marker +
+        "\" on its own line, then the exact tool payload, and finish with \"" + raw->end_marker +
+        "\" on its own line. Include both marker lines in the raw input. "
+        "Do not wrap the raw envelope in tool boundary tokens, JSON, or Markdown. "
+        "After the closing marker, stop and wait for the external tool result. "
+        "This raw format applies only to this custom tool; ordinary functions must use the JSON tool protocol above. "
+        "For an ordinary function, always put the call object inside an outer JSON array, even for a single call. "
+        "The content between tool boundaries must start with [ and end with ]. Never emit a bare call object.";
+    instructions += protect_literal ? protect_literal(raw_instructions) : raw_instructions;
+  }
+
   if (tool_ctx.UsesAssistantTextFraming()) {
     instructions +=
         "\nFor ordinary assistant text, including a brief preamble, first emit MESSAGE followed by a newline. "
@@ -334,7 +348,7 @@ std::string BuildChatPrompt(const std::vector<TranscriptMessage>& messages,
 std::string BuildChatPrompt(const chat_internal::PreparedChatMessages& messages,
                             GenAIModelInstance& model,
                             const ToolCallContext& tool_ctx) {
-  if (tool_ctx.tool_plan && tool_ctx.ActiveRawEnvelope() == nullptr) {
+  if (tool_ctx.tool_plan && !tool_ctx.HasForcedRawEnvelope()) {
     if (messages.Empty()) {
       FL_THROW(FOUNDRY_LOCAL_ERROR_INTERNAL, "messages must not be empty");
     }
