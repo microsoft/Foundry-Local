@@ -91,6 +91,34 @@ is not a supported hot-upgrade mechanism. Normal package updates followed by an
 application restart are unaffected. Do not overwrite a mapped library in place;
 deploy an update separately and restart.
 
+## Windows CUDA Provider Dependencies
+
+CUDA provider DLLs are loaded later, during execution-provider registration.
+This is separate from the binding-owned ORT/GenAI core preload described above.
+The Windows CUDA bootstrapper preloads the CUDA 12 runtime, cuBLAS Lt, and cuBLAS
+dependencies required by the shipped ORT and GenAI CUDA provider DLLs:
+
+1. The CUDA provider's own directory.
+2. Already loaded modules and the Windows application, System32, and caller-configured
+   DLL directories (`AddDllDirectory` / `SetDllDirectory`).
+3. Fully qualified directories in the process's `PATH`, in order.
+
+Only the exact CUDA dependency basenames are eligible for `PATH` fallback.
+Empty, relative, and drive-relative `PATH` entries are ignored; the loader does
+not implicitly search the current directory.
+The provider itself and the ORT/GenAI core libraries are never selected from `PATH`.
+An existing but unloadable `PATH` candidate fails with its path and Windows error;
+the loader does not silently switch to another CUDA installation.
+
+The bootstrapper retains dependency handles for the provider's lifetime. It does
+not change `PATH`, call `AddDllDirectory`, or change the process-wide default DLL
+search policy. Applications can ship compatible CUDA DLLs privately, preload
+them, or register their directory before requesting the CUDA EP. Applications
+using `PATH` fallback must treat its absolute entries as trusted native-code
+locations; applications requiring private-only resolution should omit other CUDA
+installations from their process environment. DLL search configuration is not an
+OS sandbox and does not isolate native code already loaded in the same process.
+
 ## Why Not a Native-Side Loader?
 
 Earlier iterations tried two native-side designs:

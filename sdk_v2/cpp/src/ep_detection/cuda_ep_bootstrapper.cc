@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -25,6 +26,13 @@ constexpr const char* kCudaProviderOverrideEnv = "FOUNDRY_LOCAL_CUDA_EP_LIBRARY"
 constexpr const char* kGenAiCudaLibrary = "libonnxruntime-genai-cuda.so";
 #elif defined(_WIN32)
 constexpr const char* kGenAiCudaLibrary = "onnxruntime-genai-cuda.dll";
+
+std::shared_ptr<void> LoadGenAiCudaWithDependencies(const std::filesystem::path& path, fl::ILogger& logger) {
+  // CUDA 12 dependencies of both DLLs in the Windows CUDA EP bundle; load cuBLAS Lt before cuBLAS.
+  constexpr std::array<std::wstring_view, 3> dependencies = {
+      L"cudart64_12.dll", L"cublasLt64_12.dll", L"cublas64_12.dll"};
+  return fl::platform::LoadSharedLibraryWithDependencies(path, dependencies, logger);
+}
 #endif
 
 fl::CudaEpPlatform HostCudaEpPlatform() {
@@ -92,7 +100,11 @@ CudaEpBootstrapper::CudaEpBootstrapper(std::string root_dir, EpRegistrationCallb
 #if defined(__linux__) || defined(_WIN32)
       ,
       genai_cuda_library_loader_(genai_cuda_library_loader ? std::move(genai_cuda_library_loader)
+#if defined(_WIN32)
+                                                           : LoadGenAiCudaWithDependencies)
+#else
                                                            : platform::LoadSharedLibrary)
+#endif
 #endif
 {
 }

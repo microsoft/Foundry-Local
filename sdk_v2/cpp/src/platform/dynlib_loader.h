@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <memory>
+#include <span>
+#include <string_view>
 
 namespace fl {
 class ILogger;
@@ -14,6 +16,12 @@ namespace fl::platform {
 #ifdef _WIN32
 /// Set the directory used for subsequent bare-name dynamic library loads.
 bool SetDynamicLibrarySearchDirectory(const std::filesystem::path& directory, ILogger& logger);
+
+/// Preload named dependencies from the library directory, configured DLL directories, then absolute PATH entries.
+/// The returned handle retains the dependencies without changing the process DLL search policy.
+std::shared_ptr<void> LoadSharedLibraryWithDependencies(const std::filesystem::path& path,
+                                                        std::span<const std::wstring_view> dependencies,
+                                                        ILogger& logger);
 #endif
 
 /// Load one shared library and keep it resident for the lifetime of the returned handle.
