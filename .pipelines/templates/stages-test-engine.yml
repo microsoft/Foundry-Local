@@ -31,6 +31,11 @@ stages:
         versionSpec: '3.12'
         architecture: x64
 
+    - task: PipAuthenticate@1
+      displayName: 'Authenticate AIFoundryLocal_PublicPackages for pip'
+      inputs:
+        artifactFeeds: 'AIFoundryLocal/AIFoundryLocal_PublicPackages'
+
     - template: steps-prefetch-nuget.yml
       parameters:
         ortVersion: ${{ parameters.ortVersion }}

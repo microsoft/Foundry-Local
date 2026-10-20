@@ -184,11 +184,12 @@ if(WinMLEpCatalog_FOUND)
     )
 endif()
 
-string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" FOUNDRY_LOCAL_SYSTEM_PROCESSOR)
+# CUDA/WebGPU EP bootstrappers are compiled on every non-Android platform.
+# Per-platform IsSupportedPlatform() gates runtime instantiation, so on
+# platforms without a published bundle (e.g. exotic Linux archs) the code is
+# present but inert.
 set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS ON)
-if(ANDROID OR
-   (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
-    NOT FOUNDRY_LOCAL_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$"))
+if(ANDROID)
     set(FOUNDRY_LOCAL_HAS_EP_BOOTSTRAPPERS OFF)
 endif()
 
