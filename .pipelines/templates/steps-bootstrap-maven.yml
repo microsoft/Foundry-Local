@@ -8,6 +8,9 @@ steps:
     pwsh: true
     script: |
       $ErrorActionPreference = 'Stop'
+      if (-not $env:SYSTEM_ACCESSTOKEN) {
+        throw 'SYSTEM_ACCESSTOKEN is required to restore Maven from Azure Artifacts.'
+      }
 
       $version = '3.9.9'
       $tools = Join-Path '$(Agent.TempDirectory)' 'foundry-java-tools'
@@ -18,9 +21,12 @@ steps:
 
       if (-not (Test-Path -LiteralPath $maven -PathType Leaf)) {
         New-Item -ItemType Directory -Force -Path $tools | Out-Null
-        $uri = "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$version/" +
+        $uri = 'https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/' +
+          "AIFoundryLocal_PublicPackages/maven/v1/org/apache/maven/apache-maven/$version/" +
           "apache-maven-$version-bin.zip"
-        Invoke-WebRequest $uri -OutFile $archive
+        Invoke-WebRequest $uri -OutFile $archive -Headers @{
+          Authorization = "Bearer $env:SYSTEM_ACCESSTOKEN"
+        }
 
         $expected = '8beac8d11ef208f1e2a8df0682b9448a9a363d2ad13ca74af43705549e72e74' +
           'c9378823bf689287801cbbfc2f6ea9596201d19ccacfdfb682ee8a2ff4c4418ba'
@@ -37,5 +43,28 @@ steps:
         }
       }
 
+      $settings = Join-Path '$(Build.BinariesDirectory)' 'foundry-maven-settings.xml'
+      @'
+      <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+        <mirrors>
+          <mirror>
+            <id>AIFoundryLocal_PublicPackages</id>
+            <mirrorOf>*</mirrorOf>
+            <url>https://pkgs.dev.azure.com/aiinfra/AIFoundryLocal/_packaging/AIFoundryLocal_PublicPackages/maven/v1</url>
+          </mirror>
+        </mirrors>
+        <servers>
+          <server>
+            <id>AIFoundryLocal_PublicPackages</id>
+            <username>AzureDevOps</username>
+            <password>${env.SYSTEM_ACCESSTOKEN}</password>
+          </server>
+        </servers>
+      </settings>
+      '@ | Set-Content -LiteralPath $settings -Encoding utf8
+
       Write-Host "##vso[task.setvariable variable=foundryMavenHome]$mavenHome"
+      Write-Host "##vso[task.setvariable variable=foundryMavenSettings]$settings"
       Write-Host "##vso[task.prependpath]$(Join-Path $mavenHome 'bin')"
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)

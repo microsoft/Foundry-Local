@@ -230,7 +230,7 @@ stages:
       inputs:
         mavenPOMFile: 'sdk_v2/java/pom.xml'
         goals: 'clean verify'
-        options: '--batch-mode --no-transfer-progress -Drevision=$(javaSdkVersion)-preview'
+        options: '--batch-mode --no-transfer-progress --settings "$(foundryMavenSettings)" -Drevision=$(javaSdkVersion)-preview'
         publishJUnitResults: true
         testResultsFiles: 'sdk_v2/java/target/surefire-reports/TEST-*.xml'
         testRunTitle: 'Java SDK package'
@@ -238,6 +238,8 @@ stages:
         jdkDirectory: '$(foundryJavaHome)'
         mavenVersionOption: Path
         mavenDirectory: '$(foundryMavenHome)'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
     - task: PowerShell@2
       displayName: 'Stage and validate Maven bundle'
       inputs:
