@@ -62,8 +62,8 @@ jobs:
             $name = $_.Directory.Name
             Write-Host "=== Checking: $name ==="
             clang++ -std=c++20 -Wall -Wextra -Wpedantic -Werror `
-              -Isamples/cpp/build/packages/microsoft.ai.foundry.local.runtime/2.2.1/build/native/include `
-              -I. -fsyntax-only $_.FullName
+              '-Isamples/cpp/build/packages/microsoft.ai.foundry.local.runtime/2.2.1/build/native/include' `
+              '-I.' -fsyntax-only $_.FullName
             if ($LASTEXITCODE -ne 0) {
               $failed += $name
             }
