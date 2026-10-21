@@ -1,1 +1,1 @@
--e ../../../sdk_v2/python
+foundry-local-sdk==2.2.1

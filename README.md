@@ -51,7 +51,7 @@ Foundry Local may collect usage data and send it to Microsoft to help improve ou
 1. Install the SDK:
 
     ```bash
-    npm install foundry-local-sdk
+    npm install --save-exact foundry-local-sdk@2.2.1
     ```
 2. Run your first chat completion:
 
@@ -92,7 +92,7 @@ Foundry Local may collect usage data and send it to Microsoft to help improve ou
 1. Install the SDK:
 
     ```bash
-    pip install foundry-local-sdk
+    pip install foundry-local-sdk==2.2.1
     ```
 2. Run your first chat completion:
 

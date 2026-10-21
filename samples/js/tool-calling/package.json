@@ -11,6 +11,6 @@
     "check": "node --check app.js"
   },
   "dependencies": {
-    "foundry-local-sdk": "file:../../../sdk_v2/js"
+    "foundry-local-sdk": "2.2.1"
   }
 }

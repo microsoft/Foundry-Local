@@ -6,10 +6,8 @@ language. Except for the web-server sample, inference runs natively in the appli
 > **New to Foundry Local?** Start with the [main README](../README.md), then choose a language below.
 
 > [!IMPORTANT]
-> These samples track the latest SDK APIs on `main` and reference the SDK source in this repository. Build Foundry
-> Local from source before running them. Installing a published package from NuGet, npm, PyPI, or crates.io is easier
-> for most users, but these samples are not built or tested against a specific published package version and may use
-> newer APIs. For versioned setup instructions and more examples, see the
+> All samples use the published Foundry Local SDK **2.2.1** packages from NuGet, npm, PyPI, or crates.io.
+> No local SDK source build is required. Follow the setup instructions for your language below. For more examples, see the
 > [Foundry Local get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started).
 
 ## Languages

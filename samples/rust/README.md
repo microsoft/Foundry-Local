@@ -1,14 +1,13 @@
 # Foundry Local Rust samples
 
-These seven samples demonstrate the supported Foundry Local Rust SDK workflows.
-All crates use the SDK in `sdk_v2/rust` and set the application name to
+These seven samples use the published Foundry Local Rust SDK **2.2.1**.
+All crates pin `foundry-local-sdk = "=2.2.1"` and set the application name to
 `foundry_local_samples`.
 
 > [!IMPORTANT]
-> These samples track the latest Rust SDK on `main` through a local path dependency and require Foundry Local to be
-> built or acquired by the SDK before they can run. Installing
-> [`foundry-local-sdk` from crates.io](https://crates.io/crates/foundry-local-sdk) is easier, but these samples are not
-> built or tested against a specific published version. See the
+> These samples use [`foundry-local-sdk` from crates.io](https://crates.io/crates/foundry-local-sdk/2.2.1).
+> `.cargo/config.toml` also selects native Runtime 2.2.1, which the SDK acquires during the build.
+> No local SDK source build is required. See the
 > [get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started) for versioned setup
 > guidance and additional examples.
 

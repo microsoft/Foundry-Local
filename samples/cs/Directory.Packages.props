@@ -4,9 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Microsoft.AI.Foundry.Local"
-                    Version="$(FoundryLocalPackageVersion)"
-                    Condition="'$(FoundryLocalPackageVersion)' != ''" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="2.2.1" />
     <PackageVersion Include="NAudio" Version="2.2.1" />
     <PackageVersion Include="OpenAI" Version="2.5.0" />
   </ItemGroup>

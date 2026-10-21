@@ -33,6 +33,27 @@ jobs:
         with:
           clean: true
 
+      - name: Setup .NET SDK for NuGet restore
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore C++ Runtime 2.2.1
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force samples/cpp/build | Out-Null
+          @'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net9.0</TargetFramework>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="Microsoft.AI.Foundry.Local.Runtime" Version="2.2.1" />
+            </ItemGroup>
+          </Project>
+          '@ | Set-Content samples/cpp/build/Runtime.csproj
+          dotnet restore samples/cpp/build/Runtime.csproj --packages samples/cpp/build/packages
+
       - name: Compile-check C++ samples
         shell: pwsh
         run: |
@@ -41,7 +62,8 @@ jobs:
             $name = $_.Directory.Name
             Write-Host "=== Checking: $name ==="
             clang++ -std=c++20 -Wall -Wextra -Wpedantic -Werror `
-              -Isdk_v2/cpp/include -I. -fsyntax-only $_.FullName
+              -Isamples/cpp/build/packages/microsoft.ai.foundry.local.runtime/2.2.1/build/native/include `
+              -I. -fsyntax-only $_.FullName
             if ($LASTEXITCODE -ne 0) {
               $failed += $name
             }
@@ -70,28 +92,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Configure pip for Azure Artifacts
-        run: |
-          pip config set global.index-url https://pkgs.dev.azure.com/aiinfra/PublicPackages/_packaging/ORT-Nightly/pypi/simple/
-          pip config set global.extra-index-url https://pypi.org/simple/
-          pip config set global.pre true
-
-      - name: Build SDK wheel from source
-        if: runner.os != 'Windows'
-        working-directory: sdk_v2/python
-        shell: pwsh
-        run: |
-          python -m pip install build cffi
-          python -m build --wheel --outdir dist/
-
       - name: Install sample dependencies
-        if: runner.os != 'Windows'
         shell: pwsh
         run: |
           Get-ChildItem samples/python/*/requirements.txt -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "Installing dependencies for $($_.Directory.Name)..."
             Push-Location $_.Directory.FullName
             pip install -r requirements.txt
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
             Pop-Location
           }
 
@@ -134,12 +144,6 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '20.x'
-
-      - name: Type-check SDK from source
-        working-directory: sdk_v2/js
-        run: |
-          npm install --ignore-scripts
-          npm run build:ts
 
       - name: Syntax check JS samples
         shell: pwsh
@@ -248,22 +252,6 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: samples/rust -> target
-
-      - name: Use crates.io directly
-        shell: pwsh
-        run: |
-          # Remove crates-io redirect in SDK (points to Azure Artifacts)
-          $configPath = "sdk_v2/rust/.cargo/config.toml"
-          if (Test-Path $configPath) {
-            Remove-Item $configPath
-            Write-Host "Removed sdk_v2/rust/.cargo/config.toml"
-          }
-          # Remove crates-io redirect in samples
-          $configPath = "samples/rust/.cargo/config.toml"
-          if (Test-Path $configPath) {
-            Remove-Item $configPath
-            Write-Host "Removed samples/rust/.cargo/config.toml"
-          }
 
       - name: Build Rust samples workspace
         working-directory: samples/rust

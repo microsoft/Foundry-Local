@@ -101,7 +101,7 @@ std::string PostChatCompletion(const std::string& endpoint_url, const std::strin
   Socket socket = kInvalidSocket;
   for (auto* address = addresses; address != nullptr; address = address->ai_next) {
     socket = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
-    if (socket != kInvalidSocket && connect(socket, address->ai_addr, address->ai_addrlen) == 0) {
+    if (socket != kInvalidSocket && connect(socket, address->ai_addr, static_cast<int>(address->ai_addrlen)) == 0) {
       break;
     }
 #ifdef _WIN32

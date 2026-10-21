@@ -8,10 +8,7 @@
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(FoundryLocalPackageVersion)' == ''">
-    <ProjectReference Include="../../../sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(FoundryLocalPackageVersion)' != ''">
+  <ItemGroup>
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
   </ItemGroup>
 </Project>

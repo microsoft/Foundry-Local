@@ -1,6 +1,6 @@
 # Foundry Local Python samples
 
-These seven samples use the native `sdk_v2/python` bindings. Except for
+These seven samples use the published `foundry-local-sdk` **2.2.1** package. Except for
 `web-server`, inference runs in-process without an HTTP service.
 
 | Sample | What it demonstrates |
@@ -14,10 +14,8 @@ These seven samples use the native `sdk_v2/python` bindings. Except for
 | [`byom`](byom/) | Registering local model assets and running native chat |
 
 > [!IMPORTANT]
-> These samples track the latest Python SDK on `main` through an editable source dependency and require Foundry Local
-> to be built before they can run. Installing
-> [`foundry-local-sdk` from PyPI](https://pypi.org/project/foundry-local-sdk/) is easier, but these samples are not
-> built or tested against a specific published version. See the
+> Every sample pins [`foundry-local-sdk` from PyPI](https://pypi.org/project/foundry-local-sdk/2.2.1/) to 2.2.1.
+> Installation supplies the native runtime; no local SDK source build is required. See the
 > [get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started) for versioned setup
 > guidance and additional examples.
 
@@ -25,13 +23,11 @@ These seven samples use the native `sdk_v2/python` bindings. Except for
 
 - Python 3.11 or later.
 - A supported Foundry Local platform.
-- The native sdk_v2 runtime built or installed as described in
-  [`sdk_v2/python/README.md`](../../sdk_v2/python/README.md).
 - Microphone access for `realtime-transcription`.
 
 ## Run a sample from the repository
 
-Each directory has local dependency wiring to the sdk_v2 Python project:
+Each directory pins the released SDK in `requirements.txt`:
 
 ```bash
 cd samples/python/hello-world
@@ -45,6 +41,4 @@ Use the same commands from any of the other sample directories. The first run
 may download execution providers and a model. Subsequent runs reuse the local
 cache.
 
-All samples set the SDK application name to `foundry_local_samples`. Set
-`FOUNDRY_LOCAL_LIB_DIR` before starting Python when using a native library from
-a non-default build location.
+All samples set the SDK application name to `foundry_local_samples`.

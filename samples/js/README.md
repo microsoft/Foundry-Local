@@ -1,7 +1,6 @@
 # Foundry Local JavaScript samples
 
-These seven samples use the v2 `foundry-local-sdk` APIs from `sdk_v2/js`. They run on Node.js 20 or later and
-use the SDK directly from this repository through a local `file:` dependency.
+These seven samples use the published `foundry-local-sdk` **2.2.1** package and run on Node.js 20 or later.
 
 | Sample | What it demonstrates |
 | --- | --- |
@@ -14,10 +13,8 @@ use the SDK directly from this repository through a local `file:` dependency.
 | [byom](byom/) | Register existing model assets in the local catalog and run native chat. |
 
 > [!IMPORTANT]
-> These samples track the latest JavaScript SDK on `main` through a local `file:` dependency and require Foundry Local
-> to be built before they can run. Installing
-> [`foundry-local-sdk` from npm](https://www.npmjs.com/package/foundry-local-sdk) is easier, but these samples are not
-> built or tested against a specific published version. See the
+> Every sample pins [`foundry-local-sdk` from npm](https://www.npmjs.com/package/foundry-local-sdk/v/2.2.1) to 2.2.1.
+> Installation supplies the native runtime; no local SDK source build is required. See the
 > [get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started) for versioned setup
 > guidance and additional examples.
 
@@ -27,17 +24,7 @@ use the SDK directly from this repository through a local `file:` dependency.
 - Native Foundry Local prerequisites for your platform
 - Network access for execution-provider and model downloads when they are not already cached
 
-Build the native SDK and JavaScript binding once before running a sample:
-
-```bash
-cd sdk_v2/cpp
-python build.py --configure --build --config RelWithDebInfo
-cd ../js
-npm install
-npm run build
-```
-
-Then install and run any sample:
+Install and run any sample:
 
 ```bash
 cd samples/js/hello-world

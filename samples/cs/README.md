@@ -1,6 +1,6 @@
 # Foundry Local C# samples
 
-These seven samples use the v2 C# SDK and .NET 9:
+These seven samples use Foundry Local SDK **2.2.1** and .NET 9:
 
 | Sample | What it demonstrates |
 | --- | --- |
@@ -13,10 +13,9 @@ These seven samples use the v2 C# SDK and .NET 9:
 | [`byom`](byom) | Registering existing model assets in the local catalog and running native chat |
 
 > [!IMPORTANT]
-> These samples track the latest C# SDK on `main` and reference its source project, so Foundry Local must be built
-> before they can run. Installing the
-> [Microsoft.AI.Foundry.Local NuGet package](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local) is easier, but
-> these samples are not built or tested against a specific package version. See the
+> These samples restore the published
+> [Microsoft.AI.Foundry.Local 2.2.1 NuGet package](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local/2.2.1),
+> including its native runtime dependencies. No local SDK build is required. See the
 > [get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started) for versioned setup
 > guidance and additional examples.
 
@@ -30,9 +29,9 @@ These seven samples use the v2 C# SDK and .NET 9:
 All samples set `Configuration.AppName` to `foundry_local_samples`, so they share
 the same application data and model cache.
 
-## Build from this repository
+## Build
 
-By default each project references the v2 SDK source:
+From this directory, build any sample. The SDK version is pinned centrally in `Directory.Packages.props`:
 
 ```shell
 dotnet build hello-world/HelloWorld.csproj
@@ -44,23 +43,7 @@ dotnet build vision/Vision.csproj
 dotnet build byom/Byom.csproj
 ```
 
-The v2 SDK project automatically uses a compatible local native build when one
-exists. You can instead pass `FoundryLocalNativeBinDir` or
-`FoundryLocalRuntimeVersion` as described by the v2 SDK project.
-
-## Build against a locally packed v2 SDK
-
-Pack the v2 SDK into the repository package directory, then provide its version:
-
-```shell
-dotnet pack ../../sdk_v2/cs/src/Microsoft.AI.Foundry.Local.csproj \
-  -o ../../local-packages -p:Version=0.5.0-local
-dotnet build hello-world/HelloWorld.csproj \
-  -p:FoundryLocalPackageVersion=0.5.0-local
-```
-
-`nuget.config` maps `Microsoft.AI.Foundry.Local` to `../../local-packages`;
-all other dependencies continue to come from NuGet.org.
+`nuget.config` restores the SDK and other dependencies from NuGet.org.
 
 ## Run
 

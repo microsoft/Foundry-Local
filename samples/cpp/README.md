@@ -1,6 +1,6 @@
 # Foundry Local C++ samples
 
-These seven samples use the Foundry Local SDK v2 public C++ API:
+These seven samples use the Foundry Local SDK **2.2.1** public C++ API:
 
 | Sample | Demonstrates |
 |---|---|
@@ -16,9 +16,9 @@ The non-web samples run inference directly in process. The web-server sample is 
 routes inference through HTTP.
 
 > [!IMPORTANT]
-> These samples track the latest C++ SDK on `main` and require a local Foundry Local build. The published
-> [Runtime NuGet package](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local.Runtime) is easier to consume, but
-> these samples are not built or tested against a specific package version. See the
+> These samples use the published
+> [Runtime 2.2.1 NuGet package](https://www.nuget.org/packages/Microsoft.AI.Foundry.Local.Runtime/2.2.1)
+> for both headers and native libraries. No local SDK source build is required. See the
 > [get-started documentation](https://learn.microsoft.com/en-us/azure/foundry-local/get-started) for versioned setup
 > guidance and additional examples.
 
@@ -26,36 +26,34 @@ routes inference through HTTP.
 
 - CMake 3.20 or newer
 - A C++20 compiler
-- Python 3
+- The [NuGet CLI](https://learn.microsoft.com/en-us/nuget/reference/nuget-exe-cli-reference)
 - The platform prerequisites listed in [`sdk_v2/cpp/README.md`](../../sdk_v2/cpp/README.md)
 - Optional: PortAudio development files for live microphone capture
 
 ## Build
 
-Build the SDK first through its supported build driver. Do not build the SDK directly with CMake:
+From `samples/cpp`, restore Runtime 2.2.1 and its matching native dependencies:
 
 ```sh
-cd sdk_v2/cpp
-python build.py --configure --build --config RelWithDebInfo
-cd ../../samples/cpp
+nuget install Microsoft.AI.Foundry.Local.Runtime -Version 2.2.1 -OutputDirectory build/packages/2.2.1 -Source https://api.nuget.org/v3/index.json
 ```
 
 Configure and build the samples:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build --parallel
+cmake --build build --config RelWithDebInfo --parallel
 ```
 
-The sample project finds the canonical SDK output at
-`sdk_v2/cpp/build/<Windows|Linux|macOS>/RelWithDebInfo`. For a different canonical configuration, pass its directory:
+The sample project uses the restored packages in `build/packages/2.2.1` and copies the native libraries beside each
+executable. For a different package directory, pass its location:
 
 ```sh
-cmake -S . -B build -DFOUNDRY_LOCAL_SDK_BUILD_DIR=/path/to/sdk_v2/cpp/build/<platform>/<config>
+cmake -S . -B build -DFOUNDRY_LOCAL_PACKAGES_DIR=/path/to/packages/2.2.1
 ```
 
-On Linux or macOS, ensure the SDK shared library and its adjacent runtime dependencies are in the loader search path.
-On Windows, run from a directory containing the SDK DLL and its runtime dependencies, or add that directory to `PATH`.
+For cross-compilation, set `FOUNDRY_LOCAL_RID` to the target runtime identifier, such as `win-arm64`.
+On Linux or macOS, keep the copied shared libraries in the loader search path if required by your environment.
 
 ## Run
 
