@@ -6,6 +6,7 @@ const MODEL_ALIAS: &str = "qwen2.5-0.5b";
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    manager.download_and_register_eps(None).await?;
     let model = manager.catalog().get_model(MODEL_ALIAS).await?;
 
     if !model.is_cached().await? {

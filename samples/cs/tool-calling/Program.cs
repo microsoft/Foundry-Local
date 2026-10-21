@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -10,6 +9,7 @@ var configuration = new Configuration
 
 await FoundryLocalManager.CreateAsync(configuration, NullLogger.Instance).ConfigureAwait(false);
 using var manager = FoundryLocalManager.Instance;
+await manager.DownloadAndRegisterEpsAsync().ConfigureAwait(false);
 
 var catalog = await manager.GetCatalogAsync().ConfigureAwait(false);
 var model = await catalog.GetModelAsync("qwen2.5-0.5b").ConfigureAwait(false)
@@ -36,42 +36,40 @@ try
 {
     using var session = new ChatSession(model);
     session.AddToolDefinition(
-        "multiply_numbers",
-        "Multiply two integer values.",
+        "get_weather",
+        "Get the current weather for a city.",
         """
         {
           "type": "object",
           "properties": {
-            "first": { "type": "integer" },
-            "second": { "type": "integer" }
+            "city": { "type": "string" }
           },
-          "required": ["first", "second"]
+          "required": ["city"],
+          "additionalProperties": false
         }
         """);
 
     using var firstRequest = new Request();
-    firstRequest.AddItem(MessageItem.System("Use the provided tool to perform arithmetic."));
-    firstRequest.AddItem(MessageItem.User("What is 7 multiplied by 6?"));
+    firstRequest.AddItem(MessageItem.User("What is the weather in Paris?"));
     firstRequest.SetOptions(new RequestOptions
     {
-        Search = new SearchOptions { Temperature = 0.0f },
+        Search = new SearchOptions { Temperature = 0.0f, MaxOutputTokens = 256 },
         ToolChoice = ToolChoice.Required,
     });
 
     using var firstResponse = await session.ProcessRequestAsync(firstRequest).ConfigureAwait(false);
     var toolCall = GetToolCall(firstResponse);
 
-    using var arguments = JsonDocument.Parse(toolCall.Arguments);
-    var first = arguments.RootElement.GetProperty("first").GetInt32();
-    var second = arguments.RootElement.GetProperty("second").GetInt32();
-    var result = first * second;
-
-    Console.WriteLine($"Tool call: {toolCall.Name}({first}, {second})");
-    Console.WriteLine($"Tool result: {result}");
+    Console.WriteLine($"Tool call: {toolCall.Name}({toolCall.Arguments})");
+    const string result = """{"temperature":22,"unit":"celsius","condition":"sunny"}""";
 
     using var secondRequest = new Request();
-    secondRequest.AddItem(new ToolResultItem(toolCall.CallId, result.ToString()));
-    secondRequest.AddItem(MessageItem.System("Reply with only the result returned by the tool."));
+    secondRequest.AddItem(new ToolResultItem(toolCall.CallId, result));
+    secondRequest.SetOptions(new RequestOptions
+    {
+        Search = new SearchOptions { Temperature = 0.0f, MaxOutputTokens = 256 },
+        ToolChoice = ToolChoice.None,
+    });
 
     using var secondResponse = await session.ProcessRequestAsync(secondRequest).ConfigureAwait(false);
     foreach (var item in secondResponse)

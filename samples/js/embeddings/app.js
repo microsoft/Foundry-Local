@@ -2,9 +2,9 @@ import { EmbeddingsSession, FoundryLocalManager, Item, Request } from "foundry-l
 
 const modelAlias = process.argv[2] ?? "qwen3-embedding-0.6b";
 const inputs = [
-  "The quick brown fox jumps over the lazy dog.",
-  "Local inference keeps data on the device.",
-  "Paris is the capital of France.",
+  "A kitten is sleeping on a rug.",
+  "A cat rests on a mat.",
+  "Saturn has a prominent ring system.",
 ];
 
 const manager = FoundryLocalManager.create({
@@ -17,6 +17,7 @@ let session;
 let modelLoaded = false;
 
 try {
+  await manager.downloadAndRegisterEps();
   model = await manager.catalog.getModel(modelAlias);
   if (!model.isCached) {
     console.log(`Downloading ${model.alias}...`);
@@ -32,14 +33,20 @@ try {
   }
 
   const response = await session.processRequest(request);
-  for (const [index, item] of response.output.entries()) {
+  const embeddings = response.output.map((item, index) => {
     if (item.type !== "tensor" || item.dataType !== "float") {
       throw new Error(`Expected float tensor output at index ${index}.`);
     }
     const bytes = item.data.slice();
-    const values = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
-    console.log(`[${index}] dimensions=${values.length}, first five=${Array.from(values.slice(0, 5)).join(", ")}`);
-  }
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+  });
+
+  // EmbeddingsSession returns L2-normalized vectors, so their dot product is cosine similarity.
+  const cosineSimilarity = (left, right) => left.reduce((sum, value, index) => sum + value * right[index], 0);
+  console.log(`Model: ${model.id}`);
+  console.log(`Dimensions: ${embeddings[0].length}`);
+  console.log(`Similarity (cat, cat): ${cosineSimilarity(embeddings[0], embeddings[1])}`);
+  console.log(`Similarity (cat, Saturn): ${cosineSimilarity(embeddings[0], embeddings[2])}`);
 } finally {
   session?.dispose();
   try {

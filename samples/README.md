@@ -35,3 +35,7 @@ Every language contains:
 | `web-server` | Starting and calling the built-in OpenAI-compatible HTTP server |
 
 All samples use `foundry_local_samples` as the application name so they share the same local model cache.
+Each sample registers execution providers before selecting its model. Hello world uses automatic model selection
+and a one-shot chat request about the sky; embeddings compares three sentences about cats and Saturn; tool calling
+requests Paris weather and returns a mock result before a final answer with tools disabled. Microphone capture and
+resource cleanup use the conventions of each language.

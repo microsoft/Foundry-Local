@@ -15,6 +15,7 @@ var configuration = new Configuration
 
 await FoundryLocalManager.CreateAsync(configuration, NullLogger.Instance).ConfigureAwait(false);
 using var manager = FoundryLocalManager.Instance;
+await manager.DownloadAndRegisterEpsAsync().ConfigureAwait(false);
 
 var catalog = await manager.GetCatalogAsync().ConfigureAwait(false);
 var model = await catalog.GetModelAsync("qwen2.5-0.5b").ConfigureAwait(false)

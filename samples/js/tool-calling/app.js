@@ -10,6 +10,7 @@ let session;
 let modelLoaded = false;
 
 try {
+  await manager.downloadAndRegisterEps();
   model = await manager.catalog.getModel("qwen2.5-0.5b");
   if (model.supportsToolCalling !== true) {
     throw new Error("The selected qwen2.5-0.5b variant does not support tool calling.");
@@ -25,44 +26,33 @@ try {
 
   session = new ChatSession(model);
   session.addToolDefinition({
-    name: "multiply_numbers",
-    description: "Multiply two numbers.",
+    name: "get_weather",
+    description: "Get the current weather for a city.",
     jsonSchema: JSON.stringify({
       type: "object",
       properties: {
-        first: { type: "number" },
-        second: { type: "number" },
+        city: { type: "string" },
       },
-      required: ["first", "second"],
+      required: ["city"],
       additionalProperties: false,
     }),
   });
 
   const toolRequest = new Request()
-    .addItem(Item.systemMessage("Use the provided tool for multiplication."))
-    .addItem(Item.userMessage("What is 7 multiplied by 6?"))
-    .setOptions({ toolChoice: "required", search: { temperature: 0, maxOutputTokens: 128 } });
+    .addItem(Item.userMessage("What is the weather in Paris?"))
+    .setOptions({ toolChoice: "required", search: { temperature: 0, maxOutputTokens: 256 } });
   const toolResponse = await session.processRequest(toolRequest);
   const toolCall = toolResponse.output.find((item) => item.type === "toolCall");
-  if (toolCall?.type !== "toolCall" || toolCall.name !== "multiply_numbers") {
-    throw new Error("The model did not return the expected multiply_numbers tool call.");
+  if (toolCall?.type !== "toolCall" || toolCall.name !== "get_weather") {
+    throw new Error("The model did not return the expected get_weather tool call.");
   }
 
-  const parsed = JSON.parse(toolCall.arguments);
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    typeof parsed.first !== "number" ||
-    typeof parsed.second !== "number"
-  ) {
-    throw new Error(`Invalid tool arguments: ${toolCall.arguments}`);
-  }
-  const product = parsed.first * parsed.second;
-  console.log(`Tool call: ${parsed.first} × ${parsed.second} = ${product}`);
+  console.log(`Tool call: ${toolCall.name}(${toolCall.arguments})`);
+  const result = JSON.stringify({ temperature: 22, unit: "celsius", condition: "sunny" });
 
   const finalRequest = new Request()
-    .addItem(Item.toolResult(toolCall.callId, String(product)))
-    .setOptions({ toolChoice: "none", search: { temperature: 0, maxOutputTokens: 128 } });
+    .addItem(Item.toolResult(toolCall.callId, result))
+    .setOptions({ toolChoice: "none", search: { temperature: 0, maxOutputTokens: 256 } });
   const finalResponse = await session.processRequest(finalRequest);
   const answer = finalResponse.output
     .map((item) => {

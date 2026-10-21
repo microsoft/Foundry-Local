@@ -9,6 +9,7 @@ var configuration = new Configuration
 
 await FoundryLocalManager.CreateAsync(configuration, NullLogger.Instance).ConfigureAwait(false);
 using var manager = FoundryLocalManager.Instance;
+await manager.DownloadAndRegisterEpsAsync().ConfigureAwait(false);
 
 var catalog = await manager.GetCatalogAsync().ConfigureAwait(false);
 var model = await catalog.GetModelAsync("qwen3-embedding-0.6b").ConfigureAwait(false)
@@ -29,11 +30,19 @@ try
 {
     using var session = new EmbeddingsSession(model);
     using var request = new Request();
-    request.AddItem(new TextItem("The quick brown fox jumps over the lazy dog."));
-    request.AddItem(new TextItem("Foundry Local runs models on your device."));
+    string[] inputs =
+    [
+        "A kitten is sleeping on a rug.",
+        "A cat rests on a mat.",
+        "Saturn has a prominent ring system.",
+    ];
+    foreach (var input in inputs)
+    {
+        request.AddItem(new TextItem(input));
+    }
 
     using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
-
+    var embeddings = new List<float[]>();
     for (var index = 0; index < response.ItemCount; index++)
     {
         using var item = response.GetItem(index);
@@ -42,13 +51,19 @@ try
             throw new InvalidOperationException($"Expected a tensor at index {index}.");
         }
 
-        var values = tensor.ToArray<float>();
-        Console.WriteLine(
-            $"Embedding {index}: {values.Length} dimensions; first values: "
-            + string.Join(", ", values.Take(5).Select(value => value.ToString("F6"))));
+        embeddings.Add(tensor.ToArray<float>());
     }
+
+    Console.WriteLine($"Model: {model.Id}");
+    Console.WriteLine($"Dimensions: {embeddings[0].Length}");
+    Console.WriteLine($"Similarity (cat, cat): {CosineSimilarity(embeddings[0], embeddings[1])}");
+    Console.WriteLine($"Similarity (cat, Saturn): {CosineSimilarity(embeddings[0], embeddings[2])}");
 }
 finally
 {
     await model.UnloadAsync().ConfigureAwait(false);
 }
+
+// EmbeddingsSession returns L2-normalized vectors, so their dot product is cosine similarity.
+static float CosineSimilarity(float[] left, float[] right)
+    => left.Zip(right, (a, b) => a * b).Sum();

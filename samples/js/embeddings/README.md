@@ -1,7 +1,7 @@
 # Embeddings
 
-This sample uses the native `EmbeddingsSession` API to embed several text inputs in one request. It does not use the
-deprecated `EmbeddingClient`.
+This sample uses the native `EmbeddingsSession` API to embed three sentences in one request and compare their
+cosine similarities.
 
 ```bash
 npm install

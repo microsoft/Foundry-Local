@@ -17,14 +17,11 @@ foreach (var executionProvider in executionProviders)
     Console.WriteLine($"  {executionProvider.Name} (registered: {executionProvider.IsRegistered})");
 }
 
-if (executionProviders.Length > 0)
-{
-    Console.WriteLine("Downloading and registering execution providers...");
-    await manager.DownloadAndRegisterEpsAsync(
-        (name, progress) => Console.Write($"\r  {name}: {progress:F1}%   "))
-        .ConfigureAwait(false);
-    Console.WriteLine();
-}
+Console.WriteLine("Downloading and registering execution providers...");
+await manager.DownloadAndRegisterEpsAsync(
+    (name, progress) => Console.Write($"\r  {name}: {progress:F1}%   "))
+    .ConfigureAwait(false);
+Console.WriteLine();
 
 Console.WriteLine("Opening the public catalog...");
 var catalog = await manager.GetCatalogAsync().ConfigureAwait(false);
@@ -52,6 +49,10 @@ try
     using var session = new ChatSession(model);
     using var request = new Request();
     request.AddItem(MessageItem.User("Why is the sky blue? Answer in two sentences."));
+    request.SetOptions(new RequestOptions
+    {
+        Search = new SearchOptions { Temperature = 0.0f, MaxOutputTokens = 128 },
+    });
 
     Console.WriteLine("Running native ChatSession inference...");
     using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);

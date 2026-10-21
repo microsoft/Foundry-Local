@@ -11,8 +11,6 @@ from foundry_local_sdk import (
     Request,
     RequestOptions,
     SearchOptions,
-    TextItem,
-    TextItemType,
 )
 
 APP_NAME = "foundry_local_samples"
@@ -35,25 +33,14 @@ def main() -> None:
             state = "registered" if execution_provider.is_registered else "available"
             print(f"  {execution_provider.name}: {state}")
 
-        missing_eps = [
-            execution_provider.name
-            for execution_provider in execution_providers
-            if not execution_provider.is_registered
-        ]
-        if missing_eps:
-            print("Downloading and registering execution providers...")
-            result = manager.download_and_register_eps(missing_eps)
-            if not result.success:
-                raise RuntimeError(
-                    f"Execution provider registration failed: {result.failed_eps}"
-                )
+        print("Downloading and registering execution providers...")
+        result = manager.download_and_register_eps()
+        if not result.success:
+            raise RuntimeError(
+                f"Execution provider registration failed: {result.failed_eps}"
+            )
 
         catalog = manager.catalog
-        models = catalog.list_models()
-        print(f"\nCatalog '{catalog.name}' contains {len(models)} model aliases.")
-        for available_model in models[:5]:
-            print(f"  {available_model.alias} ({available_model.id})")
-
         model = catalog.get_model(MODEL_ALIAS)
         if model is None:
             raise RuntimeError(f"Model {MODEL_ALIAS!r} was not found in the catalog.")
@@ -74,21 +61,13 @@ def main() -> None:
                     search=SearchOptions(temperature=0.0, max_output_tokens=128)
                 )
             )
-            session.set_streaming(True)
-
             with Request().add_item(
-                MessageItem.user("Explain in two sentences why the sky appears blue.")
+                MessageItem.user("Why is the sky blue? Answer in two sentences.")
             ) as request:
-                print("\nAssistant: ", end="", flush=True)
-                with session.process_streaming_request(request) as stream:
-                    for item in stream:
-                        if (
-                            isinstance(item, TextItem)
-                            and item.type is TextItemType.DEFAULT
-                        ):
-                            print(item.text, end="", flush=True)
-                    with stream.final_response as response:
-                        print(f"\nFinish reason: {response.finish_reason.name}")
+                with session.process_request(request) as response:
+                    for item in response:
+                        if isinstance(item, MessageItem):
+                            print(f"\nAssistant: {item.get_simple_text()}")
     finally:
         if model is not None and model.is_loaded:
             model.unload()

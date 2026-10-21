@@ -33,21 +33,6 @@ int main() {
     ICatalog& catalog = manager.GetCatalog();
     auto model = sample::GetModel(catalog, "qwen2.5-0.5b");
 
-    // Select a CPU chat variant explicitly. Applications may instead select a GPU/NPU variant.
-    bool selected = false;
-    auto variants = model->GetVariants();
-    for (const auto& variant : variants) {
-      const auto info = variant->GetInfo();
-      if (info.DeviceType() == FOUNDRY_LOCAL_DEVICE_CPU && info.Task() == "chat-completion") {
-        model->SelectVariant(*variant);
-        selected = true;
-        break;
-      }
-    }
-    if (!selected) {
-      throw std::runtime_error("No CPU chat variant is available for qwen2.5-0.5b");
-    }
-
     const auto info = model->GetInfo();
     std::cout << "Selected " << info.Id() << "\n";
     if (!model->IsCached()) {
@@ -62,8 +47,13 @@ int main() {
 
     model->Load();
     {
-      Session session(*model);
-      Request request{UserMessage("In one sentence, what can I build with Foundry Local?")};
+      ChatSession session(*model);
+      Request request{UserMessage("Why is the sky blue? Answer in two sentences.")};
+      RequestOptions options;
+      options.search.temperature = 0.0F;
+      options.search.max_output_tokens = 128;
+      request.SetOptions(options);
+
       const auto response = session.ProcessRequest(request);
       std::cout << "Assistant: ";
       sample::PrintAssistantMessages(response);

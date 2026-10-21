@@ -1,7 +1,8 @@
 # Embeddings
 
 Generates a batch of embeddings in-process with the native
-`EmbeddingsSession` API and decodes the returned float tensors.
+`EmbeddingsSession` API, decodes the returned float tensors, and compares the
+cosine similarities of three sentences.
 
 ```bash
 python -m pip install -r requirements.txt

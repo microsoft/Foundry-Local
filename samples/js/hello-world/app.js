@@ -17,14 +17,11 @@ try {
     console.log(`  ${provider.name}: ${provider.isRegistered ? "registered" : "not registered"}`);
   }
 
-  const missingProviders = providers.filter((provider) => !provider.isRegistered).map((provider) => provider.name);
-  if (missingProviders.length > 0) {
-    console.log(`Downloading execution providers: ${missingProviders.join(", ")}`);
-    await manager.downloadAndRegisterEps(missingProviders, (name, percent) => {
-      process.stdout.write(`\r  ${name}: ${percent.toFixed(1)}%`);
-    });
-    process.stdout.write("\n");
-  }
+  console.log("Downloading and registering execution providers...");
+  await manager.downloadAndRegisterEps((name, percent) => {
+    process.stdout.write(`\r  ${name}: ${percent.toFixed(1)}%`);
+  });
+  process.stdout.write("\n");
 
   const catalog = manager.catalog;
   model = await catalog.getModel(requestedAlias);
@@ -46,7 +43,6 @@ try {
 
   session = new ChatSession(model);
   const request = new Request()
-    .addItem(Item.systemMessage("You are a concise assistant."))
     .addItem(Item.userMessage("Why is the sky blue? Answer in two sentences."))
     .setOptions({ search: { temperature: 0, maxOutputTokens: 128 } });
 

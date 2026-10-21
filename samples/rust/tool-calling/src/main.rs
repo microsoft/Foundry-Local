@@ -1,28 +1,13 @@
-use std::io::{self, Write};
-
 use foundry_local_sdk::{
     ChatSession, FoundryLocalConfig, FoundryLocalManager, Item, Request, RequestOptions,
-    SearchOptions, TextKind, ToolChoice, ToolDefinition,
+    SearchOptions, ToolChoice, ToolDefinition,
 };
-use serde_json::{json, Value};
-use tokio_stream::StreamExt;
-
-fn multiply(arguments: &str) -> String {
-    let arguments: Value = serde_json::from_str(arguments).unwrap_or_else(|_| json!({}));
-    let first = arguments
-        .get("first")
-        .and_then(Value::as_f64)
-        .unwrap_or_default();
-    let second = arguments
-        .get("second")
-        .and_then(Value::as_f64)
-        .unwrap_or_default();
-    (first * second).to_string()
-}
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    manager.download_and_register_eps(None).await?;
     let model = manager.catalog().get_model("qwen2.5-0.5b").await?;
     if model.supports_tool_calling() != Some(true) {
         return Err("The selected qwen2.5-0.5b variant does not support tool calling".into());
@@ -42,26 +27,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     session
         .add_tool_definition(
             ToolDefinition::new(
-                "multiply",
+                "get_weather",
                 json!({
                     "type": "object",
                     "properties": {
-                        "first": { "type": "number" },
-                        "second": { "type": "number" }
+                        "city": { "type": "string" }
                     },
-                    "required": ["first", "second"]
+                    "required": ["city"],
+                    "additionalProperties": false
                 })
                 .to_string(),
             )
-            .with_description("Multiply two numbers."),
+            .with_description("Get the current weather for a city."),
         )
         .await?;
 
     let request = Request::from_items(vec![Item::user_message(vec![Item::text(
-        "Use the multiply tool to calculate 7 times 6.",
+        "What is the weather in Paris?",
     )])])
     .with_options(RequestOptions {
         search: SearchOptions {
+            temperature: Some(0.0),
             max_output_tokens: Some(256),
             ..Default::default()
         },
@@ -69,38 +55,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     });
 
-    let mut tool_results = Vec::new();
-    let mut stream = session.process_streaming_request(request);
-    while let Some(item) = stream.next().await {
-        let item = item?;
-        if let Some(call) = item.as_tool_call() {
-            println!("Tool call: {}({})", call.name, call.arguments);
-            let output = match call.name.as_str() {
-                "multiply" => multiply(&call.arguments),
-                name => format!("Unknown tool: {name}"),
-            };
-            println!("Tool result: {output}");
-            tool_results.push(Item::tool_result(call.call_id.clone(), output));
-        }
-    }
+    let response = session.process_request(request).await?;
+    let call = response
+        .items
+        .iter()
+        .find_map(Item::as_tool_call)
+        .ok_or("The model did not produce a tool call")?;
+    println!("Tool call: {}({})", call.name, call.arguments);
+    let result = json!({"temperature": 22, "unit": "celsius", "condition": "sunny"});
 
-    let follow_up = Request::from_items(tool_results).with_options(RequestOptions {
+    let follow_up = Request::from_items(vec![Item::tool_result(
+        call.call_id.clone(),
+        result.to_string(),
+    )])
+    .with_options(RequestOptions {
+        search: SearchOptions {
+            temperature: Some(0.0),
+            max_output_tokens: Some(256),
+            ..Default::default()
+        },
         tool_choice: Some(ToolChoice::None),
         ..Default::default()
     });
-    print!("Assistant: ");
-    let mut stream = session.process_streaming_request(follow_up);
-    while let Some(item) = stream.next().await {
-        if let Item::Text {
-            text,
-            kind: TextKind::Default,
-        } = item?
-        {
-            print!("{text}");
-            io::stdout().flush().ok();
+    let final_response = session.process_request(follow_up).await?;
+    for item in &final_response.items {
+        if let Some(message) = item.as_message() {
+            println!("Assistant: {}", message.text());
         }
     }
-    println!();
 
     drop(session);
     model.unload().await?;

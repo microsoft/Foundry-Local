@@ -27,10 +27,10 @@ WEATHER_SCHEMA = json.dumps(
     {
         "type": "object",
         "properties": {
-            "location": {"type": "string", "description": "City and state or country"},
-            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+            "city": {"type": "string"},
         },
-        "required": ["location"],
+        "required": ["city"],
+        "additionalProperties": False,
     }
 )
 
@@ -84,7 +84,7 @@ def main() -> None:
         with session:
             session.add_tool_definition(
                 name="get_weather",
-                description="Get the current weather for a location.",
+                description="Get the current weather for a city.",
                 json_schema=WEATHER_SCHEMA,
             )
 
@@ -94,11 +94,7 @@ def main() -> None:
             )
             with (
                 Request()
-                .add_item(
-                    MessageItem.user(
-                        "What is the weather in Seattle? Use the weather tool."
-                    )
-                )
+                .add_item(MessageItem.user("What is the weather in Paris?"))
                 .set_options(options) as request,
                 session.process_request(request) as response,
             ):
@@ -111,21 +107,19 @@ def main() -> None:
                     raise RuntimeError("The model did not produce a tool call.")
                 call = calls[0]
                 call_id = call.call_id
-                arguments = json.loads(call.arguments)
-                print(f"Tool call: {call.name}({arguments})")
+                print(f"Tool call: {call.name}({call.arguments})")
 
             weather = {
-                "location": arguments["location"],
-                "temperature": 12,
-                "unit": arguments.get("unit", "celsius"),
-                "conditions": "light rain",
+                "temperature": 22,
+                "unit": "celsius",
+                "condition": "sunny",
             }
             with (
                 Request()
                 .add_item(ToolResultItem(call_id=call_id, result=json.dumps(weather)))
                 .set_options(
                     RequestOptions(
-                        search=SearchOptions(temperature=0.0, max_output_tokens=128),
+                        search=SearchOptions(temperature=0.0, max_output_tokens=256),
                         tool_choice=ToolChoice.NONE,
                     )
                 ) as follow_up,

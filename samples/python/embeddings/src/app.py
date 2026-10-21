@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from array import array
+from collections.abc import Sequence
 
 from foundry_local_sdk import (
     Configuration,
@@ -18,10 +19,15 @@ from foundry_local_sdk import (
 APP_NAME = "foundry_local_samples"
 MODEL_ALIAS = "qwen3-embedding-0.6b"
 INPUTS = (
-    "Machine learning runs locally.",
-    "Paris is the capital of France.",
-    "Python is a programming language.",
+    "A kitten is sleeping on a rug.",
+    "A cat rests on a mat.",
+    "Saturn has a prominent ring system.",
 )
+
+
+def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    # EmbeddingsSession returns L2-normalized vectors, so their dot product is cosine similarity.
+    return sum(a * b for a, b in zip(left, right, strict=True))
 
 
 def main() -> None:
@@ -61,16 +67,24 @@ def main() -> None:
                         f"Expected {len(INPUTS)} tensors, received {len(tensors)}."
                     )
 
-                for text, tensor in zip(INPUTS, tensors, strict=True):
+                embeddings = []
+                for tensor in tensors:
                     if tensor.data_type is not TensorDataType.FLOAT:
                         raise RuntimeError(
                             f"Expected FLOAT tensor, received {tensor.data_type.name}."
                         )
                     values = array("f")
                     values.frombytes(tensor.data)
-                    print(f"\n{text}")
-                    print(f"  shape: {tensor.shape}")
-                    print(f"  first five values: {list(values[:5])}")
+                    embeddings.append(values)
+
+                print(f"Model: {model.id}")
+                print(f"Dimensions: {len(embeddings[0])}")
+                print(
+                    f"Similarity (cat, cat): {cosine_similarity(embeddings[0], embeddings[1])}"
+                )
+                print(
+                    f"Similarity (cat, Saturn): {cosine_similarity(embeddings[0], embeddings[2])}"
+                )
     finally:
         if model.is_loaded:
             model.unload()

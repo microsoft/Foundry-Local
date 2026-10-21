@@ -19,6 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ctrlc::set_handler(move || signal.store(false, Ordering::SeqCst))?;
 
     let manager = FoundryLocalManager::create(FoundryLocalConfig::new("foundry_local_samples"))?;
+    manager.download_and_register_eps(None).await?;
     let model = manager.catalog().get_model(MODEL_ALIAS).await?;
 
     if !model.is_cached().await? {

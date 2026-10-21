@@ -1,8 +1,8 @@
 # Tool calling
 
 This sample uses native `ChatSession` tool definitions and the `ToolCallItem`/`ToolResultItem` flow. It forces the
-first turn to call a multiplication tool, executes the function in JavaScript, and submits the result to the same
-session for the final answer.
+first turn to call `get_weather` for Paris, supplies a mock weather result, and submits it to the same session for
+the final answer with tool calling disabled.
 
 ```bash
 npm install

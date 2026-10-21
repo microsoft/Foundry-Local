@@ -1,9 +1,9 @@
 use std::io::{self, Write};
 
 use foundry_local_sdk::{
-    ChatSession, FoundryLocalConfig, FoundryLocalManager, Item, Request, TextKind,
+    ChatSession, FoundryLocalConfig, FoundryLocalManager, Item, Request, RequestOptions,
+    SearchOptions,
 };
-use tokio_stream::StreamExt;
 
 const MODEL_ALIAS: &str = "qwen2.5-0.5b";
 
@@ -28,15 +28,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    if execution_providers.iter().any(|ep| !ep.is_registered) {
-        let result = manager
-            .download_and_register_eps_with_progress(None, |name, progress| {
-                print!("\rRegistering {name}: {progress:.1}%");
-                io::stdout().flush().ok();
-            })
-            .await?;
-        println!("\n{}", result.status);
-    }
+    let result = manager
+        .download_and_register_eps_with_progress(None, |name, progress| {
+            print!("\rRegistering {name}: {progress:.1}%");
+            io::stdout().flush().ok();
+        })
+        .await?;
+    println!("\n{}", result.status);
 
     let catalog = manager.catalog();
     println!("Catalog: {}", catalog.name());
@@ -58,22 +56,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     model.load().await?;
     let session = ChatSession::new(&model).await?;
     let request = Request::from_items(vec![Item::user_message(vec![Item::text(
-        "In one sentence, what can I build with Foundry Local?",
-    )])]);
+        "Why is the sky blue? Answer in two sentences.",
+    )])])
+    .with_options(RequestOptions {
+        search: SearchOptions {
+            temperature: Some(0.0),
+            max_output_tokens: Some(128),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
-    print!("Assistant: ");
-    let mut stream = session.process_streaming_request(request);
-    while let Some(item) = stream.next().await {
-        if let Item::Text {
-            text,
-            kind: TextKind::Default,
-        } = item?
-        {
-            print!("{text}");
-            io::stdout().flush().ok();
+    let response = session.process_request(request).await?;
+    for item in &response.items {
+        if let Some(message) = item.as_message() {
+            println!("Assistant: {}", message.text());
         }
     }
-    println!();
 
     drop(session);
     model.unload().await?;

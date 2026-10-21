@@ -22,6 +22,7 @@ let transcription;
 const queue = new ItemQueue();
 
 try {
+  await manager.downloadAndRegisterEps();
   model = await manager.catalog.getModel(modelAlias);
   if (!model.isCached) {
     console.log(`Downloading ${model.alias}...`);

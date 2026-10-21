@@ -14,7 +14,7 @@ foundry_local::ToolDefinition WeatherTool() {
   return {
       "get_weather",
       "Get the current weather for a city.",
-      R"({"type":"object","properties":{"city":{"type":"string"}},"required":["city"]})",
+      R"({"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false})",
   };
 }
 
@@ -35,6 +35,7 @@ void RunToolConversation(foundry_local::IModel& model) {
 
   Request request{UserMessage("What is the weather in Paris?")};
   RequestOptions request_options;
+  request_options.search.temperature = 0.0F;
   request_options.search.max_output_tokens = 256;
   request_options.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
   request.SetOptions(request_options);
@@ -51,6 +52,7 @@ void RunToolConversation(foundry_local::IModel& model) {
     Request result_request{Item::ToolResult(
         std::string(call.call_id), R"({"temperature":22,"unit":"celsius","condition":"sunny"})")};
     RequestOptions result_options;
+    result_options.search.temperature = 0.0F;
     result_options.search.max_output_tokens = 256;
     result_options.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_NONE;
     result_request.SetOptions(result_options);
