@@ -20,6 +20,7 @@
 #include "service/handler_utils.h"
 #include "service/non_streaming_disconnect_monitor.h"
 #include "service/web_service.h"
+#include "util/scope_guard.h"
 #include "utils/temp_path.h"
 
 #include <foundry_local/foundry_local_c.h>
@@ -28,6 +29,7 @@
 #include <nlohmann/json.hpp>
 
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <mutex>
 #include <optional>
@@ -74,6 +76,46 @@ TEST(HttpUserAgentTest, KeepsOnlyKnownProductAndNumericReleaseVersion) {
   EXPECT_EQ(SafeHttpUserAgent("foundry-local-cpp/1..2"), "unknown-http-client");
   EXPECT_EQ(SafeHttpUserAgent("foundry-local-cpp/" + std::string(1024 * 1024, '1')), "unknown-http-client");
 }
+
+// Gate the final inference log before request completion is published, while disconnect monitoring is still active.
+class WebServiceTestLogger : public StderrLogger {
+ public:
+  void Log(LogLevel level, std::string_view message) override {
+    StderrLogger::Log(level, message);
+    std::unique_lock lock(mutex_);
+    if (!pause_next_completion_ || !message.starts_with("Completion stats:")) return;
+
+    pause_next_completion_ = false;
+    completion_reached_ = true;
+    cv_.notify_all();
+    cv_.wait(lock, [&] { return resume_completion_; });
+  }
+
+  void PauseNextCompletion() {
+    std::lock_guard lock(mutex_);
+    pause_next_completion_ = true;
+    completion_reached_ = false;
+    resume_completion_ = false;
+  }
+
+  bool WaitForCompletion() {
+    std::unique_lock lock(mutex_);
+    return cv_.wait_for(lock, std::chrono::seconds(10), [&] { return completion_reached_; });
+  }
+
+  void ResumeCompletion() {
+    std::lock_guard lock(mutex_);
+    resume_completion_ = true;
+    cv_.notify_all();
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  bool pause_next_completion_ = false;
+  bool completion_reached_ = false;
+  bool resume_completion_ = false;
+};
 
 class WebUsageTelemetry : public TelemetryLogger {
  public:
@@ -266,7 +308,7 @@ INSTANTIATE_TEST_SUITE_P(Tcp, NonStreamingHalfCloseTest, ::testing::Bool());
 class WebServiceTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
-    logger_ = std::make_unique<StderrLogger>();
+    logger_ = std::make_unique<WebServiceTestLogger>();
     ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
     model_load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
     session_manager_ = std::make_unique<SessionManager>(*logger_);
@@ -350,7 +392,7 @@ class WebServiceTest : public ::testing::Test {
   static std::unique_ptr<test::MockCatalog> public_catalog_;
   static std::unique_ptr<test::MockCatalog> local_catalog_;
   static std::unique_ptr<test::CpuOnlyEpDetector> ep_detector_;
-  static std::unique_ptr<StderrLogger> logger_;
+  static std::unique_ptr<WebServiceTestLogger> logger_;
   static std::unique_ptr<ModelLoadManager> model_load_manager_;
   static std::unique_ptr<SessionManager> session_manager_;
   static std::unique_ptr<WebUsageTelemetry> telemetry_;
@@ -363,7 +405,7 @@ class WebServiceTest : public ::testing::Test {
 std::unique_ptr<test::MockCatalog> WebServiceTest::public_catalog_;
 std::unique_ptr<test::MockCatalog> WebServiceTest::local_catalog_;
 std::unique_ptr<test::CpuOnlyEpDetector> WebServiceTest::ep_detector_;
-std::unique_ptr<StderrLogger> WebServiceTest::logger_;
+std::unique_ptr<WebServiceTestLogger> WebServiceTest::logger_;
 std::unique_ptr<ModelLoadManager> WebServiceTest::model_load_manager_;
 std::unique_ptr<SessionManager> WebServiceTest::session_manager_;
 std::unique_ptr<WebUsageTelemetry> WebServiceTest::telemetry_;
@@ -1338,14 +1380,17 @@ TEST_F(WebServiceTest, HalfClosedNonStreamingChatConnectionReceivesCompletion) {
   const auto unload_result = Get(std::string("/models/unload/") + kResponseStoreTestModelAlias);
   EXPECT_EQ(unload_result["status"], "unloaded") << unload_result.dump(2);
 }
+#endif
 
 TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndReleasesSession) {
   const auto load_result = Get(std::string("/models/load/") + kResponseStoreTestModelAlias);
   ASSERT_EQ(load_result["status"], "loaded") << load_result.dump(2);
   const auto prior_action_count = telemetry_->Events().actions.size();
 
-  const int client = ::socket(AF_INET, SOCK_STREAM, 0);
-  ASSERT_GE(client, 0);
+  using Socket = decltype(::socket(AF_INET, SOCK_STREAM, 0));
+  const Socket client = ::socket(AF_INET, SOCK_STREAM, 0);
+  ASSERT_NE(client, static_cast<Socket>(-1));
+  auto connection = std::make_shared<oatpp::network::tcp::Connection>(client);
   sockaddr_in address{};
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -1362,17 +1407,21 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
       "POST /v1/chat/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
       "Content-Type: application/json\r\nContent-Length: " +
       std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
-  ASSERT_EQ(::send(client, message.data(), message.size(), 0), static_cast<ssize_t>(message.size()));
 
-  const auto start_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (session_manager_->ActiveCount() == 0 && std::chrono::steady_clock::now() < start_deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  const bool started = session_manager_->ActiveCount() > 0;
+  // Keep the request in flight even when the tiny model finishes between session-count polls.
+  logger_->PauseNextCompletion();
+  ScopeGuard resume_completion([&]() noexcept { logger_->ResumeCompletion(); });
+  ASSERT_EQ(::send(client, message.data(), static_cast<int>(message.size()), 0), static_cast<int>(message.size()));
+  ASSERT_TRUE(logger_->WaitForCompletion()) << "The non-streaming request did not reach completion";
+  EXPECT_GT(session_manager_->ActiveCount(), 0u);
+
   linger abortive_close{1, 0};
-  ASSERT_EQ(::setsockopt(client, SOL_SOCKET, SO_LINGER, &abortive_close, sizeof(abortive_close)), 0);
-  ::close(client);
-  ASSERT_TRUE(started) << "The non-streaming request did not begin inference";
+  ASSERT_EQ(::setsockopt(client, SOL_SOCKET, SO_LINGER,
+                         reinterpret_cast<const char*>(&abortive_close), sizeof(abortive_close)),
+            0);
+  connection.reset();
+  logger_->ResumeCompletion();
+  resume_completion.Dismiss();
 
   const auto stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   while (session_manager_->ActiveCount() > 0 && std::chrono::steady_clock::now() < stop_deadline) {
@@ -1401,7 +1450,6 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
   const auto unload_result = Get(std::string("/models/unload/") + kResponseStoreTestModelAlias);
   EXPECT_EQ(unload_result["status"], "unloaded") << unload_result.dump(2);
 }
-#endif
 
 TEST_F(WebServiceTest, ClosingResponsesStreamCancelsInferenceAndPreservesConversation) {
   const auto load_result = Get(std::string("/models/load/") + kResponseStoreTestModelAlias);
