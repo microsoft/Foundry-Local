@@ -5,8 +5,6 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) 20 or later
-- A built [SDK v2 native runtime](../../sdk_v2/cpp/README.md). The JavaScript build uses the
-  C++ `RelWithDebInfo` build output to link its addon and stage native dependencies.
 
 ## Samples
 
@@ -39,13 +37,10 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    cd Foundry-Local/samples/js
    ```
 
-1. Build the SDK v2 source package, then install a sample's dependencies:
+1. Navigate to a sample and install dependencies:
 
    ```bash
-   cd ../../sdk_v2/js
-   npm install
-   npm run build
-   cd ../../samples/js/native-chat-completions
+   cd native-chat-completions
    npm install
    ```
 
@@ -56,8 +51,6 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    ```
 
 > [!TIP]
-> Native JS samples in this repo pin `foundry-local-sdk` to the local `sdk_v2/js`
-> source package via a `file:` dependency, so `npm install` uses the in-repo v2
-> SDK instead of the published legacy package. On **Windows**, the v2 package
-> bundles WinML hardware acceleration automatically; no separate `-winml`
-> package is needed.
+> Each sample installs `foundry-local-sdk` using the `latest` npm tag. These samples require SDK v2 APIs.
+> The published package includes prebuilt native binaries, so no local C++ build or build configuration is required.
+> On **Windows**, the package bundles WinML hardware acceleration automatically; no separate `-winml` package is needed.

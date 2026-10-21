@@ -159,11 +159,10 @@ jobs:
           foreach ($dir in Get-ChildItem samples/js -Directory) {
             $name = $dir.Name
             Write-Host "=== Checking: $name ==="
-            # Install dependencies from each sample manifest; the manifest pins
-            # foundry-local-sdk to the in-repo sdk_v2/js source via file: path.
+            # Samples use latest for consumers; CI overrides only the SDK to check this PR's source.
             Push-Location $dir.FullName
             if (Test-Path "package.json") {
-              npm install --ignore-scripts --registry https://registry.npmjs.org
+              npm install --no-save --package-lock=false --ignore-scripts --registry https://registry.npmjs.org foundry-local-sdk@file:../../../sdk_v2/js
               if ($LASTEXITCODE -ne 0) {
                 Pop-Location
                 throw "Dependency installation failed: $name"

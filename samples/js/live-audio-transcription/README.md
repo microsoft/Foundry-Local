@@ -5,7 +5,7 @@ JavaScript SDK with a typed `AudioSession`.
 
 ## Prerequisites
 
-- Built SDK v2 source package and native runtime (see the [JavaScript samples setup](../README.md))
+- Foundry Local JavaScript SDK v2 (installed by `npm install`; see the [JavaScript samples setup](../README.md))
 - Node.js 20+
 - A microphone (optional — falls back to synthetic audio)
 
