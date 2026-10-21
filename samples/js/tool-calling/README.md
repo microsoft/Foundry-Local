@@ -9,11 +9,6 @@ npm install
 npm start
 ```
 
-With no argument, the sample enumerates the catalog and selects the smallest model that declares tool-calling
-support. To request a specific model, pass its alias as the first argument:
-
-```bash
-npm start -- <model-alias>
-```
-
-The sample validates that a requested model declares tool-calling support and fails clearly when it does not.
+The sample selects `qwen2.5-0.5b` and verifies that the selected catalog variant declares tool-calling support. This
+keeps the download small and uses a model whose current variants publish the metadata required by structured tool
+calling.

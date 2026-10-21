@@ -43,5 +43,6 @@ npm install
 npm start
 ```
 
-Every sample accepts an optional model alias as described in its own README. The non-web samples invoke the native
-in-process session APIs; only `web-server` starts the built-in HTTP service.
+Samples that accept an optional model alias document it in their own README. The tool-calling sample intentionally
+uses `qwen2.5-0.5b`, whose current catalog variants publish the metadata required by structured tool calling. The
+non-web samples invoke the native in-process session APIs; only `web-server` starts the built-in HTTP service.

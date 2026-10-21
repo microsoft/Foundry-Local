@@ -16,6 +16,9 @@ let session;
 let modelLoaded = false;
 let audioInput;
 let captureStarted = false;
+let request;
+let stream;
+let transcription;
 const queue = new ItemQueue();
 
 try {
@@ -28,13 +31,13 @@ try {
   modelLoaded = true;
 
   session = new AudioSession(model);
-  const request = new Request()
+  request = new Request()
     .addItem(Item.audioDescriptor("pcm", sampleRate, channels))
     .addItem(queue)
     .setOptions({ additionalOptions: { language: "en" } });
-  const stream = session.processStreamingRequest(request);
+  stream = session.processStreamingRequest(request);
 
-  const transcription = (async () => {
+  transcription = (async () => {
     for await (const item of stream) {
       if (item.type === "speechSegment") {
         const prefix = item.kind === "final" ? "\n[final] " : "\r[partial] ";
@@ -93,6 +96,10 @@ try {
   audioInput?.removeAllListeners();
   if (!queue.finished) {
     queue.markFinished();
+  }
+  request?.cancel();
+  if (stream !== undefined && transcription !== undefined) {
+    await Promise.allSettled([transcription, stream.response]);
   }
   queue.dispose();
   session?.dispose();

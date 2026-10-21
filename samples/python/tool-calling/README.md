@@ -2,9 +2,10 @@
 
 Registers a JSON-schema function tool on a native `ChatSession`, handles the
 model's `ToolCallItem`, and returns a `ToolResultItem` for the final response.
-The sample discovers a model whose catalog metadata explicitly reports
-tool-calling support, preferring a cached model and then the smallest known
-download. It fails with a clear error if the catalog has no compatible model.
+The sample selects `qwen2.5-0.5b` and verifies that the selected catalog
+variant explicitly reports tool-calling support. This keeps the download small
+and uses a model whose current variants publish the metadata required by
+structured tool calling.
 
 ```bash
 python -m pip install -r requirements.txt
