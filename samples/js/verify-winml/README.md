@@ -11,9 +11,8 @@ WinML EP-backed model variants and finishes with one native streaming chat check
 
 ## Setup
 
-`package.json` installs the repo-local `foundry-local-sdk` package and then
-runs its WinML installer script, so the sample always uses the current
-branch's WinML artifact pins:
+`package.json` installs `foundry-local-sdk` using the `latest` npm tag.
+The SDK's installer handles the WinML runtime dependencies automatically:
 
 ```bash
 npm install

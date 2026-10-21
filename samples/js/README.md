@@ -4,7 +4,7 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or later recommended)
+- [Node.js](https://nodejs.org/) 20 or later
 
 ## Samples
 
@@ -24,6 +24,9 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
 | [tutorial-document-summarizer](tutorial-document-summarizer/) | Summarize documents with AI (tutorial). |
 | [tutorial-tool-calling](tutorial-tool-calling/) | Create a tool-calling assistant (tutorial). |
 | [tutorial-voice-to-text](tutorial-voice-to-text/) | Transcribe and summarize audio (tutorial). |
+| [live-audio-transcription](live-audio-transcription/) | Stream microphone PCM through an `AudioSession`. |
+| [verify-winml](verify-winml/) | Verify execution providers and accelerated native chat. |
+| [byom-cache-rescan](byom-cache-rescan/) | Register a CPU model clone explicitly in the local catalog. |
 
 ## Running a Sample
 
@@ -48,4 +51,6 @@ These samples demonstrate how to use the Foundry Local JavaScript SDK (`foundry-
    ```
 
 > [!TIP]
-> Each sample's `package.json` includes the single `foundry-local-sdk` package. On **Windows**, it bundles WinML hardware acceleration automatically. Just run `npm install` — no separate package or flag is needed.
+> Each sample installs `foundry-local-sdk` using the `latest` npm tag. These samples require SDK v2 APIs.
+> The published package includes prebuilt native binaries, so no local C++ build or build configuration is required.
+> On **Windows**, the package bundles WinML hardware acceleration automatically; no separate `-winml` package is needed.
