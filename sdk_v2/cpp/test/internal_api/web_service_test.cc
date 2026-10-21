@@ -20,7 +20,7 @@
 #include "service/handler_utils.h"
 #include "service/non_streaming_disconnect_monitor.h"
 #include "service/web_service.h"
-#include "utils.h"
+#include "util/scope_guard.h"
 #include "utils/temp_path.h"
 
 #include <foundry_local/foundry_local_c.h>
@@ -1388,7 +1388,7 @@ TEST_F(WebServiceTest, ClosingNonStreamingChatConnectionCancelsInferenceAndRelea
   ASSERT_EQ(::setsockopt(client, SOL_SOCKET, SO_LINGER, &abortive_close, sizeof(abortive_close)), 0);
   // Reset after HTTP parsing but before inference can finish, independently of the tiny model's generation speed.
   session_manager_->ResetClientOnNextRegistration(std::move(connection));
-  ScopeGuard clear_disconnect([&] { session_manager_->ResetClientOnNextRegistration(nullptr); });
+  ScopeGuard clear_disconnect([&]() noexcept { session_manager_->ResetClientOnNextRegistration(nullptr); });
   ASSERT_EQ(::send(client, message.data(), message.size(), 0), static_cast<ssize_t>(message.size()));
 
   bool canceled = false;
