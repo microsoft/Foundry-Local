@@ -40,7 +40,7 @@ try {
   transcription = (async () => {
     for await (const item of stream) {
       if (item.type === "speechSegment") {
-        const prefix = item.kind === "final" ? "\n[final] " : "\r[partial] ";
+        const prefix = item.kind === "final" ? "\n[final] " : item.kind === "partial" ? "\r[partial] " : "";
         process.stdout.write(`${prefix}${item.text}`);
       }
     }

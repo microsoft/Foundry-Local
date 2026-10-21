@@ -22,7 +22,7 @@ All crates use the SDK in `sdk_v2/rust` and set the application name to
 | Directory | Demonstrates |
 | --- | --- |
 | [`hello-world`](hello-world/) | Manager setup, execution-provider registration, catalog/model lifecycle, and native chat inference |
-| [`realtime-transcription`](realtime-transcription/) | In-process microphone streaming with the temporarily retained deprecated live-transcription API |
+| [`realtime-transcription`](realtime-transcription/) | Native microphone streaming with `AudioSession` and `ItemQueue` |
 | [`embeddings`](embeddings/) | Single and batch embeddings with the native `EmbeddingsSession` |
 | [`tool-calling`](tool-calling/) | Native `ChatSession` tool definitions, tool-call items, and tool-result items |
 | [`web-server`](web-server/) | Starting the built-in service, discovering its URL, calling an OpenAI-compatible endpoint, and stopping it |

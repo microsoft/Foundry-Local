@@ -1,12 +1,13 @@
-#![allow(deprecated)]
-
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use foundry_local_sdk::{FoundryLocalConfig, FoundryLocalManager};
+use foundry_local_sdk::{
+    AudioSession, FoundryLocalConfig, FoundryLocalManager, Item, Request, RequestOptions,
+    SpeechSegmentKind,
+};
 use tokio_stream::StreamExt;
 
 const MODEL_ALIAS: &str = "nemotron-speech-streaming-en-0.6b";
@@ -25,35 +26,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     model.load().await?;
 
-    // The native AudioSession does not yet expose incremental microphone input.
-    // This deprecated in-process API remains the currently functional streaming
-    // path and will be replaced when equivalent native streaming support lands.
-    let audio_client = model.create_audio_client();
-    let mut session = audio_client.create_live_transcription_session();
-    session.settings.language = Some("en".to_string());
-    session.start(None).await?;
-    let session = Arc::new(session);
-
-    let mut results = session.get_stream().await?;
-    let result_task = tokio::spawn(async move {
-        while let Some(result) = results.next().await {
-            match result {
-                Ok(result) => {
-                    if let Some(content) = result.content.first() {
-                        if result.is_final {
-                            println!("\n[final] {}", content.text);
-                        } else {
-                            print!("{}", content.text);
-                            io::stdout().flush().ok();
-                        }
-                    }
-                }
-                Err(error) => {
-                    eprintln!("\nTranscription error: {error}");
-                    break;
-                }
-            }
-        }
+    let session = AudioSession::new(&model).await?;
+    let queue = session.create_input_queue()?;
+    let request = Request::from_items(vec![Item::audio_data(
+        Vec::<u8>::new(),
+        Some("pcm"),
+        16000,
+        1,
+    )])
+    .with_input_queue(queue.clone())
+    .with_options(RequestOptions {
+        additional_options: vec![("language".to_string(), "en".to_string())],
+        ..Default::default()
     });
 
     let device = cpal::default_host()
@@ -107,19 +91,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     stream.play()?;
+    let mut results = session.process_streaming_request(request);
+    let result_task = tokio::spawn(async move {
+        while let Some(item) = results.next().await {
+            if let Item::SpeechSegment(segment) = item? {
+                match segment.kind {
+                    SpeechSegmentKind::None => print!("{}", segment.text),
+                    SpeechSegmentKind::Partial => print!("\r{}", segment.text),
+                    SpeechSegmentKind::Final => println!("\n[final] {}", segment.text),
+                }
+                io::stdout().flush().ok();
+            }
+        }
+        let response = results.response().await?;
+        for item in &response.items {
+            if let Some(result) = item.as_speech_result() {
+                println!("\nTranscript: {}", result.text);
+            }
+        }
+        Ok::<_, foundry_local_sdk::FoundryLocalError>(())
+    });
+
     println!("Listening. Press Ctrl+C to stop.");
-    while running.load(Ordering::SeqCst) {
+    while running.load(Ordering::SeqCst) && !result_task.is_finished() {
         if let Ok(Some(samples)) =
             tokio::time::timeout(Duration::from_millis(100), audio_rx.recv()).await
         {
             let pcm = convert_to_mono_16khz_pcm(&samples, channels, sample_rate);
-            session.append(&pcm, None).await?;
+            queue.push(&Item::bytes(pcm))?;
         }
     }
 
     drop(stream);
-    session.stop(None).await?;
-    result_task.await?;
+    queue.mark_finished();
+    result_task.await??;
     drop(session);
     model.unload().await?;
     manager.shutdown()?;

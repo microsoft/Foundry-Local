@@ -57,12 +57,17 @@ try
 
     var forwardAudioTask = Task.Run(async () =>
     {
-        await foreach (var chunk in capturedAudio.Reader.ReadAllAsync().ConfigureAwait(false))
+        try
         {
-            audioQueue.Push(BytesItem.CreateOwned(chunk));
+            await foreach (var chunk in capturedAudio.Reader.ReadAllAsync().ConfigureAwait(false))
+            {
+                audioQueue.Push(BytesItem.CreateOwned(chunk));
+            }
         }
-
-        audioQueue.MarkFinished();
+        finally
+        {
+            audioQueue.MarkFinished();
+        }
     });
 
     var stream = session.ProcessStreamingRequestAsync(request);
@@ -83,32 +88,37 @@ try
             }
         });
 
-        using var microphone = new WaveInEvent
+        try
         {
-            WaveFormat = new WaveFormat(rate: 16000, bits: 16, channels: 1),
-            BufferMilliseconds = 100,
-        };
-
-        microphone.DataAvailable += (_, eventArgs) =>
-        {
-            if (eventArgs.BytesRecorded == 0)
+            using var microphone = new WaveInEvent
             {
-                return;
-            }
+                WaveFormat = new WaveFormat(rate: 16000, bits: 16, channels: 1),
+                BufferMilliseconds = 100,
+            };
 
-            var chunk = new byte[eventArgs.BytesRecorded];
-            Buffer.BlockCopy(eventArgs.Buffer, 0, chunk, 0, chunk.Length);
-            capturedAudio.Writer.TryWrite(chunk);
-        };
+            microphone.DataAvailable += (_, eventArgs) =>
+            {
+                if (eventArgs.BytesRecorded == 0)
+                {
+                    return;
+                }
 
-        Console.WriteLine("Listening. Speak into your microphone, then press Enter to stop.");
-        microphone.StartRecording();
-        Console.ReadLine();
-        microphone.StopRecording();
+                var chunk = new byte[eventArgs.BytesRecorded];
+                Buffer.BlockCopy(eventArgs.Buffer, 0, chunk, 0, chunk.Length);
+                capturedAudio.Writer.TryWrite(chunk);
+            };
 
-        capturedAudio.Writer.Complete();
-        await forwardAudioTask.ConfigureAwait(false);
-        await transcriptionTask.ConfigureAwait(false);
+            Console.WriteLine("Listening. Speak into your microphone, then press Enter to stop.");
+            microphone.StartRecording();
+            Console.ReadLine();
+            microphone.StopRecording();
+        }
+        finally
+        {
+            capturedAudio.Writer.TryComplete();
+            await forwardAudioTask.ConfigureAwait(false);
+            await transcriptionTask.ConfigureAwait(false);
+        }
 
         using var finalResponse = await stream.FinalResponse.ConfigureAwait(false);
         foreach (var item in finalResponse)

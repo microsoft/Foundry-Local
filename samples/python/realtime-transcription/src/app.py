@@ -122,12 +122,12 @@ def main() -> None:
                             for item in stream:
                                 if not isinstance(item, SpeechSegmentItem):
                                     continue
-                                ending = (
-                                    "\n"
-                                    if item.kind is SpeechSegmentKind.FINAL
-                                    else "\r"
-                                )
-                                print(item.text, end=ending, flush=True)
+                                if item.kind is SpeechSegmentKind.PARTIAL:
+                                    print(f"\r{item.text}", end="", flush=True)
+                                elif item.kind is SpeechSegmentKind.FINAL:
+                                    print(f"\n[final] {item.text}")
+                                else:
+                                    print(item.text, end="", flush=True)
 
                             with stream.final_response as response:
                                 result = next(

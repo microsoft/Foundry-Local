@@ -99,7 +99,7 @@ Foundry Local may collect usage data and send it to Microsoft to help improve ou
     ```python
     from foundry_local_sdk import (
         ChatSession, Configuration, FoundryLocalManager,
-        MessageItem, Request, TextItem,
+        MessageItem, Request,
     )
 
     with FoundryLocalManager(Configuration(app_name="foundry_local_samples")) as manager:
@@ -116,7 +116,9 @@ Foundry Local may collect usage data and send it to Microsoft to help improve ou
             with ChatSession(model) as session:
                 with Request().add_item(MessageItem.user("What is the golden ratio?")) as request:
                     with session.process_request(request) as response:
-                        print("".join(item.text for item in response if isinstance(item, TextItem)))
+                        for item in response:
+                            if isinstance(item, MessageItem):
+                                print(item.get_simple_text())
         finally:
             model.unload()
     ```
