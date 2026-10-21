@@ -602,6 +602,11 @@ When `FOUNDRY_LOCAL_RUNTIME_VERSION` is set, the NuGet acquisition path supports
 - **`nuget`** — runs `nuget install` once per package. Use this when authentication depends on a
   NuGet or Visual Studio credential provider that the standalone NuGet CLI can host.
 
+By default, HTTP mode tries NuGet.org first, then the Microsoft package feed proxy
+(`https://packagefeedproxy.microsoft.io/nuget/v3/index.json`), then the public ORT-Nightly Azure Artifacts feed.
+The proxy provides a fallback for networks that block direct NuGet.org access. Explicit feed overrides replace
+this list; `dotnet` and `nuget` modes receive the same default sources but control their own source selection.
+
 | Variable | Applies to | Purpose |
 |----------|------------|---------|
 | `FOUNDRY_LOCAL_NUGET_MODE` | all | `http` (default), `dotnet`, or `nuget`. |
