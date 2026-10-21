@@ -64,7 +64,7 @@ extends:
   template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
   parameters:
     settings:
-      networkIsolationPolicy: CFSClean,CFSClean2,CFSClean3
+      networkIsolationPolicy: AzureStorage,CFSClean,CFSClean2,CFSClean3
     pool:
       # default all windows jobs, individual jobs override
       name: onnxruntime-Win-CPU-2022
