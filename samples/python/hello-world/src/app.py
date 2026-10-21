@@ -11,6 +11,8 @@ from foundry_local_sdk import (
     Request,
     RequestOptions,
     SearchOptions,
+    TextItem,
+    TextItemType,
 )
 
 APP_NAME = "foundry_local_samples"
@@ -56,6 +58,7 @@ def main() -> None:
         print("Model loaded.")
 
         with ChatSession(model) as session:
+            session.set_streaming(True)
             session.set_options(
                 RequestOptions(
                     search=SearchOptions(temperature=0.0, max_output_tokens=128)
@@ -64,10 +67,15 @@ def main() -> None:
             with Request().add_item(
                 MessageItem.user("Why is the sky blue? Answer in two sentences.")
             ) as request:
-                with session.process_request(request) as response:
-                    for item in response:
-                        if isinstance(item, MessageItem):
-                            print(f"\nAssistant: {item.get_simple_text()}")
+                print("\nAssistant: ", end="", flush=True)
+                with session.process_streaming_request(request) as stream:
+                    for item in stream:
+                        if (
+                            isinstance(item, TextItem)
+                            and item.type is TextItemType.DEFAULT
+                        ):
+                            print(item.text, end="", flush=True)
+                print()
     finally:
         if model is not None and model.is_loaded:
             model.unload()

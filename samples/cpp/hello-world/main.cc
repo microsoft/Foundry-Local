@@ -48,15 +48,26 @@ int main() {
     model->Load();
     {
       ChatSession session(*model);
+      session.SetStreamingCallback([](Item item) {
+        if (item.GetType() == FOUNDRY_LOCAL_ITEM_TEXT) {
+          const auto text = item.GetText();
+          if (text.type == FOUNDRY_LOCAL_TEXT_ITEM_TYPE_DEFAULT) {
+            std::cout << text.text << std::flush;
+          }
+        }
+
+        return 0;
+      });
+
       Request request{UserMessage("Why is the sky blue? Answer in two sentences.")};
       RequestOptions options;
       options.search.temperature = 0.0F;
       options.search.max_output_tokens = 128;
       request.SetOptions(options);
 
-      const auto response = session.ProcessRequest(request);
-      std::cout << "Assistant: ";
-      sample::PrintAssistantMessages(response);
+      std::cout << "Assistant: " << std::flush;
+      session.ProcessRequest(request);
+      std::cout << "\n";
     }
     model->Unload();
     manager.Shutdown();

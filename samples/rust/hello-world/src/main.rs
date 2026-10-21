@@ -2,8 +2,9 @@ use std::io::{self, Write};
 
 use foundry_local_sdk::{
     ChatSession, FoundryLocalConfig, FoundryLocalManager, Item, Request, RequestOptions,
-    SearchOptions,
+    SearchOptions, TextKind,
 };
+use tokio_stream::StreamExt;
 
 const MODEL_ALIAS: &str = "qwen2.5-0.5b";
 
@@ -67,13 +68,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     });
 
-    let response = session.process_request(request).await?;
-    for item in &response.items {
-        if let Some(message) = item.as_message() {
-            println!("Assistant: {}", message.text());
+    print!("Assistant: ");
+    io::stdout().flush()?;
+    let mut stream = session.process_streaming_request(request);
+    while let Some(item) = stream.next().await {
+        if let Item::Text {
+            text,
+            kind: TextKind::Default,
+        } = item?
+        {
+            print!("{text}");
+            io::stdout().flush()?;
         }
     }
+    stream.response().await?;
+    println!();
 
+    drop(stream);
     drop(session);
     model.unload().await?;
     manager.shutdown()?;

@@ -47,6 +47,7 @@ await model.LoadAsync().ConfigureAwait(false);
 try
 {
     using var session = new ChatSession(model);
+    session.SetStreaming(true);
     using var request = new Request();
     request.AddItem(MessageItem.User("Why is the sky blue? Answer in two sentences."));
     request.SetOptions(new RequestOptions
@@ -54,19 +55,22 @@ try
         Search = new SearchOptions { Temperature = 0.0f, MaxOutputTokens = 128 },
     });
 
-    Console.WriteLine("Running native ChatSession inference...");
-    using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
-
-    foreach (var item in response)
+    Console.Write("Assistant: ");
+    await using var stream = session.ProcessStreamingRequestAsync(request);
+    await foreach (var item in stream.ConfigureAwait(false))
     {
         using (item)
         {
-            if (item is MessageItem message)
+            if (item is TextItem { Type: TextItemType.Default } text)
             {
-                Console.WriteLine($"Assistant: {message.GetSimpleText()}");
+                Console.Write(text.Text);
+                Console.Out.Flush();
             }
         }
     }
+
+    using var response = await stream.FinalResponse.ConfigureAwait(false);
+    Console.WriteLine();
 }
 finally
 {

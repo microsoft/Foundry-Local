@@ -46,19 +46,15 @@ try {
     .addItem(Item.userMessage("Why is the sky blue? Answer in two sentences."))
     .setOptions({ search: { temperature: 0, maxOutputTokens: 128 } });
 
-  const response = await session.processRequest(request);
-  const text = response.output
-    .map((item) => {
-      if (item.type === "text") return item.text;
-      if (item.type === "message") {
-        if (item.content !== undefined) return item.content;
-        return item.parts?.filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
-      }
-      return "";
-    })
-    .join("");
-
-  console.log(`\nAssistant: ${text}`);
+  process.stdout.write("\nAssistant: ");
+  const stream = session.processStreamingRequest(request);
+  for await (const item of stream) {
+    if (item.type === "text" && item.textType === "default") {
+      process.stdout.write(item.text);
+    }
+  }
+  await stream.response;
+  process.stdout.write("\n");
 } finally {
   session?.dispose();
   try {
