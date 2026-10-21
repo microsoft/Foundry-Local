@@ -11,6 +11,10 @@
 #include <string>
 #include <string_view>
 
+#ifdef GetMessage
+#undef GetMessage
+#endif
+
 namespace sample {
 
 inline constexpr std::string_view kAppName = "foundry_local_samples";

@@ -77,6 +77,7 @@ jobs:
           pip config set global.pre true
 
       - name: Build SDK wheel from source
+        if: runner.os != 'Windows'
         working-directory: sdk_v2/python
         shell: pwsh
         run: |
@@ -84,6 +85,7 @@ jobs:
           python -m build --wheel --outdir dist/
 
       - name: Install sample dependencies
+        if: runner.os != 'Windows'
         shell: pwsh
         run: |
           Get-ChildItem samples/python/*/requirements.txt -ErrorAction SilentlyContinue | ForEach-Object {
@@ -177,7 +179,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows, macos]
+        include:
+          - platform: windows
+            rid: win-x64
+          - platform: macos
+            rid: osx-arm64
 
     steps:
       - name: Checkout repository
@@ -198,7 +204,14 @@ jobs:
           foreach ($proj in $projects) {
             $name = $proj.BaseName
             Write-Host "`n=== Building: $name ==="
-            dotnet build $proj.FullName --configuration Debug 2>&1
+            dotnet restore $proj.FullName --runtime ${{ matrix.rid }} `
+              --configfile samples/cs/nuget.config `
+              -p:RuntimeIdentifiers=${{ matrix.rid }} 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              dotnet build $proj.FullName --configuration Debug --no-restore `
+                --runtime ${{ matrix.rid }} `
+                -p:RuntimeIdentifiers=${{ matrix.rid }} 2>&1
+            }
             if ($LASTEXITCODE -ne 0) {
               Write-Host "BUILD FAILED: $name"
               $failed += $name
@@ -228,6 +241,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
+          toolchain: stable
           components: clippy
 
       - name: Cache cargo dependencies

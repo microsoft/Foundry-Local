@@ -34,10 +34,10 @@ void RunToolConversation(foundry_local::IModel& model) {
   session.AddToolDefinition(WeatherTool());
 
   Request request{UserMessage("What is the weather in Paris?")};
-  request.SetOptions({
-      .search = {.max_output_tokens = 256},
-      .tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED,
-  });
+  RequestOptions request_options;
+  request_options.search.max_output_tokens = 256;
+  request_options.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_REQUIRED;
+  request.SetOptions(request_options);
 
   auto response = session.ProcessRequest(request);
   for (const auto& item : response.GetItems()) {
@@ -50,10 +50,10 @@ void RunToolConversation(foundry_local::IModel& model) {
 
     Request result_request{Item::ToolResult(
         std::string(call.call_id), R"({"temperature":22,"unit":"celsius","condition":"sunny"})")};
-    result_request.SetOptions({
-        .search = {.max_output_tokens = 256},
-        .tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_NONE,
-    });
+    RequestOptions result_options;
+    result_options.search.max_output_tokens = 256;
+    result_options.tool_choice = FOUNDRY_LOCAL_TOOL_CHOICE_NONE;
+    result_request.SetOptions(result_options);
     const auto final_response = session.ProcessRequest(result_request);
     std::cout << "Assistant: ";
     sample::PrintAssistantMessages(final_response);
