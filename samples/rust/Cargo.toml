@@ -5,5 +5,7 @@ members = [
     "embeddings",
     "tool-calling",
     "web-server",
+    "vision",
+    "byom",
 ]
 resolver = "2"

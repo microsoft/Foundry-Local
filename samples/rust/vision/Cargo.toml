@@ -1,0 +1,9 @@
+[package]
+name = "vision"
+version = "0.1.0"
+edition = "2021"
+description = "Native vision chat with a local image"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk_v2/rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

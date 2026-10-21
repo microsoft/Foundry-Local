@@ -1,6 +1,6 @@
 # Foundry Local Python samples
 
-These five samples use the native `sdk_v2/python` bindings. Except for
+These seven samples use the native `sdk_v2/python` bindings. Except for
 `web-server`, inference runs in-process without an HTTP service.
 
 | Sample | What it demonstrates |
@@ -10,6 +10,8 @@ These five samples use the native `sdk_v2/python` bindings. Except for
 | [`embeddings`](embeddings/) | Native batched embeddings with `EmbeddingsSession` |
 | [`tool-calling`](tool-calling/) | Native chat tool definitions, calls, and results |
 | [`web-server`](web-server/) | Built-in server and its OpenAI-compatible endpoint |
+| [`vision`](vision/) | Native chat with text and a local image |
+| [`byom`](byom/) | Registering local model assets and running native chat |
 
 > [!IMPORTANT]
 > These samples track the latest Python SDK on `main` through an editable source dependency and require Foundry Local

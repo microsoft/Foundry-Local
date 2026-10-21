@@ -1,0 +1,9 @@
+[package]
+name = "byom"
+version = "0.1.0"
+edition = "2021"
+description = "Register local model assets and run native chat"
+
+[dependencies]
+foundry-local-sdk = { path = "../../../sdk_v2/rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

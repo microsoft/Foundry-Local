@@ -1,6 +1,6 @@
 # Foundry Local Rust samples
 
-These five samples demonstrate the supported Foundry Local Rust SDK workflows.
+These seven samples demonstrate the supported Foundry Local Rust SDK workflows.
 All crates use the SDK in `sdk_v2/rust` and set the application name to
 `foundry_local_samples`.
 
@@ -26,6 +26,8 @@ All crates use the SDK in `sdk_v2/rust` and set the application name to
 | [`embeddings`](embeddings/) | Batched embeddings and similarity comparison with the native `EmbeddingsSession` |
 | [`tool-calling`](tool-calling/) | Native `ChatSession` tool definitions, tool-call items, and tool-result items |
 | [`web-server`](web-server/) | Starting the built-in service, discovering its URL, calling an OpenAI-compatible endpoint, and stopping it |
+| [`vision`](vision/) | Sending text and a local image through a native `ChatSession` |
+| [`byom`](byom/) | Registering existing local model assets and running native chat |
 
 ## Running a Sample
 
@@ -42,6 +44,17 @@ transcription uses the default microphone and runs until Ctrl+C:
 ```bash
 cargo run -p realtime-transcription
 ```
+
+Vision accepts a catalog alias with task `vision-language-chat` and a local JPEG or PNG image. BYOM accepts an
+already exported, compatible ONNX Runtime GenAI chat model directory containing `genai_config.json`, weights, and
+tokenizer files:
+
+```bash
+cargo run -p vision -- VISION_MODEL_ALIAS /path/to/image.png
+cargo run -p byom -- /path/to/model-directory
+```
+
+The BYOM sample unregisters its model on normal completion without deleting your files.
 
 The first run may download execution providers and model assets. Later runs
 reuse cached models.

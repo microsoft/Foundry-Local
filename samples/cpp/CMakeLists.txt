@@ -61,6 +61,8 @@ add_foundry_sample(realtime-transcription realtime-transcription)
 add_foundry_sample(embeddings embeddings)
 add_foundry_sample(tool-calling tool-calling)
 add_foundry_sample(web-server web-server)
+add_foundry_sample(vision vision)
+add_foundry_sample(byom byom)
 
 find_package(Threads REQUIRED)
 target_link_libraries(realtime-transcription PRIVATE Threads::Threads)

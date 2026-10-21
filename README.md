@@ -138,11 +138,11 @@ Explore complete working examples in the [`samples/`](samples/) folder:
 
 | Language | Samples | Highlights |
 | --- | --- | --- |
-| [**C++**](samples/cpp/) | 5 | Hello world, real-time transcription, embeddings, tool calling, and web server |
-| [**C#**](samples/cs/) | 5 | Hello world, real-time transcription, embeddings, tool calling, and web server |
-| [**JavaScript**](samples/js/) | 5 | Hello world, real-time transcription, embeddings, tool calling, and web server |
-| [**Python**](samples/python/) | 5 | Hello world, real-time transcription, embeddings, tool calling, and web server |
-| [**Rust**](samples/rust/) | 5 | Hello world, real-time transcription, embeddings, tool calling, and web server |
+| [**C++**](samples/cpp/) | 7 | Hello world, real-time transcription, embeddings, tool calling, web server, vision, and BYOM |
+| [**C#**](samples/cs/) | 7 | Hello world, real-time transcription, embeddings, tool calling, web server, vision, and BYOM |
+| [**JavaScript**](samples/js/) | 7 | Hello world, real-time transcription, embeddings, tool calling, web server, vision, and BYOM |
+| [**Python**](samples/python/) | 7 | Hello world, real-time transcription, embeddings, tool calling, web server, vision, and BYOM |
+| [**Rust**](samples/rust/) | 7 | Hello world, real-time transcription, embeddings, tool calling, web server, vision, and BYOM |
 
 C developers can use the [C API guide](sdk_v2/cpp/README.md#c-api) and [public C header](sdk_v2/cpp/include/foundry_local/foundry_local_c.h) to integrate the same runtime directly.
 

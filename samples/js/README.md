@@ -1,6 +1,6 @@
 # Foundry Local JavaScript samples
 
-These five samples use the v2 `foundry-local-sdk` APIs from `sdk_v2/js`. They run on Node.js 20 or later and
+These seven samples use the v2 `foundry-local-sdk` APIs from `sdk_v2/js`. They run on Node.js 20 or later and
 use the SDK directly from this repository through a local `file:` dependency.
 
 | Sample | What it demonstrates |
@@ -10,6 +10,8 @@ use the SDK directly from this repository through a local `file:` dependency.
 | [embeddings](embeddings/) | Generate native text embeddings with `EmbeddingsSession`. |
 | [tool-calling](tool-calling/) | Register a native chat tool, execute a returned `ToolCallItem`, and submit a `ToolResultItem`. |
 | [web-server](web-server/) | Start the built-in server, discover its URL, and call its OpenAI-compatible endpoint. |
+| [vision](vision/) | Send text and a local image to a native `ChatSession`. |
+| [byom](byom/) | Register existing model assets in the local catalog and run native chat. |
 
 > [!IMPORTANT]
 > These samples track the latest JavaScript SDK on `main` through a local `file:` dependency and require Foundry Local

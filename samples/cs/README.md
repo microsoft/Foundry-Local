@@ -1,6 +1,6 @@
 # Foundry Local C# samples
 
-These five samples use the v2 C# SDK and .NET 9:
+These seven samples use the v2 C# SDK and .NET 9:
 
 | Sample | What it demonstrates |
 | --- | --- |
@@ -9,6 +9,8 @@ These five samples use the v2 C# SDK and .NET 9:
 | [`embeddings`](embeddings) | Native `EmbeddingsSession` inference |
 | [`tool-calling`](tool-calling) | Native tool definitions, `ToolCallItem`, and `ToolResultItem` |
 | [`web-server`](web-server) | The built-in server and its discovered OpenAI-compatible endpoint |
+| [`vision`](vision) | Native chat with text and a local image |
+| [`byom`](byom) | Registering existing model assets in the local catalog and running native chat |
 
 > [!IMPORTANT]
 > These samples track the latest C# SDK on `main` and reference its source project, so Foundry Local must be built
@@ -38,6 +40,8 @@ dotnet build realtime-transcription/RealtimeTranscription.csproj
 dotnet build embeddings/Embeddings.csproj
 dotnet build tool-calling/ToolCalling.csproj
 dotnet build web-server/WebServer.csproj
+dotnet build vision/Vision.csproj
+dotnet build byom/Byom.csproj
 ```
 
 The v2 SDK project automatically uses a compatible local native build when one
@@ -65,7 +69,13 @@ Run any project with `dotnet run --project <directory>`. For example:
 ```shell
 dotnet run --project hello-world
 dotnet run --project realtime-transcription
+dotnet run --project vision -- VISION_MODEL_ALIAS /path/to/image.png
+dotnet run --project byom -- /path/to/model-directory
 ```
+
+For `vision`, use an alias whose catalog task is `vision-language-chat` and your own JPEG or PNG image.
+For `byom`, use an already exported, compatible ONNX Runtime GenAI chat model directory containing
+`genai_config.json`, weights, and tokenizer files. The sample unregisters the model without deleting its assets.
 
 The realtime sample records 16 kHz mono PCM until you press Enter. The web-server
 sample binds to an ephemeral loopback port, reads the actual URL discovered by
