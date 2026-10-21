@@ -7,10 +7,10 @@
 
 #include <gtest/gtest.h>
 
-#include <array>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #ifndef NOMINMAX
@@ -22,7 +22,6 @@ namespace fl::platform {
 namespace {
 
 constexpr std::wstring_view kDependency = L"foundry_loader_test_dependency.dll";
-constexpr std::array kDependencies{kDependency};
 
 class TestLogger : public ILogger {
  public:
@@ -60,7 +59,7 @@ class WindowsDllLoaderTest : public testing::Test {
 TEST_F(WindowsDllLoaderTest, LoadsPathDependencyAndRetainsItUntilLibraryRelease) {
   test::ScopedEnvironmentVariable path("PATH", cuda_dir.string());
   EXPECT_EQ(LoadSharedLibrary(library, logger), nullptr);
-  auto handle = LoadSharedLibraryWithDependencies(library, kDependencies, logger);
+  auto handle = LoadSharedLibraryWithPathFallback(library, logger);
   ExpectValue(handle);
   EXPECT_NE(::GetModuleHandleW(kDependency.data()), nullptr);
   handle.reset();
@@ -68,44 +67,27 @@ TEST_F(WindowsDllLoaderTest, LoadsPathDependencyAndRetainsItUntilLibraryRelease)
   EXPECT_EQ(LoadSharedLibrary(library, logger), nullptr);
 }
 
-TEST_F(WindowsDllLoaderTest, ExplicitDllDirectoryTakesPrecedenceOverPath) {
+TEST_F(WindowsDllLoaderTest, AddedDllDirectoryWorksWithoutPathAndOrtStyleLoadReusesModule) {
   const auto invalid_dir = root.path() / "invalid";
   std::filesystem::create_directory(invalid_dir);
   std::ofstream(invalid_dir / kDependency) << "not a DLL";
   test::ScopedEnvironmentVariable path("PATH", invalid_dir.string());
   const auto cookie = ::AddDllDirectory(cuda_dir.c_str());
   ASSERT_NE(cookie, nullptr);
-  auto handle = LoadSharedLibraryWithDependencies(library, kDependencies, logger);
+  auto handle = LoadSharedLibraryWithPathFallback(library, logger);
   EXPECT_TRUE(::RemoveDllDirectory(cookie));
   ExpectValue(handle);
+
+  const auto ort_handle = ::LoadLibraryExW(library.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+  ASSERT_NE(ort_handle, nullptr);
+  EXPECT_EQ(ort_handle, handle.get());
+  EXPECT_TRUE(::FreeLibrary(ort_handle));
 }
 
-TEST_F(WindowsDllLoaderTest, ProviderDirectoryTakesPrecedenceOverPath) {
+TEST_F(WindowsDllLoaderTest, ProviderDirectoryWorksWithoutPath) {
   std::filesystem::copy_file(cuda_dir / kDependency, provider_dir / kDependency);
-  test::ScopedEnvironmentVariable path("PATH", "relative;.");
-  ExpectValue(LoadSharedLibraryWithDependencies(library, kDependencies, logger));
-}
-
-TEST_F(WindowsDllLoaderTest, PreloadedDependencyWorksWithoutPath) {
-  auto dependency = LoadSharedLibrary(cuda_dir / kDependency, logger);
-  ASSERT_NE(dependency, nullptr);
   test::ScopedEnvironmentVariable path("PATH", "");
-  ExpectValue(LoadSharedLibraryWithDependencies(library, kDependencies, logger));
-}
-
-TEST_F(WindowsDllLoaderTest, SkipsEmptyAndRelativePathEntries) {
-  const auto previous_directory = std::filesystem::current_path();
-  std::filesystem::current_path(cuda_dir);
-  test::ScopedEnvironmentVariable path("PATH", ";.;..;CUDA 12 bin;C:;");
-  auto handle = LoadSharedLibraryWithDependencies(library, kDependencies, logger);
-  std::filesystem::current_path(previous_directory);
-  EXPECT_EQ(handle, nullptr);
-  EXPECT_FALSE(logger.messages.empty());
-}
-
-TEST_F(WindowsDllLoaderTest, SupportsQuotedPathEntryAfterMissingDirectory) {
-  test::ScopedEnvironmentVariable path("PATH", (root.path() / "absent").string() + ";\"" + cuda_dir.string() + "\"");
-  ExpectValue(LoadSharedLibraryWithDependencies(library, kDependencies, logger));
+  ExpectValue(LoadSharedLibraryWithPathFallback(library, logger));
 }
 
 TEST_F(WindowsDllLoaderTest, SupportsUnicodePathEntry) {
@@ -114,7 +96,7 @@ TEST_F(WindowsDllLoaderTest, SupportsUnicodePathEntry) {
   std::filesystem::copy_file(cuda_dir / kDependency, unicode_dir / kDependency);
   test::ScopedEnvironmentVariable path("PATH", "");
   ASSERT_EQ(_wputenv_s(L"PATH", unicode_dir.c_str()), 0);
-  ExpectValue(LoadSharedLibraryWithDependencies(library, kDependencies, logger));
+  ExpectValue(LoadSharedLibraryWithPathFallback(library, logger));
 }
 
 TEST_F(WindowsDllLoaderTest, ReportsInvalidFirstPathCandidateWithoutTryingAnotherDistribution) {
@@ -122,22 +104,18 @@ TEST_F(WindowsDllLoaderTest, ReportsInvalidFirstPathCandidateWithoutTryingAnothe
   std::filesystem::create_directory(invalid_dir);
   std::ofstream(invalid_dir / kDependency) << "not a DLL";
   test::ScopedEnvironmentVariable path("PATH", invalid_dir.string() + ";" + cuda_dir.string());
-  EXPECT_EQ(LoadSharedLibraryWithDependencies(library, kDependencies, logger), nullptr);
+  EXPECT_EQ(LoadSharedLibraryWithPathFallback(library, logger), nullptr);
   ASSERT_FALSE(logger.messages.empty());
-  EXPECT_NE(logger.messages.back().find("failed to load dependency"), std::string::npos);
+  EXPECT_NE(logger.messages.back().find("failed to load"), std::string::npos);
+  EXPECT_NE(logger.messages.back().find("(193)"), std::string::npos);
 }
 
-TEST_F(WindowsDllLoaderTest, ReleasesDependenciesIfTargetLibraryCannotLoad) {
-  test::ScopedEnvironmentVariable path("PATH", cuda_dir.string());
-  EXPECT_EQ(LoadSharedLibraryWithDependencies(provider_dir / "missing.dll", kDependencies, logger), nullptr);
+TEST_F(WindowsDllLoaderTest, ReportsMissingDependencyWithoutLeakingModules) {
+  test::ScopedEnvironmentVariable path("PATH", "");
+  EXPECT_EQ(LoadSharedLibraryWithPathFallback(library, logger), nullptr);
   EXPECT_EQ(::GetModuleHandleW(kDependency.data()), nullptr);
-}
-
-TEST_F(WindowsDllLoaderTest, ReleasesEarlierDependenciesIfAnotherDependencyIsMissing) {
-  test::ScopedEnvironmentVariable path("PATH", cuda_dir.string());
-  constexpr std::array dependencies{kDependency, std::wstring_view(L"foundry_loader_test_absent.dll")};
-  EXPECT_EQ(LoadSharedLibraryWithDependencies(library, dependencies, logger), nullptr);
-  EXPECT_EQ(::GetModuleHandleW(kDependency.data()), nullptr);
+  ASSERT_EQ(logger.messages.size(), 1u);
+  EXPECT_NE(logger.messages.back().find("(126)"), std::string::npos);
 }
 
 }  // namespace

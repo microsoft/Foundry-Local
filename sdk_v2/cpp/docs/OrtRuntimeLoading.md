@@ -95,29 +95,29 @@ deploy an update separately and restart.
 
 CUDA provider DLLs are loaded later, during execution-provider registration.
 This is separate from the binding-owned ORT/GenAI core preload described above.
-The Windows CUDA bootstrapper preloads the CUDA 12 runtime, cuBLAS Lt, and cuBLAS
-dependencies required by the shipped ORT and GenAI CUDA provider DLLs:
+The Windows CUDA bootstrapper preloads `onnxruntime-genai-cuda.dll` and
+`onnxruntime_providers_cuda.dll` by absolute path. For each library it first uses
+`LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR`, allowing
+provider-local dependencies and application-configured `AddDllDirectory` entries.
+Only a missing-module error (126) triggers a second attempt using
+`LOAD_WITH_ALTERED_SEARCH_PATH`, enabling ordinary Windows dependency search,
+including `PATH`. Other load errors are reported without retrying.
 
-1. The CUDA provider's own directory.
-2. Already loaded modules and the Windows application, System32, and caller-configured
-   DLL directories (`AddDllDirectory` / `SetDllDirectory`).
-3. Fully qualified directories in the process's `PATH`, in order.
+The provider is preloaded before ORT registration, using the same absolute path
+passed to ORT so its registration load reuses the resident module. Both handles
+remain owned by the bootstrapper until teardown, after ORT unregistration.
+Failed attempts release provisional handles without dropping committed ones.
+The OS resolves CUDA/cuDNN imports; there is no maintained dependency-name list.
+Dependencies may be provider-local, application-added, or on `PATH`; applications
+do not need to configure both `PATH` and `AddDllDirectory` for these preloads.
 
-Only the exact CUDA dependency basenames are eligible for `PATH` fallback.
-Empty, relative, and drive-relative `PATH` entries are ignored; the loader does
-not implicitly search the current directory.
-The provider itself and the ORT/GenAI core libraries are never selected from `PATH`.
-An existing but unloadable `PATH` candidate fails with its path and Windows error;
-the loader does not silently switch to another CUDA installation.
-
-The bootstrapper retains dependency handles for the provider's lifetime. It does
-not change `PATH`, call `AddDllDirectory`, or change the process-wide default DLL
-search policy. Applications can ship compatible CUDA DLLs privately, preload
-them, or register their directory before requesting the CUDA EP. Applications
-using `PATH` fallback must treat its absolute entries as trusted native-code
-locations; applications requiring private-only resolution should omit other CUDA
-installations from their process environment. DLL search configuration is not an
-OS sandbox and does not isolate native code already loaded in the same process.
+This preload does not modify `PATH`, register DLL directories, or change the
+process-wide default DLL search flags. Core ORT/GenAI loading and existing
+model-load setup are unchanged. Applications own compatible installations and
+trusted search configuration, including `PATH` and the current directory used
+by ordinary Windows search. This is not a sandbox or isolated DLL namespace.
+Libraries loaded later still follow their component's own loading policy;
+successful registration alone does not qualify every delayed/cuDNN workload.
 
 ## Why Not a Native-Side Loader?
 
