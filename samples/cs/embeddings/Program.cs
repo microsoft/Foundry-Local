@@ -1,74 +1,54 @@
-// <complete_code>
-// <imports>
 using Microsoft.AI.Foundry.Local;
-// </imports>
+using Microsoft.Extensions.Logging.Abstractions;
 
-// <init>
-var config = new Configuration
+var configuration = new Configuration
 {
     AppName = "foundry_local_samples",
-    LogLevel = Microsoft.AI.Foundry.Local.LogLevel.Information
+    LogLevel = LogLevel.Information,
 };
 
-// Initialize the singleton instance.
-await FoundryLocalManager.CreateAsync(config, Utils.GetAppLogger());
-var mgr = FoundryLocalManager.Instance;
-// </init>
+await FoundryLocalManager.CreateAsync(configuration, NullLogger.Instance).ConfigureAwait(false);
+using var manager = FoundryLocalManager.Instance;
 
-// <model_setup>
-// Get the model catalog
-var catalog = await mgr.GetCatalogAsync();
+var catalog = await manager.GetCatalogAsync().ConfigureAwait(false);
+var model = await catalog.GetModelAsync("qwen3-embedding-0.6b").ConfigureAwait(false)
+    ?? throw new InvalidOperationException("The qwen3-embedding-0.6b model was not found.");
 
-// Get an embedding model
-var model = await catalog.GetModelAsync("qwen3-embedding-0.6b") ?? throw new Exception("Embedding model not found");
-
-// Download the model (the method skips download if already cached)
-await model.DownloadAsync(progress =>
+if (!await model.IsCachedAsync().ConfigureAwait(false))
 {
-    Console.Write($"\rDownloading model: {progress:F2}%");
-    if (progress >= 100f)
-    {
-        Console.WriteLine();
-    }
-});
-
-// Load the model
-Console.Write($"Loading model {model.Id}...");
-await model.LoadAsync();
-Console.WriteLine("done.");
-// </model_setup>
-
-// <single_embedding>
-// Get an embedding client
-var embeddingClient = await model.GetEmbeddingClientAsync();
-
-// Generate a single embedding
-Console.WriteLine("\n--- Single Embedding ---");
-var response = await embeddingClient.GenerateEmbeddingAsync("The quick brown fox jumps over the lazy dog");
-var embedding = response.Data[0].Embedding;
-Console.WriteLine($"Dimensions: {embedding.Count}");
-Console.WriteLine($"First 5 values: [{string.Join(", ", embedding.Take(5).Select(v => v.ToString("F6")))}]");
-// </single_embedding>
-
-// <batch_embedding>
-// Generate embeddings for multiple inputs
-Console.WriteLine("\n--- Batch Embeddings ---");
-var batchResponse = await embeddingClient.GenerateEmbeddingsAsync([
-    "Machine learning is a subset of artificial intelligence",
-    "The capital of France is Paris",
-    "Rust is a systems programming language"
-]);
-
-Console.WriteLine($"Number of embeddings: {batchResponse.Data.Count}");
-for (var i = 0; i < batchResponse.Data.Count; i++)
-{
-    Console.WriteLine($"  [{i}] Dimensions: {batchResponse.Data[i].Embedding.Count}");
+    Console.WriteLine($"Downloading {model.Id}...");
+    await model.DownloadAsync(
+        progress => Console.Write($"\r  {progress:F1}%   "))
+        .ConfigureAwait(false);
+    Console.WriteLine();
 }
-// </batch_embedding>
 
-// <cleanup>
-// Tidy up - unload the model
-await model.UnloadAsync();
-Console.WriteLine("\nModel unloaded.");
-// </cleanup>
-// </complete_code>
+await model.LoadAsync().ConfigureAwait(false);
+
+try
+{
+    using var session = new EmbeddingsSession(model);
+    using var request = new Request();
+    request.AddItem(new TextItem("The quick brown fox jumps over the lazy dog."));
+    request.AddItem(new TextItem("Foundry Local runs models on your device."));
+
+    using var response = await session.ProcessRequestAsync(request).ConfigureAwait(false);
+
+    for (var index = 0; index < response.ItemCount; index++)
+    {
+        using var item = response.GetItem(index);
+        if (item is not TensorItem tensor)
+        {
+            throw new InvalidOperationException($"Expected a tensor at index {index}.");
+        }
+
+        var values = tensor.ToArray<float>();
+        Console.WriteLine(
+            $"Embedding {index}: {values.Length} dimensions; first values: "
+            + string.Join(", ", values.Take(5).Select(value => value.ToString("F6"))));
+    }
+}
+finally
+{
+    await model.UnloadAsync().ConfigureAwait(false);
+}
