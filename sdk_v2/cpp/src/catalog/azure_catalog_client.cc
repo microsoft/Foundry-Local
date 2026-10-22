@@ -164,8 +164,7 @@ std::vector<ModelInfo> ToModelInfos(const std::vector<CatalogLocalModel>& raw_mo
                                    bool uses_legacy_foundry_local_filter) {
   std::vector<ModelInfo> infos;
   for (const auto& model : raw_models) {
-    if (!uses_legacy_foundry_local_filter &&
-        (!model.foundry_local || (!model.foundry_local->empty() && *model.foundry_local != "hide"))) {
+    if (!uses_legacy_foundry_local_filter && (!model.foundry_local || !model.foundry_local->empty())) {
       continue;
     }
     if (auto info = CatalogModelToModelInfo(model)) {

@@ -184,7 +184,7 @@ TEST(AzureCatalogClientTest, UsesOneFilterSetPerDeviceAndProvider) {
   EXPECT_EQ(requests[2]["filters"][5]["values"], nlohmann::json({"npu"}));
 }
 
-TEST(AzureCatalogClientTest, FiltersOutFoundryLocalTestModels) {
+TEST(AzureCatalogClientTest, FiltersOutNonemptyFoundryLocalTags) {
   CpuOnlyEpDetector ep;
   StderrLogger logger;
   const char* response = R"({
@@ -202,16 +202,34 @@ TEST(AzureCatalogClientTest, FiltersOutFoundryLocalTestModels) {
           "variantMetadata": {"modelType": "ONNX", "device": "cpu", "executionProvider": "CPUExecutionProvider"}
         }
       }
+    }, {
+      "assetId": "azureml://registries/azureml/models/hidden-model/versions/1",
+      "annotations": {
+        "tags": {"alias": "test-model", "foundryLocal": "hide"},
+        "systemCatalogData": {
+          "deploymentOptions": ["Foundry Local on Devices"]
+        }
+      },
+      "properties": {
+        "name": "hidden-model", "version": 1,
+        "variantInfo": {
+          "variantMetadata": {"modelType": "ONNX", "device": "cpu", "executionProvider": "CPUExecutionProvider"}
+        }
+      }
     }]
   })";
   AzureCatalogClient client("https://test.com", "", ep, logger,
                             [&](const std::string&, const std::string&) { return MakeOkResponse(response); });
 
   const auto raw_models = client.FetchAllModels();
-  ASSERT_EQ(raw_models.size(), 1u);
+  ASSERT_EQ(raw_models.size(), 2u);
   EXPECT_EQ(raw_models.front().foundry_local, "test");
+  EXPECT_EQ(raw_models.back().foundry_local, "hide");
   ASSERT_TRUE(CatalogModelToModelInfo(raw_models.front()).has_value());
+  ASSERT_TRUE(CatalogModelToModelInfo(raw_models.back()).has_value());
   EXPECT_TRUE(client.FetchAllModelInfos().empty());
+  EXPECT_TRUE(client.FetchModelsByIds({"test-model:1", "hidden-model:1"}).empty());
+  EXPECT_TRUE(client.FetchAllVersionsByAlias("test-model").empty());
 }
 
 TEST(AzureCatalogClientTest, LegacyTagOverridesBypassDefaultAllowlistAcrossCatalogQueries) {
@@ -436,7 +454,7 @@ TEST(AzureCatalogClientTest, ParsesToolCallingCapabilityFromHistoricalTag) {
     }, {
       "assetId": "azureml://registries/azureml/models/modern-model/versions/2",
       "annotations": {
-        "tags": {"supportsToolCalling": "true", "foundryLocal": "hide"},
+        "tags": {"supportsToolCalling": "true", "foundryLocal": ""},
         "systemCatalogData": {"alias": "modern-model", "supportsToolCalling": false}
       },
       "properties": {
@@ -855,7 +873,7 @@ TEST(AzureCatalogClientTest, FetchAllVersionsUsesLegacyTagAliasFromFullServiceRe
       },
       {
         "assetId": "azureml://registries/azureml/models/qwen2.5-0.5b-cpu/versions/3",
-        "annotations": {"tags": {"foundryLocal": "hide"}, "systemCatalogData": {"alias": "qwen2.5-0.5b"}},
+        "annotations": {"tags": {"foundryLocal": ""}, "systemCatalogData": {"alias": "qwen2.5-0.5b"}},
         "properties": {
           "name": "qwen2.5-0.5b-cpu", "version": 3,
           "variantInfo": {"variantMetadata": {"modelType": "ONNX", "device": "cpu"}}
