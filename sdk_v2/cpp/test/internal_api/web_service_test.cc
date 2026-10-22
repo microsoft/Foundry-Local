@@ -23,6 +23,7 @@
 #include "service/handler_utils.h"
 #include "service/non_streaming_disconnect_monitor.h"
 #include "service/web_service.h"
+#include "util/path_safety.h"
 #include "utils/temp_path.h"
 
 #include <foundry_local/foundry_local_c.h>
@@ -30,6 +31,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <mutex>
@@ -377,6 +380,14 @@ std::string WebServiceTest::base_url_;
 // GET /status
 // ========================================================================
 
+TEST_F(WebServiceTest, StatusAdvertisesArtifactQualifiedModelManagementAsBoolean) {
+  const auto body = Get("/status");
+  ASSERT_TRUE(body.contains("artifact_qualified_model_management"));
+  const auto& capability = body.at("artifact_qualified_model_management");
+  ASSERT_TRUE(capability.is_boolean());
+  EXPECT_TRUE(capability.get<bool>());
+}
+
 TEST_F(WebServiceTest, StatusReturnsModelCachePath) {
   auto j = Get("/status");
 
@@ -537,9 +548,27 @@ class WebServiceModelManagementTest : public ::testing::TestWithParam<bool> {
                                          : kExactId);
       // The native Engine reports 1024 despite the artifact's lower search.max_length (128).
       EXPECT_EQ(body.at("context_length"), 1024);
+      EXPECT_EQ(body.at("model_path"), NormalizeModelPath(ExactModel()->GetPath()));
       EXPECT_FALSE(body.contains("max_input_tokens"));
       EXPECT_FALSE(body.contains("max_output_tokens"));
     }
+  }
+
+  httplib::Result ManageWithExpectedPath(const std::string& operation, const std::string& name,
+                                         const std::string& expected_path) {
+    return client_->Get(prefix_ + "/models/" + operation + "/" + name +
+                        "?expected_model_path=" + httplib::encode_uri_component(expected_path));
+  }
+
+  void ExpectPathMismatch(const std::string& operation, const std::string& expected_path) {
+    const auto response = ManageWithExpectedPath(operation, kEncodedId, expected_path);
+    ASSERT_TRUE(response);
+    EXPECT_EQ(response->status, 409) << response->body;
+    const auto body = json::parse(response->body);
+    EXPECT_EQ(body.at("error").at("type"), "invalid_request_error");
+    EXPECT_EQ(body.at("error").at("message"),
+              "Model path mismatch: expected_model_path does not match the server's model path");
+    EXPECT_FALSE(body.contains("model_path"));
   }
 
   static constexpr const char* kExactId = "publisher/shared model+%2F:2";
@@ -582,6 +611,205 @@ TEST_P(WebServiceModelManagementTest, RawColonAndLowercaseEscapesResolveExactIds
   ExpectStatus("load", "publisher%2fshared%20model+%252F%3a2", "loaded");
   EXPECT_TRUE(ExactModel()->IsLoaded());
   ExpectStatus("unload", kEncodedId, "unloaded");
+}
+
+TEST_P(WebServiceModelManagementTest, StaleRegistrationPathIsRejectedBeforeLoadingOldArtifact) {
+  const auto replacement_path = test::GetTestDataModelPath(test::kLoadableTestModelAlias);
+  ASSERT_NE(NormalizeModelPath(replacement_path), NormalizeModelPath(ExactModel()->GetPath()));
+  ExpectPathMismatch("load", replacement_path);
+  ExpectPathMismatch("unload", replacement_path);
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel(kExactId), nullptr);
+  EXPECT_FALSE(ExactModel()->IsLoaded());
+
+  // Legacy callers may still explicitly load the host's old catalog snapshot.
+  ExpectStatus("load", kEncodedId, "loaded");
+  ExpectStatus("unload", kEncodedId, "unloaded");
+  service_->Stop();
+  const auto actions = telemetry_.Events().actions;
+  ASSERT_EQ(actions.size(), 4u);
+  for (size_t i = 0; i < 2; ++i) {
+    EXPECT_EQ(actions[i].status, ActionStatus::kClientError);
+    EXPECT_EQ(actions[i].model_id, kExactId);
+  }
+}
+
+TEST_P(WebServiceModelManagementTest, StaleRegistrationCannotReuseOrUnloadOldArtifactWithLiveSession) {
+  ExpectStatus("load", kEncodedId, "loaded");
+  auto* original = bindings_.model_load_manager.GetLoadedModel(kExactId);
+  ASSERT_NE(original, nullptr);
+  auto session = std::make_unique<ChatSession>(*ExactModel(), *original, bindings_.logger, telemetry_);
+  const auto replacement_path = test::GetTestDataModelPath(test::kLoadableTestModelAlias);
+  ExpectPathMismatch("load", replacement_path);
+  ExpectPathMismatch("unload", replacement_path);
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel(kExactId), original);
+  EXPECT_TRUE(ExactModel()->IsLoaded());
+  EXPECT_EQ(original->SessionRefCount(), 1);
+  session.reset();
+  ExpectStatus("unload", kEncodedId, "unloaded");
+}
+
+TEST_P(WebServiceModelManagementTest, MatchingNormalizedExpectedPathLoadsAndReusesActualArtifact) {
+  const std::filesystem::path path = ExactModel()->GetPath();
+  const auto spelling = path.parent_path() / "unused-normalization-component" / ".." / path.filename() / ".";
+  for (const auto* status : {"loaded", "already_loaded"}) {
+    const auto response = ManageWithExpectedPath("load", kEncodedId, spelling.generic_string());
+    ASSERT_TRUE(response);
+    ASSERT_EQ(response->status, 200) << response->body;
+    const auto body = json::parse(response->body);
+    EXPECT_EQ(body.at("status"), status);
+    EXPECT_EQ(body.at("model_id"), kExactId);
+    EXPECT_EQ(body.at("model_path"), NormalizeModelPath(path.string()));
+    EXPECT_EQ(body.at("context_length"), 1024);
+  }
+
+  const auto response = ManageWithExpectedPath("unload", kEncodedId, spelling.generic_string());
+  ASSERT_TRUE(response);
+  EXPECT_EQ(response->status, 200) << response->body;
+  EXPECT_EQ(json::parse(response->body).at("status"), "unloaded");
+}
+
+#ifdef _WIN32
+TEST_P(WebServiceModelManagementTest, WindowsExtendedPathAndCaseDifferencesMatchSameArtifact) {
+  const std::filesystem::path path = ExactModel()->GetPath();
+  const auto extended = std::filesystem::path(L"\\\\?\\" + path.wstring()).string();
+  const auto response = ManageWithExpectedPath("load", kEncodedId, extended);
+  ASSERT_TRUE(response);
+  ASSERT_EQ(response->status, 200) << response->body;
+  EXPECT_EQ(json::parse(response->body).at("model_path"), NormalizeModelPath(path.string()));
+  std::string uppercase = path.generic_string();
+  std::transform(uppercase.begin(), uppercase.end(), uppercase.begin(),
+                 [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+  const auto unloaded = ManageWithExpectedPath("unload", kEncodedId, uppercase);
+  ASSERT_TRUE(unloaded);
+  EXPECT_EQ(unloaded->status, 200) << unloaded->body;
+  EXPECT_EQ(json::parse(unloaded->body).at("status"), "unloaded");
+}
+#endif
+
+TEST_P(WebServiceModelManagementTest, LocalExpectedPathDecodesSpacesPlusPercentAndQueryDelimitersExactlyOnce) {
+  auto root = test::TempPath::CreateTempDir("fl_expected_path_");
+  const auto path = root.path() / "artifact space+%2F & #=";
+  std::filesystem::copy(test::GetTestDataModelPath("tiny-paged-attention"), path,
+                        std::filesystem::copy_options::recursive);
+  auto info = test::MakeTestModelInfo("encoded-artifact");
+  info.uri = "test://not-the-artifact-path";
+  auto& catalog = GetParam() ? local_catalog_ : public_catalog_;
+  catalog.AddModel(Model::FromLocalRegistration(std::move(info), path.string(), bindings_.download_manager,
+                                                bindings_.model_load_manager));
+  auto encoded = httplib::encode_uri_component((path / ".").string());
+  ASSERT_NE(encoded.find("%252F"), std::string::npos);
+  // Form encoders use '+' for spaces, but literal '+' must remain percent-encoded.
+  for (auto pos = encoded.find("%20"); pos != std::string::npos; pos = encoded.find("%20")) {
+    encoded.replace(pos, 3, "+");
+  }
+
+  for (const auto* status : {"loaded", "already_loaded"}) {
+    const auto response = client_->Get(prefix_ + "/models/load/encoded-artifact%3A1?expected_model_path=" + encoded);
+    ASSERT_TRUE(response);
+    ASSERT_EQ(response->status, 200) << response->body;
+    const auto body = json::parse(response->body);
+    EXPECT_EQ(body.at("status"), status);
+    EXPECT_EQ(body.at("model_id"), "encoded-artifact:1");
+    EXPECT_EQ(body.at("model_path"), NormalizeModelPath(path.string()));
+  }
+
+  const auto response = ManageWithExpectedPath("unload", "encoded-artifact%3A1", path.string());
+  ASSERT_TRUE(response);
+  EXPECT_EQ(response->status, 200) << response->body;
+  EXPECT_EQ(json::parse(response->body).at("status"), "unloaded");
+}
+
+TEST_P(WebServiceModelManagementTest, InvalidExpectedPathsAreRejectedBeforeAnyLoadOrUnload) {
+  for (const auto* operation : {"load", "unload"}) {
+    for (const auto* invalid : {"", "%", "%2", "%GG", "%00", "%0A", "%7f"}) {
+      const auto response =
+          client_->Get(prefix_ + "/models/" + operation + "/" + kEncodedId + "?expected_model_path=" + invalid);
+      ASSERT_TRUE(response);
+      EXPECT_EQ(response->status, 400) << response->body;
+      EXPECT_EQ(json::parse(response->body).at("error").at("type"), "invalid_request_error");
+    }
+  }
+
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel(kExactId), nullptr);
+}
+
+TEST_P(WebServiceModelManagementTest, UnloadPreconditionAndDetailedInventoryWorkAfterArtifactDirectoryRemoval) {
+  auto root = test::TempPath::CreateTempDir("fl_missing_artifact_");
+  const auto path = root.path() / "removed-artifact";
+  std::filesystem::copy(test::GetTestDataModelPath("tiny-paged-attention"), path,
+                        std::filesystem::copy_options::recursive);
+  auto& catalog = GetParam() ? local_catalog_ : public_catalog_;
+  catalog.AddModel(Model::FromLocalRegistration(test::MakeTestModelInfo("removed-artifact"), path.string(),
+                                                bindings_.download_manager, bindings_.model_load_manager));
+  const auto loaded = ManageWithExpectedPath("load", "removed-artifact%3A1", path.string());
+  ASSERT_TRUE(loaded);
+  ASSERT_EQ(loaded->status, 200) << loaded->body;
+  std::filesystem::remove_all(path);
+  ASSERT_FALSE(std::filesystem::exists(path));
+  const auto states = client_->Get(prefix_ + "/models/loaded?details=true");
+  ASSERT_TRUE(states);
+  ASSERT_EQ(states->status, 200) << states->body;
+  EXPECT_EQ(json::parse(states->body), json::array({{{"model_id", "removed-artifact:1"},
+                                                     {"model_path", NormalizeModelPath(path.string())},
+                                                     {"context_length", 1024}}}));
+  const auto rejected =
+      ManageWithExpectedPath("unload", "removed-artifact%3A1", (root.path() / "replacement").string());
+  ASSERT_TRUE(rejected);
+  EXPECT_EQ(rejected->status, 409) << rejected->body;
+  EXPECT_NE(bindings_.model_load_manager.GetLoadedModel("removed-artifact:1"), nullptr);
+  const auto unloaded = ManageWithExpectedPath("unload", "removed-artifact%3A1", (path / ".").string());
+  ASSERT_TRUE(unloaded);
+  EXPECT_EQ(unloaded->status, 200) << unloaded->body;
+  EXPECT_EQ(json::parse(unloaded->body).at("status"), "unloaded");
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel("removed-artifact:1"), nullptr);
+}
+
+TEST_P(WebServiceModelManagementTest, DetailedLoadedStatesAreCatalogAndArtifactScopedWithoutCreatingSessions) {
+  const auto other_path = test::GetTestDataModelPath(test::kLoadableTestModelAlias);
+  auto& other_catalog = GetParam() ? public_catalog_ : local_catalog_;
+  auto collision = test::MakeTestModelInfo("collision");
+  collision.model_id = kExactId;
+  other_catalog.AddModel(Model::FromLocalRegistration(std::move(collision), other_path, bindings_.download_manager,
+                                                      bindings_.model_load_manager));
+  other_catalog.AddModel(Model::FromModelInfo(test::MakeTestModelInfo("other-scope"), other_path,
+                                              bindings_.download_manager, bindings_.model_load_manager));
+  const std::string other_prefix = GetParam() ? "" : "/catalogs/local";
+  const auto expect_states = [this](const std::string& prefix, const json& expected) {
+    const auto response = client_->Get(prefix + "/models/loaded?details=true");
+    ASSERT_TRUE(response);
+    ASSERT_EQ(response->status, 200) << response->body;
+    EXPECT_EQ(json::parse(response->body), expected);
+  };
+
+  expect_states(prefix_, json::array());
+  expect_states(other_prefix, json::array());
+  ExpectStatus("load", kEncodedId, "loaded");
+  const auto own_state = json::array({{{"model_id", kExactId},
+                                       {"model_path", NormalizeModelPath(ExactModel()->GetPath())},
+                                       {"context_length", 1024}}});
+  expect_states(prefix_, own_state);
+  expect_states(other_prefix, json::array());
+  const auto legacy = client_->Get(prefix_ + "/models/loaded?details=false");
+  ASSERT_TRUE(legacy);
+  ASSERT_EQ(legacy->status, 200) << legacy->body;
+  EXPECT_EQ(json::parse(legacy->body), json::array({kExactId}));
+
+  const auto loaded = client_->Get(other_prefix + "/models/load/other-scope%3A1");
+  ASSERT_TRUE(loaded);
+  ASSERT_EQ(loaded->status, 200) << loaded->body;
+  expect_states(
+      other_prefix,
+      json::array(
+          {{{"model_id", "other-scope:1"}, {"model_path", NormalizeModelPath(other_path)}, {"context_length", 512}}}));
+  expect_states(prefix_, own_state);
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel(kExactId)->SessionRefCount(), 0);
+  EXPECT_EQ(bindings_.model_load_manager.GetLoadedModel("other-scope:1")->SessionRefCount(), 0);
+  ExpectStatus("unload", kEncodedId, "unloaded");
+  const auto unloaded = client_->Get(other_prefix + "/models/unload/other-scope%3A1");
+  ASSERT_TRUE(unloaded);
+  ASSERT_EQ(unloaded->status, 200) << unloaded->body;
+  expect_states(prefix_, json::array());
+  expect_states(other_prefix, json::array());
 }
 
 TEST_P(WebServiceModelManagementTest, EngineLoadReturnsNativeContextWithoutCreatingSession) {

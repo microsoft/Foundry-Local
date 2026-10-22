@@ -606,8 +606,27 @@ Loading an exact variant does not change its alias group's selected variant. Unl
 live native sessions.
 `GET /models/loaded` and `GET /catalogs/local/models/loaded` list loaded variant IDs from their respective catalogs,
 including loaded non-selected variants. A matching ID at a different artifact path is not considered loaded.
+Adding `?details=true` to either loaded-model route instead returns an array of authoritative
+`{"model_id": "...", "model_path": "...", "context_length": 1024}` states, qualified by the selected catalog
+and artifact path. It only observes loaded instances: it does not load weights, create sessions, or fetch metadata.
+Unknown context limits are omitted. Without `details=true`, the legacy array of ID strings is unchanged.
+`GET /status` advertises `"artifact_qualified_model_management": true` when these native path-qualified management
+semantics are available. Shared-host clients must require that Boolean before publishing readiness or issuing
+management requests; matching a Rust host protocol alone does not qualify an older native library.
 
-Successful load responses retain `status` (`loaded` or `already_loaded`) and also return the resolved `model_id`.
+Load and unload requests optionally accept the `expected_model_path` query parameter. Encode the filesystem path as a
+query value (spaces may be `%20` or `+`; encode literal `+`, `%`, `&`, and `#`). The service decodes exactly once,
+canonicalizes the expected and host-resolved cached/BYOM paths, and compares them using native model-loader identity
+rules before loading, reusing, or unloading weights. Weak canonicalization permits unloading after artifact files
+or their directory have been removed. A mismatch returns HTTP 409 without changing an existing load; a malformed value
+returns HTTP 400. Callers omitting this parameter retain the legacy behavior.
+Shared-serving clients should always supply their selected native `Model::GetPath()` / SDK `Model::path()` value:
+another metadata client can unregister/re-register an ID while a running host still holds its old catalog snapshot.
+This is a path precondition, not detection of weight-file changes at the same path.
+
+Successful load responses retain `status` (`loaded` or `already_loaded`) and also return the resolved `model_id`
+and authoritative filesystem `model_path` from the loaded instance. Clients should verify both ID and path before
+binding to that host; registration metadata URI is not an artifact-path contract.
 For Generator backends, `context_length` reports the configured total input-plus-output token window used by
 inference (`model.context_length`, falling back to legacy `search.max_length`). Generator explicitly overrides
 native `max_length` per request, so a lower artifact `search.max_length` is not an additional ceiling.

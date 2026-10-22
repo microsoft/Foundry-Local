@@ -24,8 +24,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 // winsock2.h must come before windows.h to avoid pulling in winsock.h (1.x).
@@ -125,6 +128,20 @@ class ForceCloseConnectionProvider : public oatpp::network::ServerConnectionProv
   std::shared_ptr<ForceCloseInvalidator> invalidator_;
 };
 
+struct ServiceStatusResponse {
+  std::string model_cache_path;
+  std::vector<std::string> endpoints;
+  int64_t pid;
+  bool artifact_qualified_model_management = true;
+};
+
+void to_json(nlohmann::json& json, const ServiceStatusResponse& response) {
+  json = {{"modelCachePath", response.model_cache_path},
+          {"endpoints", response.endpoints},
+          {"pid", response.pid},
+          {"artifact_qualified_model_management", response.artifact_qualified_model_management}};
+}
+
 }  // namespace
 
 // ========================================================================
@@ -136,13 +153,13 @@ class StatusHandler : public HttpRequestHandler {
   explicit StatusHandler(ServiceContext& ctx) : ctx_(ctx) {}
 
   std::shared_ptr<OutgoingResponse> handle(const std::shared_ptr<IncomingRequest>&) override {
-    nlohmann::json body = {
-        {"modelCachePath", ctx_.model_cache_dir},
-        {"endpoints", ctx_.bound_urls},
+    const ServiceStatusResponse body{
+        .model_cache_path = ctx_.model_cache_dir,
+        .endpoints = ctx_.bound_urls,
 #ifdef _WIN32
-        {"pid", static_cast<int64_t>(GetCurrentProcessId())},
+        .pid = static_cast<int64_t>(GetCurrentProcessId()),
 #else
-        {"pid", static_cast<int64_t>(getpid())},
+        .pid = static_cast<int64_t>(getpid()),
 #endif
     };
 

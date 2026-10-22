@@ -154,6 +154,9 @@ Catalog access does not block on EP downloads. Call `download_and_register_eps` 
 The additive `shared_service` API lets independent SDK clients reuse a separately hosted
 model. Catalog queries and downloads remain ordinary SDK operations; inference uses
 the existing OpenAI-compatible service. Client exit does not unload the shared model.
+Shared load/unload require the artifact path from `Model::path().await`; detailed
+inventory reports the host's actual loaded paths rather than treating matching IDs
+as proof of matching artifacts.
 Distribute the matching `foundry-local-host` executable and native runtime together;
 the Rust pipeline stages these as `foundry-host-<rid>` artifacts. See the
 [shared-serving API and compatibility contract](docs/api.md#shared-serving).

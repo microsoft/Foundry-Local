@@ -7,12 +7,10 @@
 #include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/genai_config.h"
 #include "inferencing/generative/genai_model_instance.h"
-#include "platform/path.h"
 #include "util/path_safety.h"
 #include "utils.h"
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fmt/format.h>
@@ -24,33 +22,6 @@ namespace {
 
 /// The expected config filename inside a model directory.
 constexpr const char* kGenAIConfigFileName = "genai_config.json";
-
-std::string NormalizeModelPath(std::string_view path) {
-  std::filesystem::path normalized;
-  std::string error_message;
-  if (!platform::GetWeaklyCanonicalPath(std::filesystem::path(std::string(path)), normalized, error_message)) {
-    std::error_code ec;
-    normalized = std::filesystem::absolute(std::filesystem::path(std::string(path)), ec);
-    if (ec) {
-      normalized = std::filesystem::path(std::string(path));
-    }
-  }
-
-  return normalized.lexically_normal().string();
-}
-
-bool ModelPathsEqual(std::string_view left, std::string_view right) {
-  const auto normalized_left = NormalizeModelPath(left);
-  const auto normalized_right = NormalizeModelPath(right);
-#ifdef _WIN32
-  return normalized_left.size() == normalized_right.size() &&
-         std::equal(normalized_left.begin(), normalized_left.end(), normalized_right.begin(), [](char lhs, char rhs) {
-           return std::tolower(static_cast<unsigned char>(lhs)) == std::tolower(static_cast<unsigned char>(rhs));
-         });
-#else
-  return normalized_left == normalized_right;
-#endif
-}
 
 /// Maps model_id substrings to their required execution provider registration name.
 /// If a model_id contains one of these keys, the corresponding EP must be registered.
@@ -395,7 +366,8 @@ std::optional<ModelLoadManager::LoadedModelState> ModelLoadManager::GetLoadedMod
     return std::nullopt;
   }
 
-  LoadedModelState state{.config = loaded->GetGenAIConfig(), .context_length = std::nullopt};
+  LoadedModelState state{
+      .config = loaded->GetGenAIConfig(), .model_path = loaded->ModelPath(), .context_length = std::nullopt};
   if (state.config.GetChatBackendKind() == ChatBackendKind::kEngine) {
     // Model construction waits for Engine capability initialization; this cached limit is immutable afterward.
     const auto* engine = loaded->GetChatEngine();

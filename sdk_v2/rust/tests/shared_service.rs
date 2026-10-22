@@ -82,11 +82,12 @@ fn shared_client_process() {
     let config: SharedServiceConfig =
         serde_json::from_str(&std::env::var("FOUNDRY_SHARED_TEST_CONFIG").unwrap()).unwrap();
     let output = PathBuf::from(std::env::var_os("FOUNDRY_SHARED_TEST_OUTPUT").unwrap());
+    let model_path = PathBuf::from(std::env::var_os("FOUNDRY_SHARED_TEST_MODEL_PATH").unwrap());
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let service = SharedService::new(config).unwrap();
         let host = service.ensure_started().await.unwrap();
         let loaded = host
-            .load(CatalogType::Local, "shared-coding:1")
+            .load(CatalogType::Local, "shared-coding:1", &model_path)
             .await
             .unwrap();
         fs::write(
@@ -110,9 +111,9 @@ async fn cuda_host_shutdown_without_inference() {
     let cleanup = HostCleanup {
         directory: config.directory.clone(),
     };
-    let model_path = std::env::var_os("FOUNDRY_SHARED_TEST_MODEL");
+    let model_override = std::env::var_os("FOUNDRY_SHARED_TEST_MODEL");
     let model_id = format!("shared-cuda-probe-{}:1", std::process::id());
-    let _manager = if let Some(path) = &model_path {
+    let (_manager, model_path) = if let Some(path) = &model_override {
         let manager = FoundryLocalManager::create(
             FoundryLocalConfig::new("cuda-shutdown-probe")
                 .library_path(config.library.to_string_lossy())
@@ -124,13 +125,14 @@ async fn cuda_host_shutdown_without_inference() {
         let catalog = manager.local_catalog().unwrap();
         let mut metadata = catalog.create_model_info().unwrap();
         metadata.set_string_property("task", "coding").unwrap();
-        catalog
+        let model = catalog
             .register_model(&PathBuf::from(path).to_string_lossy(), &model_id, metadata)
             .await
             .unwrap();
-        Some(manager)
+        let path = model.path().await.unwrap();
+        (Some(manager), Some(path))
     } else {
-        None
+        (None, None)
     };
     let host = service.ensure_started().await.unwrap();
     assert!(host
@@ -149,9 +151,13 @@ async fn cuda_host_shutdown_without_inference() {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
     }
-    if model_path.is_some() {
-        host.load(CatalogType::Local, &model_id).await.unwrap();
-        host.unload(CatalogType::Local, &model_id).await.unwrap();
+    if let Some(path) = model_path {
+        host.load(CatalogType::Local, &model_id, &path)
+            .await
+            .unwrap();
+        host.unload(CatalogType::Local, &model_id, &path)
+            .await
+            .unwrap();
     }
     drop(cleanup);
     assert_process_exits(pid);
@@ -232,6 +238,7 @@ async fn shared_host_reuses_weights_across_processes() {
         .register_model(&model_path.to_string_lossy(), "shared-coding:1", metadata)
         .await
         .unwrap();
+    let expected_model_path = model.path().await.unwrap();
     assert!(
         !model.is_loaded().await.unwrap(),
         "metadata client must not load inference weights"
@@ -253,6 +260,7 @@ async fn shared_host_reuses_weights_across_processes() {
             ])
             .env("FOUNDRY_SHARED_TEST_CONFIG", &encoded_config)
             .env("FOUNDRY_SHARED_TEST_OUTPUT", &output)
+            .env("FOUNDRY_SHARED_TEST_MODEL_PATH", &expected_model_path)
             .stdout(Stdio::from(log.try_clone().unwrap()))
             .stderr(Stdio::from(log))
             .spawn()
@@ -278,6 +286,10 @@ async fn shared_host_reuses_weights_across_processes() {
     let loaded: SharedModelState =
         serde_json::from_value(observations[0]["loaded"].clone()).unwrap();
     assert_eq!(loaded.model_id, "shared-coding:1");
+    assert_eq!(
+        fs::canonicalize(&loaded.model_path).unwrap(),
+        fs::canonicalize(&expected_model_path).unwrap()
+    );
     assert!(loaded.context_length.is_some_and(|value| value > 0));
     let service = SharedService::new(config.clone()).unwrap();
     let host = service
@@ -293,6 +305,41 @@ async fn shared_host_reuses_weights_across_processes() {
         !model.is_loaded().await.unwrap(),
         "loaded-state query must not accidentally load a client model"
     );
+    let states = host.loaded_model_states(CatalogType::Local).await.unwrap();
+    assert_eq!(states.len(), 1);
+    assert_eq!(states[0].model_id, loaded.model_id);
+    assert_eq!(states[0].context_length, loaded.context_length);
+    assert_eq!(
+        fs::canonicalize(&states[0].model_path).unwrap(),
+        fs::canonicalize(&expected_model_path).unwrap()
+    );
+    if real_model.is_none() {
+        let other_path = dir.join("different-artifact");
+        fs::create_dir(&other_path).unwrap();
+        assert!(host
+            .unload(CatalogType::Local, "shared-coding:1", &other_path)
+            .await
+            .is_err());
+        assert_eq!(
+            host.loaded_models(CatalogType::Local).await.unwrap(),
+            vec!["shared-coding:1"]
+        );
+        host.unload(CatalogType::Local, "shared-coding:1", &expected_model_path)
+            .await
+            .unwrap();
+        assert!(host
+            .load(CatalogType::Local, "shared-coding:1", &other_path)
+            .await
+            .is_err());
+        assert!(host
+            .loaded_models(CatalogType::Local)
+            .await
+            .unwrap()
+            .is_empty());
+        host.load(CatalogType::Local, "shared-coding:1", &expected_model_path)
+            .await
+            .unwrap();
+    }
 
     let client = reqwest::Client::builder()
         .no_proxy()
@@ -353,7 +400,7 @@ async fn shared_host_reuses_weights_across_processes() {
     let record: serde_json::Value =
         serde_json::from_slice(&fs::read(config.directory.join("ready.json")).unwrap()).unwrap();
     let host_pid: u32 = record["pid"].as_u64().unwrap().try_into().unwrap();
-    host.unload(CatalogType::Local, "shared-coding:1")
+    host.unload(CatalogType::Local, "shared-coding:1", &expected_model_path)
         .await
         .unwrap();
     assert!(host

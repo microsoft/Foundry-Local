@@ -79,10 +79,11 @@ class ModelLoadManager {
 
   struct LoadedModelState {
     GenAIConfig config;
+    std::string model_path;
     std::optional<uint64_t> context_length;
   };
 
-  /// Copy loaded configuration and effective context under the lifecycle lock, qualified by ID and artifact path.
+  /// Copy loaded configuration, actual path, and effective context under the lock, qualified by ID and artifact path.
   /// Engine limits come from its already-initialized native capabilities, without creating a request or session.
   std::optional<LoadedModelState> GetLoadedModelState(std::string_view model_id, std::string_view model_path);
 

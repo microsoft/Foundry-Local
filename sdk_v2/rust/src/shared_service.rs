@@ -18,7 +18,7 @@ use sha2::{Digest, Sha256};
 use crate::error::{FoundryLocalError, Result};
 use crate::CatalogType;
 
-const PROTOCOL_VERSION: u32 = 1;
+const PROTOCOL_VERSION: u32 = 2;
 const START_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// A single shared serving configuration. Different configurations must use
@@ -71,12 +71,14 @@ pub struct SharedServiceConnection {
     client: reqwest::Client,
 }
 
-/// Exact serving observation returned by a successful load. Context length comes
-/// from the loaded native configuration, not the catalog; absence means unknown.
+/// Authoritative serving observation. Context length comes from the loaded native
+/// configuration, not the catalog; absence means unknown.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SharedModelState {
     /// Resolved model variant ID in the selected catalog.
     pub model_id: String,
+    /// Authoritative local artifact path in the serving process.
+    pub model_path: PathBuf,
     /// Loaded native context window, when reported by the serving runtime.
     pub context_length: Option<u64>,
 }
@@ -115,7 +117,7 @@ impl SharedService {
         })
         .await?;
         match record {
-            Some(record) => Ok(Some(connect_record(record).await?)),
+            Some(record) => Ok(Some(connect_record(&record).await?)),
             None => Ok(None),
         }
     }
@@ -146,7 +148,7 @@ impl SharedService {
         }
 
         if let Some(record) = read_live_record(&identity)? {
-            return connect_record(record).await;
+            return connect_record(&record).await;
         }
 
         // The start lock protects publication of the host configuration. A host
@@ -198,7 +200,7 @@ impl SharedService {
 
         loop {
             if let Some(record) = read_live_record(&identity)? {
-                return connect_record(record).await;
+                return connect_record(&record).await;
             }
             if let Some(receiver) = &mut process_exit {
                 match receiver.try_recv() {
@@ -225,23 +227,56 @@ impl SharedServiceConnection {
         format!("{}{}/v1", self.endpoint, catalog_prefix(catalog))
     }
 
-    /// Load an exact catalog variant in the serving process. This does not pin
-    /// residency after completion or reserve resources for a later HTTP request.
-    pub async fn load(&self, catalog: CatalogType, model_id: &str) -> Result<SharedModelState> {
-        let state: SharedModelState =
-            serde_json::from_value(self.operation(catalog, "load", model_id).await?)?;
+    /// Load an exact catalog variant and artifact in the serving process.
+    /// Obtain `model_path` from [`crate::Model::path`] after acquisition. A stale
+    /// server registration is rejected before loading or reusing its artifact.
+    /// This does not pin residency or reserve resources for a later HTTP request.
+    pub async fn load(
+        &self,
+        catalog: CatalogType,
+        model_id: &str,
+        model_path: &Path,
+    ) -> Result<SharedModelState> {
+        if !model_path.is_absolute() {
+            return Err(invalid("expected model path must be absolute"));
+        }
+        let expected = model_path.to_path_buf();
+        let expected =
+            crate::detail::task::spawn_blocking(move || Ok(fs::canonicalize(expected)?)).await?;
+        let state: SharedModelState = serde_json::from_value(
+            self.operation(catalog, "load", model_id, Some(&expected))
+                .await?,
+        )?;
         if state.model_id != model_id || state.context_length == Some(0) {
             return Err(invalid(
                 "shared host returned a different model ID or invalid loaded context",
             ));
         }
+        if !state.model_path.is_absolute() {
+            return Err(invalid("shared host returned a relative model path"));
+        }
+        let actual = state.model_path.clone();
+        let actual =
+            crate::detail::task::spawn_blocking(move || Ok(fs::canonicalize(actual)?)).await?;
+        if actual != expected {
+            return Err(invalid("shared host returned a different model artifact"));
+        }
         Ok(state)
     }
 
-    /// Explicit shared unload. An in-use model is rejected by native protection;
-    /// failure is never converted to a deferred unload.
-    pub async fn unload(&self, catalog: CatalogType, model_id: &str) -> Result<()> {
-        self.operation(catalog, "unload", model_id)
+    /// Explicit shared unload of the selected artifact. A different artifact or
+    /// in-use model is rejected; failure is never converted to a deferred unload.
+    /// The absolute path may identify weights that have since been removed.
+    pub async fn unload(
+        &self,
+        catalog: CatalogType,
+        model_id: &str,
+        model_path: &Path,
+    ) -> Result<()> {
+        if !model_path.is_absolute() {
+            return Err(invalid("expected model path must be absolute"));
+        }
+        self.operation(catalog, "unload", model_id, Some(model_path))
             .await
             .map(|_| ())
     }
@@ -263,29 +298,55 @@ impl SharedServiceConnection {
         .await?)
     }
 
-    async fn operation(
-        &self,
-        catalog: CatalogType,
-        operation: &str,
-        model_id: &str,
-    ) -> Result<serde_json::Value> {
-        if model_id.is_empty() {
-            return Err(invalid("model ID must not be empty"));
-        }
-        Ok(checked(
+    /// Observe loaded artifacts and effective contexts without loading weights.
+    /// Match artifact paths, not IDs alone, against the selected client model.
+    pub async fn loaded_model_states(&self, catalog: CatalogType) -> Result<Vec<SharedModelState>> {
+        let states: Vec<SharedModelState> = checked(
             self.client
                 .get(format!(
-                    "{}{}/models/{operation}/{}",
+                    "{}{}/models/loaded",
                     self.endpoint,
-                    catalog_prefix(catalog),
-                    urlencoding::encode(model_id)
+                    catalog_prefix(catalog)
                 ))
+                .query(&[("details", "true")])
                 .send()
                 .await?,
         )
         .await?
         .json()
-        .await?)
+        .await?;
+        if states.iter().any(|state| {
+            state.model_id.is_empty()
+                || !state.model_path.is_absolute()
+                || state.context_length == Some(0)
+        }) {
+            return Err(invalid(
+                "shared host returned an invalid loaded model state",
+            ));
+        }
+        Ok(states)
+    }
+
+    async fn operation(
+        &self,
+        catalog: CatalogType,
+        operation: &str,
+        model_id: &str,
+        expected_model_path: Option<&Path>,
+    ) -> Result<serde_json::Value> {
+        if model_id.is_empty() {
+            return Err(invalid("model ID must not be empty"));
+        }
+        let mut request = self.client.get(format!(
+            "{}{}/models/{operation}/{}",
+            self.endpoint,
+            catalog_prefix(catalog),
+            urlencoding::encode(model_id)
+        ));
+        if let Some(path) = expected_model_path {
+            request = request.query(&[("expected_model_path", native_path(path)?)]);
+        }
+        Ok(checked(request.send().await?).await?.json().await?)
     }
 }
 
@@ -394,7 +455,7 @@ fn read_live_record(expected: &HostIdentity) -> Result<Option<HostRecord>> {
     Ok(Some(record))
 }
 
-async fn connect_record(record: HostRecord) -> Result<SharedServiceConnection> {
+async fn connect_record(record: &HostRecord) -> Result<SharedServiceConnection> {
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -416,8 +477,17 @@ async fn connect_record(record: HostRecord) -> Result<SharedServiceConnection> {
             "shared serving endpoint no longer belongs to the recorded host",
         ));
     }
+    if status
+        .get("artifact_qualified_model_management")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return Err(invalid(
+            "native runtime does not support artifact-qualified shared model management",
+        ));
+    }
     Ok(SharedServiceConnection {
-        endpoint: record.endpoint,
+        endpoint: record.endpoint.clone(),
         client,
     })
 }
@@ -516,6 +586,7 @@ pub async fn run_host(config_path: &Path) -> Result<()> {
         pid: std::process::id(),
         endpoint,
     };
+    connect_record(&record).await?;
     let ready_path = record.identity.config.directory.join("ready.json");
     let pending_path = ready_path.with_extension("pending");
     fs::write(&pending_path, serde_json::to_vec(&record)?)?;
@@ -534,6 +605,9 @@ fn native_path(path: &Path) -> Result<String> {
     let value = path
         .to_str()
         .ok_or_else(|| invalid("native paths must be valid UTF-8"))?;
+    if value.contains('\0') {
+        return Err(invalid("native paths must not contain NUL"));
+    }
     // Native configuration still joins some paths with '/', which Windows
     // extended-length paths prohibit. Keep canonical identity, but pass ordinary
     // drive/UNC syntax across this existing UTF-8 SDK boundary.
@@ -647,37 +721,56 @@ mod tests {
 
     #[tokio::test]
     async fn load_routes_exact_local_id_and_busy_unload_is_an_error() {
-        let (endpoint, server) = http_reply(
-            "200 OK",
-            r#"{"status":"loaded","model_id":"coding:1","context_length":4096}"#,
-        );
+        let (_dir, identity) = fixture();
+        let model_path = identity.config.model_cache_dir.join("weights + v1");
+        fs::create_dir(&model_path).unwrap();
+        let body = serde_json::json!({
+            "status": "loaded",
+            "model_id": "coding:1",
+            "model_path": model_path,
+            "context_length": 4096
+        })
+        .to_string();
+        let (endpoint, server) = http_reply("200 OK", &body);
         let connection = SharedServiceConnection {
             endpoint,
             client: reqwest::Client::builder().no_proxy().build().unwrap(),
         };
         let state = connection
-            .load(CatalogType::Local, "coding:1")
+            .load(CatalogType::Local, "coding:1", &model_path.join("."))
             .await
             .unwrap();
         assert_eq!(state.context_length, Some(4096));
-        assert!(server
-            .join()
-            .unwrap()
-            .starts_with("GET /catalogs/local/models/load/coding%3A1 "));
+        let request = server.join().unwrap();
+        assert!(request.starts_with("GET /catalogs/local/models/load/coding%3A1?"));
+        let url = reqwest::Url::parse(&format!(
+            "http://localhost{}",
+            request.split_whitespace().nth(1).unwrap()
+        ))
+        .unwrap();
+        assert_eq!(
+            url.query_pairs().collect::<Vec<_>>(),
+            vec![(
+                "expected_model_path".into(),
+                native_path(&fs::canonicalize(&model_path).unwrap())
+                    .unwrap()
+                    .into()
+            )]
+        );
         let (endpoint, server) = http_reply("409 Conflict", r#"{"error":"model in use"}"#);
         let connection = SharedServiceConnection {
             endpoint,
             ..connection
         };
         let error = connection
-            .unload(CatalogType::Public, "coding:1")
+            .unload(CatalogType::Public, "coding:1", &model_path)
             .await
             .unwrap_err();
         assert!(error.to_string().contains("409"), "{error}");
         assert!(server
             .join()
             .unwrap()
-            .starts_with("GET /models/unload/coding%3A1 "));
+            .starts_with("GET /models/unload/coding%3A1?expected_model_path="));
     }
 
     #[tokio::test]
@@ -692,27 +785,122 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_rejects_wrong_identity_invalid_context_and_redirects() {
-        for (status, body) in [
-            (
-                "200 OK",
-                r#"{"model_id":"different:1","context_length":4096}"#,
-            ),
-            ("200 OK", r#"{"model_id":"coding:1","context_length":0}"#),
-            (
-                "302 Found",
-                r#"{"model_id":"coding:1","context_length":4096}"#,
-            ),
+    async fn unload_validates_path_without_requiring_cached_weights() {
+        let (_dir, identity) = fixture();
+        let path = identity.config.model_cache_dir.join("removed-weights");
+        let (endpoint, server) = http_reply("200 OK", "{}");
+        let connection = SharedServiceConnection {
+            endpoint,
+            client: reqwest::Client::builder().no_proxy().build().unwrap(),
+        };
+        connection
+            .unload(CatalogType::Local, "coding:1", &path)
+            .await
+            .unwrap();
+        server.join().unwrap();
+        let error = connection
+            .unload(CatalogType::Local, "coding:1", Path::new("relative"))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("must be absolute"), "{error}");
+        let invalid = PathBuf::from(format!("{}\0suffix", path.display()));
+        let error = connection
+            .unload(CatalogType::Local, "coding:1", &invalid)
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("must not contain NUL"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn detailed_inventory_observes_paths_without_loading_and_rejects_invalid_states() {
+        let (_dir, identity) = fixture();
+        let path = identity.config.model_cache_dir;
+        for (model_id, model_path, context_length, valid) in [
+            ("coding:1", path.as_path(), None, true),
+            ("", path.as_path(), Some(4096), false),
+            ("coding:1", Path::new("relative"), Some(4096), false),
+            ("coding:1", path.as_path(), Some(0), false),
         ] {
-            let (endpoint, server) = http_reply(status, body);
+            let body = serde_json::json!([{
+                "model_id": model_id,
+                "model_path": model_path,
+                "context_length": context_length
+            }])
+            .to_string();
+            let (endpoint, server) = http_reply("200 OK", &body);
             let connection = SharedServiceConnection {
                 endpoint,
                 client: reqwest::Client::builder().no_proxy().build().unwrap(),
             };
-            assert!(connection
-                .load(CatalogType::Public, "coding:1")
+            let result = connection.loaded_model_states(CatalogType::Local).await;
+            if valid {
+                let states = result.unwrap();
+                assert_eq!(states[0].model_path, path);
+                assert_eq!(states[0].context_length, None);
+            } else {
+                assert!(result.is_err());
+            }
+            assert!(server
+                .join()
+                .unwrap()
+                .starts_with("GET /catalogs/local/models/loaded?details=true "));
+        }
+    }
+
+    #[tokio::test]
+    async fn load_rejects_wrong_identity_invalid_context_and_redirects() {
+        let (_dir, identity) = fixture();
+        let model_path = identity.config.model_cache_dir;
+        for (status, model_id, context_length, returned_path, reason) in [
+            (
+                "200 OK",
+                "different:1",
+                4096,
+                model_path.as_path(),
+                "different model ID",
+            ),
+            (
+                "200 OK",
+                "coding:1",
+                0,
+                model_path.as_path(),
+                "invalid loaded context",
+            ),
+            (
+                "200 OK",
+                "coding:1",
+                4096,
+                identity.config.app_data_dir.as_path(),
+                "different model artifact",
+            ),
+            (
+                "200 OK",
+                "coding:1",
+                4096,
+                Path::new("relative"),
+                "relative model path",
+            ),
+            ("302 Found", "coding:1", 4096, model_path.as_path(), "302"),
+        ] {
+            let body = serde_json::json!({
+                "model_id": model_id,
+                "model_path": returned_path,
+                "context_length": context_length
+            })
+            .to_string();
+            let (endpoint, server) = http_reply(status, &body);
+            let connection = SharedServiceConnection {
+                endpoint,
+                client: reqwest::Client::builder().no_proxy().build().unwrap(),
+            };
+            let error = connection
+                .load(CatalogType::Public, "coding:1", &model_path)
                 .await
-                .is_err());
+                .unwrap_err();
+            assert!(error.to_string().contains(reason), "{error}");
             server.join().unwrap();
         }
     }
@@ -726,7 +914,67 @@ mod tests {
             endpoint,
             pid: 123,
         };
-        assert!(connect_record(record).await.is_err());
+        assert!(connect_record(&record).await.is_err());
         server.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn legacy_protocol_is_rejected_before_any_http_or_control_request() {
+        let (_dir, identity) = fixture();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let mut legacy = identity.clone();
+        legacy.protocol = PROTOCOL_VERSION - 1;
+        let record = HostRecord {
+            identity: legacy,
+            pid: 123,
+            endpoint: format!("http://{}", listener.local_addr().unwrap()),
+        };
+        fs::write(
+            identity.config.directory.join("ready.json"),
+            serde_json::to_vec(&record).unwrap(),
+        )
+        .unwrap();
+        let lock = open_lock(&identity.config.directory.join("host.lock")).unwrap();
+        lock.lock_exclusive().unwrap();
+        let service = SharedService::new(identity.config).unwrap();
+        let error = service.connect().await.err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("different shared host configuration"),
+            "{error}"
+        );
+        let error = service.ensure_started().await.err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("different shared host configuration"),
+            "{error}"
+        );
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[tokio::test]
+    async fn matching_process_without_native_artifact_contract_is_rejected() {
+        let (_dir, identity) = fixture();
+        for capability in [None, Some(false)] {
+            let mut body = serde_json::json!({"pid":123});
+            if let Some(value) = capability {
+                body["artifact_qualified_model_management"] = value.into();
+            }
+            let (endpoint, server) = http_reply("200 OK", &body.to_string());
+            let record = HostRecord {
+                identity: identity.clone(),
+                endpoint,
+                pid: 123,
+            };
+            let error = connect_record(&record).await.err().unwrap();
+            assert!(error.to_string().contains("artifact-qualified"), "{error}");
+            assert!(server.join().unwrap().starts_with("GET /status "));
+        }
     }
 }

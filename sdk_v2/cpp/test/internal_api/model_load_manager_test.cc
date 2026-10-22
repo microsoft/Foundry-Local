@@ -9,6 +9,7 @@
 #include "internal_api/test_helpers.h"
 #include "internal_api/test_model_cache.h"
 #include "logger.h"
+#include "util/path_safety.h"
 #include "utils/temp_path.h"
 
 #include <gtest/gtest.h>
@@ -101,6 +102,28 @@ class TempModelDir {
 // ---------------------------------------------------------------------------
 // EP Guard Tests
 // ---------------------------------------------------------------------------
+
+TEST(ModelPathIdentityTest, MissingPathsNormalizeDotSegmentsAndTrailingSeparatorsWithoutMatchingOtherArtifacts) {
+  auto root = fl::test::TempPath::CreateTempDir("fl_model_path_identity_");
+  const auto model_path = root.path() / "missing model+%2F";
+  const auto alternate = root.path() / "absent" / ".." / model_path.filename() / ".";
+  ASSERT_FALSE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(fl::ModelPathsEqual(model_path.string(), alternate.string()));
+  EXPECT_EQ(fl::NormalizeModelPath(alternate.string()), fl::NormalizeModelPath(model_path.string()));
+  EXPECT_FALSE(fl::ModelPathsEqual(model_path.string(), (model_path / "child").string()));
+  EXPECT_FALSE(fl::ModelPathsEqual(model_path.string(), (root.path() / "other-model").string()));
+}
+
+#ifdef _WIN32
+TEST(ModelPathIdentityTest, MissingWindowsExtendedDrivePathMatchesPlainPath) {
+  auto root = fl::test::TempPath::CreateTempDir("fl_extended_model_path_");
+  const auto model_path = root.path() / "removed-artifact";
+  const auto extended = std::filesystem::path(L"\\\\?\\" + model_path.wstring());
+  ASSERT_FALSE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(fl::ModelPathsEqual(model_path.string(), extended.string()));
+  EXPECT_EQ(fl::NormalizeModelPath(model_path.string()), fl::NormalizeModelPath(extended.string()));
+}
+#endif
 
 TEST(ModelLoadManagerTest, LoadWithCudaOverride_CudaNotAvailable_Throws) {
   CpuOnlyDetector ep;
@@ -412,6 +435,7 @@ TEST(ModelLoadManagerTest, LoadedConfigSnapshotRequiresMatchingIdAndPathAndSurvi
   EXPECT_EQ(snapshot->config.GetChatBackendKind(), fl::ChatBackendKind::kEngine);
   ASSERT_TRUE(snapshot->context_length.has_value());
   EXPECT_EQ(*snapshot->context_length, 1024u);
+  EXPECT_EQ(snapshot->model_path, fl::NormalizeModelPath(model_path.string()));
   auto* instance = manager.GetLoadedModel("snapshot-model:1");
   ASSERT_NE(instance, nullptr);
   EXPECT_EQ(instance->SessionRefCount(), 0);
@@ -427,4 +451,5 @@ TEST(ModelLoadManagerTest, LoadedConfigSnapshotRequiresMatchingIdAndPathAndSurvi
   EXPECT_EQ(snapshot->config.model->context_length, 1024);
   EXPECT_EQ(snapshot->config.search->max_length, 128);
   EXPECT_EQ(*snapshot->context_length, 1024u);
+  EXPECT_EQ(snapshot->model_path, fl::NormalizeModelPath(model_path.string()));
 }

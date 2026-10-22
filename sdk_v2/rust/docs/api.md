@@ -103,6 +103,10 @@ CPU-only tests can leave it empty. This set is part of host compatibility.
 Use the same cache/application-data configuration for metadata clients and host.
 Create/download/register models before starting the host; the current shared-host
 API does not refresh local registrations made after host startup.
+Load and unload require the selected artifact's absolute filesystem path. The host
+checks it before changing residency, so re-registering an ID in another metadata
+client cannot silently reuse or stop a different artifact from the host's snapshot.
+Use `Model::path().await`, not the catalog download URI.
 
 | Method | Description |
 | --- | --- |
@@ -110,12 +114,17 @@ API does not refresh local registrations made after host startup.
 | `service.connect().await` | Return `Option<SharedServiceConnection>`; absent differs from incompatible/unreachable. |
 | `service.ensure_started().await` | Start or reuse one matching host across clients. |
 | `connection.inference_endpoint(catalog)` | OpenAI base URL, with separate public/local catalog routing. |
-| `connection.load(catalog, model_id).await` | Return `SharedModelState` with resolved `model_id` and optional loaded-config `context_length`; not a residency/resource reservation. |
-| `connection.unload(catalog, model_id).await` | Explicit shared unload; in-use failure is not deferred. |
+| `connection.load(catalog, model_id, model_path).await` | Require the absolute artifact path from `Model::path().await` after acquisition. Return `SharedModelState` with resolved `model_id`, authoritative `model_path`, and optional loaded-config `context_length`; not a residency/resource reservation. |
+| `connection.unload(catalog, model_id, model_path).await` | Explicit shared unload of the selected artifact; mismatched-path and in-use failures are not deferred. |
 | `connection.loaded_models(catalog).await` | Authoritative server-loaded IDs, not the client's local state. |
+| `connection.loaded_model_states(catalog).await` | Observe authoritative loaded artifact paths and effective contexts without loading weights; use path identity as well as ID for readiness. |
 
 Host/native artifact hashes (including adjacent platform libraries), SDK protocol/version and canonical configuration must
-match before reuse. An incompatible live host is not replaced. Client drop never
+match before reuse. Protocol 2 also requires the native status capability for
+artifact-qualified model management before readiness or control; older hosts and
+native libraries are rejected before changing residency. Use freshly matched host/native
+artifacts, not a new host combined with a legacy runtime.
+An incompatible live host is not replaced. Client drop never
 unloads shared models or stops the host. Cancelling a startup/load waiter does not
 promise to cancel non-interruptible server work. Query actual state before another
 authorized attempt; never automatically replay inference.
