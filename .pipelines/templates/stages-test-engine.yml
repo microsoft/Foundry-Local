@@ -25,6 +25,11 @@ stages:
 
     - template: steps-prefetch-vcpkg.yml
 
+    - task: PipAuthenticate@1
+      displayName: 'Authenticate Python packages'
+      inputs:
+        artifactFeed: 'Lotus'
+
     - task: UsePythonVersion@0
       displayName: 'Use Python 3.12'
       inputs:
