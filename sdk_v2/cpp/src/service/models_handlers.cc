@@ -5,6 +5,7 @@
 #include "service/models_handlers.h"
 
 #include "catalog.h"
+#include "inferencing/model_load_manager.h"
 #include "model_info.h"
 #include "service/handler_utils.h"
 #include "service/web_service.h"
@@ -14,7 +15,93 @@
 
 #include <fmt/format.h>
 
+#include <cstdint>
+#include <optional>
+#include <string_view>
+
 namespace fl {
+
+namespace {
+
+int HexDigitValue(char ch) {
+  if (ch >= '0' && ch <= '9') {
+    return ch - '0';
+  }
+
+  if (ch >= 'a' && ch <= 'f') {
+    return ch - 'a' + 10;
+  }
+
+  if (ch >= 'A' && ch <= 'F') {
+    return ch - 'A' + 10;
+  }
+
+  return -1;
+}
+
+std::optional<std::string> DecodeModelPathSegment(std::string_view segment) {
+  // oatpp 1.3 passes raw path variables. Decode exactly once; '+' is literal in a path, not a form-space.
+  std::string decoded;
+  decoded.reserve(segment.size());
+  for (size_t i = 0; i < segment.size(); ++i) {
+    auto ch = static_cast<unsigned char>(segment[i]);
+    if (ch == '%') {
+      if (segment.size() - i < 3) {
+        return std::nullopt;
+      }
+
+      const auto high = HexDigitValue(segment[i + 1]);
+      const auto low = HexDigitValue(segment[i + 2]);
+      if (high < 0 || low < 0) {
+        return std::nullopt;
+      }
+
+      ch = static_cast<unsigned char>((high << 4) | low);
+      i += 2;
+    }
+
+    if (ch < 0x20 || ch == 0x7f) {
+      return std::nullopt;
+    }
+
+    decoded.push_back(static_cast<char>(ch));
+  }
+
+  return decoded;
+}
+
+Model* ResolveManagedModel(ICatalog& catalog, const std::string& name) {
+  if (auto* variant = catalog.GetModelVariant(name)) {
+    return variant;
+  }
+
+  return catalog.GetModel(name);
+}
+
+struct LoadModelResponse {
+  std::string status;
+  std::string model_id;
+  std::optional<uint64_t> context_length;
+};
+
+void to_json(nlohmann::json& json, const LoadModelResponse& response) {
+  json = {{"status", response.status}, {"model_id", response.model_id}};
+  if (response.context_length) {
+    json["context_length"] = *response.context_length;
+  }
+}
+
+LoadModelResponse MakeLoadModelResponse(ServiceContext& ctx, const Model& model, std::string status) {
+  LoadModelResponse response{.status = std::move(status), .model_id = model.Id(), .context_length = std::nullopt};
+  const auto state = ctx.model_load_manager.GetLoadedModelState(model.Id(), model.GetPath());
+  if (state) {
+    response.context_length = state->context_length;
+  }
+
+  return response;
+}
+
+}  // namespace
 
 // ========================================================================
 // Handler: GET /models/loaded
@@ -61,8 +148,14 @@ class LoadModelHandler : public HttpRequestHandler {
       return ErrorResponse(Status::CODE_400, "Missing model name");
     }
 
-    std::string name = name_raw->c_str();
-    auto* model = ctx_.catalog.GetModel(name);
+    const auto decoded_name = DecodeModelPathSegment(*name_raw);
+    if (!decoded_name) {
+      tracker.SetStatus(ActionStatus::kClientError);
+      return ErrorResponse(Status::CODE_400, "Invalid model name", "Invalid path segment encoding");
+    }
+
+    const auto& name = *decoded_name;
+    auto* model = ResolveManagedModel(ctx_.catalog, name);
 
     if (!model) {
       tracker.SetStatus(ActionStatus::kClientError);
@@ -73,7 +166,7 @@ class LoadModelHandler : public HttpRequestHandler {
     if (model->IsLoaded()) {
       tracker.SetStatus(ActionStatus::kSkipped);
 
-      return JsonResponse(Status::CODE_200, {{"status", "already_loaded"}});
+      return JsonResponse(Status::CODE_200, MakeLoadModelResponse(ctx_, *model, "already_loaded"));
     }
 
     if (!model->IsCached()) {
@@ -86,7 +179,7 @@ class LoadModelHandler : public HttpRequestHandler {
       tracker.SetStatus(ActionStatus::kSuccess);
 
       ctx_.logger.Log(LogLevel::Information, fmt::format("Model loaded via web service: {}", name));
-      return JsonResponse(Status::CODE_200, {{"status", "loaded"}});
+      return JsonResponse(Status::CODE_200, MakeLoadModelResponse(ctx_, *model, "loaded"));
     } catch (const std::exception& ex) {
       tracker.RecordException(ex);
 
@@ -117,8 +210,14 @@ class UnloadModelHandler : public HttpRequestHandler {
       return ErrorResponse(Status::CODE_400, "Missing model name");
     }
 
-    std::string name = name_raw->c_str();
-    auto* model = ctx_.catalog.GetModel(name);
+    const auto decoded_name = DecodeModelPathSegment(*name_raw);
+    if (!decoded_name) {
+      tracker.SetStatus(ActionStatus::kClientError);
+      return ErrorResponse(Status::CODE_400, "Invalid model name", "Invalid path segment encoding");
+    }
+
+    const auto& name = *decoded_name;
+    auto* model = ResolveManagedModel(ctx_.catalog, name);
 
     if (!model) {
       tracker.SetStatus(ActionStatus::kClientError);

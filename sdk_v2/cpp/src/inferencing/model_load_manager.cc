@@ -3,6 +3,8 @@
 #include "inferencing/model_load_manager.h"
 
 #include "exception.h"
+#include "inferencing/generative/chat/onnx_chat_engine.h"
+#include "inferencing/generative/chat/search_options.h"
 #include "inferencing/generative/genai_config.h"
 #include "inferencing/generative/genai_model_instance.h"
 #include "platform/path.h"
@@ -369,7 +371,11 @@ GenAIModelInstance* ModelLoadManager::GetLoadedModel(std::string_view model_id, 
 GenAIModelInstance* ModelLoadManager::GetLoadedModel(std::string_view model_id,
                                                      const std::string* normalized_model_path) {
   std::lock_guard<std::mutex> lock(mutex_);
+  return FindLoadedModelLocked(model_id, normalized_model_path);
+}
 
+GenAIModelInstance* ModelLoadManager::FindLoadedModelLocked(std::string_view model_id,
+                                                            const std::string* normalized_model_path) {
   std::string id_str(model_id);
   auto it = loaded_models_.find(id_str);
   if (it != loaded_models_.end() &&
@@ -378,6 +384,30 @@ GenAIModelInstance* ModelLoadManager::GetLoadedModel(std::string_view model_id,
   }
 
   return nullptr;
+}
+
+std::optional<ModelLoadManager::LoadedModelState> ModelLoadManager::GetLoadedModelState(
+    std::string_view model_id, std::string_view model_path) {
+  const auto normalized_model_path = NormalizeModelPath(model_path);
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto* loaded = FindLoadedModelLocked(model_id, &normalized_model_path);
+  if (!loaded) {
+    return std::nullopt;
+  }
+
+  LoadedModelState state{.config = loaded->GetGenAIConfig(), .context_length = std::nullopt};
+  if (state.config.GetChatBackendKind() == ChatBackendKind::kEngine) {
+    // Model construction waits for Engine capability initialization; this cached limit is immutable afterward.
+    const auto* engine = loaded->GetChatEngine();
+    if (engine && engine->MaxRequestLength() > 0) {
+      state.context_length = engine->MaxRequestLength();
+    }
+  } else if ((state.config.model && state.config.model->context_length > 0) ||
+             (state.config.search && state.config.search->max_length > 0)) {
+    state.context_length = static_cast<uint64_t>(GetModelMaxContextLength(state.config));
+  }
+
+  return state;
 }
 
 }  // namespace fl

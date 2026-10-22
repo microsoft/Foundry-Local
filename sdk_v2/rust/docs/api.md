@@ -13,6 +13,7 @@
 - [Model Catalog](#model-catalog)
   - [Catalog](#catalog)
   - [Model](#model)
+- [Shared Serving](#shared-serving)
 - [OpenAI Clients](#openai-clients)
   - [ChatClient](#chatclient)
   - [ChatCompletionStream](#chatcompletionstream)
@@ -74,6 +75,57 @@ pub struct FoundryLocalManager { /* private fields */ }
 | `urls` | `fn urls(&self) -> Result<Vec<String>, FoundryLocalError>` | URLs the local web service is listening on. Empty until `start_web_service` is called. |
 | `start_web_service` | `async fn start_web_service(&self) -> Result<(), FoundryLocalError>` | Start the local web service. Retrieve listening URLs via `urls()`. |
 | `stop_web_service` | `async fn stop_web_service(&self) -> Result<(), FoundryLocalError>` | Stop the local web service. |
+| `is_shutdown_requested` | `fn is_shutdown_requested(&self) -> bool` | Observe shutdown requested by native code or a web-service handler. |
+
+---
+
+## Shared Serving
+
+`shared_service` provides SDK control of a separately hosted model, while catalog
+queries, downloads, and execution-provider preparation remain existing SDK operations.
+The crate also builds `foundry-local-host`; distribute it alongside the matching SDK
+and native runtime using the normal application packaging mechanism.
+The Rust pipeline stages matched `foundry-host-<rid>` bundles containing the host,
+native libraries, license, and a SHA-256 manifest. Building the source crate alone
+does not install this bundle; callers must supply its actual executable/library
+paths rather than assume a separately installed Foundry service is compatible.
+The manifest records both the SDK version and source revision. Release pipelines
+stamp the SDK version before building; a client built from an unstamped source
+checkout is not interchangeable with a differently versioned release host.
+
+`SharedServiceConfig` has five absolute `PathBuf` fields: `directory` (user-private
+coordination state), `executable` (host binary), `library` (native library file),
+`model_cache_dir`, and `app_data_dir` (including local model registrations).
+Its `execution_providers: Vec<String>` names the providers the host must prepare
+and register through existing SDK acquisition before becoming ready. Use the
+selected models' runtime metadata, not an integration-maintained provider list.
+CPU-only tests can leave it empty. This set is part of host compatibility.
+Use the same cache/application-data configuration for metadata clients and host.
+Create/download/register models before starting the host; the current shared-host
+API does not refresh local registrations made after host startup.
+
+| Method | Description |
+| --- | --- |
+| `SharedService::new(config)` | Configure without starting the host or loading native code. |
+| `service.connect().await` | Return `Option<SharedServiceConnection>`; absent differs from incompatible/unreachable. |
+| `service.ensure_started().await` | Start or reuse one matching host across clients. |
+| `connection.inference_endpoint(catalog)` | OpenAI base URL, with separate public/local catalog routing. |
+| `connection.load(catalog, model_id).await` | Return `SharedModelState` with resolved `model_id` and optional loaded-config `context_length`; not a residency/resource reservation. |
+| `connection.unload(catalog, model_id).await` | Explicit shared unload; in-use failure is not deferred. |
+| `connection.loaded_models(catalog).await` | Authoritative server-loaded IDs, not the client's local state. |
+
+Host/native artifact hashes (including adjacent platform libraries), SDK protocol/version and canonical configuration must
+match before reuse. An incompatible live host is not replaced. Client drop never
+unloads shared models or stops the host. Cancelling a startup/load waiter does not
+promise to cancel non-interruptible server work. Query actual state before another
+authorized attempt; never automatically replay inference.
+
+Control uses existing Foundry management HTTP routes internally, with redirects and
+proxy use disabled. Inference retains the existing loopback server's access policy:
+loopback is not authentication or OS-user isolation. Keep the state directory in
+the current user's private application data. Sharing does not promise unlimited
+concurrency or pinned residency. A reported loaded context length is not an
+output-budget policy or a reservation of currently available GPU memory.
 
 ---
 

@@ -530,7 +530,7 @@ void Manager::StartWebService() {
   web_service_ = std::make_unique<WebService>(*public_catalog_, *local_catalog_, *logger_, *config_.model_cache_dir,
                                               *model_load_manager_,
                                               *session_manager_, *telemetry_,
-                                              [this]() { Shutdown(); });
+                                              [this]() { RequestShutdown(); });
 
   auto endpoints = config_.web_service_endpoints;
   if (endpoints.empty()) {
@@ -591,13 +591,25 @@ void Manager::StopWebService() {
 #endif
 }
 
-void Manager::Shutdown() {
+void Manager::RequestShutdown() {
   bool expected = false;
   if (!shutdown_requested_.compare_exchange_strong(expected, true)) {
     return;  // already shutting down
   }
 
   logger_->Log(LogLevel::Information, "Shutdown requested");
+
+  model_load_manager_->RejectNewLoads();
+  session_manager_->CancelAll();
+}
+
+void Manager::Shutdown() {
+  RequestShutdown();
+
+  bool expected = false;
+  if (!shutdown_started_.compare_exchange_strong(expected, true)) {
+    return;
+  }
 
   // Order matters:
   //   1. Reject new loads so callers gated on IsShutdownRequested can stop early.
@@ -608,9 +620,6 @@ void Manager::Shutdown() {
   //   3. Stop the web service (JoinAll now unblocks), then drain HTTP-tracked sessions.
   //   4. Unload all models, polling per-model session refcount for direct-API users who haven't
   //      dropped their flSession* yet. Bounded by timeout so a stuck caller can't block shutdown.
-  model_load_manager_->RejectNewLoads();
-  session_manager_->CancelAll();
-
   if (web_service_running_) {
     StopWebService();
   }

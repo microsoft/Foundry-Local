@@ -9,10 +9,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -75,6 +77,15 @@ class ModelLoadManager {
   /// Get a loaded model for an immediate query only when its normalized path matches `model_path`.
   GenAIModelInstance* GetLoadedModel(std::string_view model_id, std::string_view model_path);
 
+  struct LoadedModelState {
+    GenAIConfig config;
+    std::optional<uint64_t> context_length;
+  };
+
+  /// Copy loaded configuration and effective context under the lifecycle lock, qualified by ID and artifact path.
+  /// Engine limits come from its already-initialized native capabilities, without creating a request or session.
+  std::optional<LoadedModelState> GetLoadedModelState(std::string_view model_id, std::string_view model_path);
+
   /// Reject operations on a directory containing any loaded model, regardless of ID or revision.
   /// Holds the lifecycle mutex through the operation so another handle cannot load files being removed.
   /// The operation must not call back into this ModelLoadManager.
@@ -99,6 +110,7 @@ class ModelLoadManager {
   bool HasEP(const std::string& ep_name) const;
   bool UnloadModel(std::string_view model_id, const std::string* normalized_model_path);
   GenAIModelInstance* GetLoadedModel(std::string_view model_id, const std::string* normalized_model_path);
+  GenAIModelInstance* FindLoadedModelLocked(std::string_view model_id, const std::string* normalized_model_path);
 
   IEpDetector& ep_detector_;
   ILogger& logger_;

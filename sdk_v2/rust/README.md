@@ -149,6 +149,32 @@ model
 
 Catalog access does not block on EP downloads. Call `download_and_register_eps` when you need hardware-accelerated execution providers.
 
+## Shared serving (preview)
+
+The additive `shared_service` API lets independent SDK clients reuse a separately hosted
+model. Catalog queries and downloads remain ordinary SDK operations; inference uses
+the existing OpenAI-compatible service. Client exit does not unload the shared model.
+Distribute the matching `foundry-local-host` executable and native runtime together;
+the Rust pipeline stages these as `foundry-host-<rid>` artifacts. See the
+[shared-serving API and compatibility contract](docs/api.md#shared-serving).
+
+From this directory, run the cross-process gate using the normal native runtime configuration:
+
+```sh
+cargo test --test shared_service shared_host_reuses_weights_across_processes -- --nocapture
+```
+
+`FOUNDRY_SHARED_TEST_HOST` and `FOUNDRY_SHARED_TEST_LIBRARY` select a staged host/native
+bundle for relocation testing. Without a live model override, the gate uses bundled
+tiny weights. `FOUNDRY_SHARED_TEST_MODEL` opts into the Qwen CUDA coding fixture:
+valid tool call, simulated tool failure, coding continuation, shared loaded context,
+explicit unload, and actual process exit. Diagnostics stay under the C++ build directory.
+
+**Qualification blocker:** the tested Windows CUDA provider can hang during process-exit
+cleanup after Foundry shutdown completes. The live gate deliberately fails when the host
+does not exit; releasing its serving lock is not sufficient. This path is not release-qualified,
+and the SDK does not force-unload provider libraries or bypass their cleanup to hide the failure.
+
 ## Quick Start
 
 ```rust

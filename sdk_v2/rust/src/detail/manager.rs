@@ -224,6 +224,11 @@ impl NativeManager {
         self.api.check(status)
     }
 
+    pub(crate) fn is_shutdown_requested(&self) -> bool {
+        // SAFETY: the manager is retained by its caller for this observation.
+        unsafe { (self.api.root().Manager_IsShutdownRequested)(self.ptr) }
+    }
+
     /// Run the prescribed teardown exactly once: `Manager_Shutdown` then
     /// `Manager_Release`.
     ///

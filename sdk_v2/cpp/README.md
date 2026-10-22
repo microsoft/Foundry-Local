@@ -597,6 +597,31 @@ for (const std::string& endpoint : manager.GetWebServiceEndpoints()) {
 manager.StopWebService();
 ```
 
+Model management accepts exact versioned model IDs as well as legacy aliases:
+`GET /models/load/{name}` and `GET /models/unload/{name}` use the public catalog;
+`GET /catalogs/local/models/load/{name}` and `GET /catalogs/local/models/unload/{name}` use the local catalog.
+Encode the entire name as one URL path segment (for example, `publisher/model:2` becomes `publisher%2Fmodel%3A2`).
+The service percent-decodes once, preserves literal `+`, and resolves an exact ID before falling back to an alias.
+Loading an exact variant does not change its alias group's selected variant. Unload still refuses models held by
+live native sessions.
+`GET /models/loaded` and `GET /catalogs/local/models/loaded` list loaded variant IDs from their respective catalogs,
+including loaded non-selected variants. A matching ID at a different artifact path is not considered loaded.
+
+Successful load responses retain `status` (`loaded` or `already_loaded`) and also return the resolved `model_id`.
+For Generator backends, `context_length` reports the configured total input-plus-output token window used by
+inference (`model.context_length`, falling back to legacy `search.max_length`). Generator explicitly overrides
+native `max_length` per request, so a lower artifact `search.max_length` is not an additional ceiling.
+This is read from the loaded instance, qualified by model ID and artifact path, without creating a session.
+It is not a catalog maximum or an independent input/output cap: clients must reserve their requested output tokens
+within that window. For Engine backends, `context_length` comes from the existing loaded Engine's native
+`MaxRequestLength` capability, also used by session preflight. Observing this cached value creates no request or
+session. Unknown limits are omitted rather than guessed; the response does not negotiate profiles or verify changes
+to files at the same artifact path.
+
+`POST /shutdown` returns `{"status":"shutting_down"}`, rejects new loads, and cancels tracked sessions.
+The HTTP worker only requests shutdown: a standalone host must observe `Manager::IsShutdownRequested()` and release
+the manager on its owner thread, which stops the service, drains sessions, and unloads models.
+
 Streaming chat completions, Responses, and audio transcriptions cancel their active inference when the SSE client
 disconnects. The service sends SSE keepalive comments during token silence so a dropped connection can be detected
 without waiting for the next token. Undrained streams are limited to 1 MiB of buffered events; exceeding the limit

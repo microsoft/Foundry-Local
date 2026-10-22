@@ -4,6 +4,7 @@
 
 #include "ep_detection/ep_detector.h"
 #include "exception.h"
+#include "inferencing/generative/chat/onnx_chat_engine.h"
 #include "inferencing/generative/genai_model_instance.h"
 #include "internal_api/test_helpers.h"
 #include "internal_api/test_model_cache.h"
@@ -392,4 +393,38 @@ TEST_F(ModelLoadManagerUnloadTest, SameIdRequiresSameCanonicalPathForLoadLookupA
 
   EXPECT_TRUE(mgr_->UnloadModel(fl::test::kTestChatModelAlias, equivalent_path.string()));
   EXPECT_EQ(mgr_->GetLoadedModel(fl::test::kTestChatModelAlias), nullptr);
+}
+
+TEST(ModelLoadManagerTest, LoadedConfigSnapshotRequiresMatchingIdAndPathAndSurvivesUnload) {
+  fl::test::FakeServiceBindings bindings;
+  auto& manager = bindings.model_load_manager;
+  const auto model_path = fl::test::GetTestDataPath("tiny-paged-attention");
+  ASSERT_TRUE(std::filesystem::exists(model_path));
+  ASSERT_EQ(manager.LoadModel(model_path.string(), "snapshot-model:1").status,
+            fl::ModelLoadManager::LoadStatus::kSuccess);
+  const auto equivalent_path = model_path / ".";
+  const auto snapshot = manager.GetLoadedModelState("snapshot-model:1", equivalent_path.string());
+  ASSERT_TRUE(snapshot.has_value());
+  ASSERT_TRUE(snapshot->config.model.has_value());
+  ASSERT_TRUE(snapshot->config.search.has_value());
+  EXPECT_EQ(snapshot->config.model->context_length, 1024);
+  EXPECT_EQ(snapshot->config.search->max_length, 128);
+  EXPECT_EQ(snapshot->config.GetChatBackendKind(), fl::ChatBackendKind::kEngine);
+  ASSERT_TRUE(snapshot->context_length.has_value());
+  EXPECT_EQ(*snapshot->context_length, 1024u);
+  auto* instance = manager.GetLoadedModel("snapshot-model:1");
+  ASSERT_NE(instance, nullptr);
+  EXPECT_EQ(instance->SessionRefCount(), 0);
+  const auto* engine = instance->GetChatEngine();
+  ASSERT_NE(engine, nullptr);
+  EXPECT_EQ(engine->MaxRequestLength(), 1024u);
+  EXPECT_EQ(*snapshot->context_length, engine->MaxRequestLength());
+  EXPECT_FALSE(manager.GetLoadedModelState("unknown-model:1", model_path.string()).has_value());
+  EXPECT_FALSE(manager.GetLoadedModelState("snapshot-model:1", model_path.parent_path().string()).has_value());
+
+  EXPECT_TRUE(manager.UnloadModel("snapshot-model:1"));
+  EXPECT_FALSE(manager.GetLoadedModelState("snapshot-model:1", model_path.string()).has_value());
+  EXPECT_EQ(snapshot->config.model->context_length, 1024);
+  EXPECT_EQ(snapshot->config.search->max_length, 128);
+  EXPECT_EQ(*snapshot->context_length, 1024u);
 }
