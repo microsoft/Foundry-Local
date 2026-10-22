@@ -88,28 +88,34 @@ std::filesystem::path FindModelConfigDirectory(
 
 TEST(ModelCapabilitiesTest, ExactQwen35TextTypeAndTemplateEnableBothCapabilities) {
   const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
-      "qwen3_5_text", kQwenToolCallProjection, kQwenToolResultProjection);
+      "qwen3_5_text", kQwenToolCallProjection, kQwenToolResultProjection,
+      "<tool_call>", "</tool_call>");
 
+  EXPECT_TRUE(capabilities.supports_tool_calling);
   EXPECT_TRUE(capabilities.native_qwen_xml_tool_calls);
   EXPECT_TRUE(capabilities.positional_tool_results);
 }
 
 TEST(ModelCapabilitiesTest, ExactQwen35TextTypeWithNonmatchingTemplateDisablesBothCapabilities) {
   const auto capabilities =
-      fl::model_capabilities_internal::ResolveRenderedProbes("qwen3_5_text", "not-qwen", "not-qwen");
+      fl::model_capabilities_internal::ResolveRenderedProbes(
+          "qwen3_5_text", "not-qwen", "not-qwen", "<tool_call>", "</tool_call>");
 
+  EXPECT_FALSE(capabilities.supports_tool_calling);
   EXPECT_FALSE(capabilities.native_qwen_xml_tool_calls);
   EXPECT_FALSE(capabilities.positional_tool_results);
 }
 
 class UnsupportedModelCapabilitiesTest : public ::testing::TestWithParam<std::string_view> {};
 
-TEST_P(UnsupportedModelCapabilitiesTest, ExactQwenTemplateDoesNotEnableCapabilities) {
+TEST_P(UnsupportedModelCapabilitiesTest, ExactQwenTemplateOnboardsCompatibleModelTypes) {
   const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
-      GetParam(), kQwenToolCallProjection, kQwenToolResultProjection);
+      GetParam(), kQwenToolCallProjection, kQwenToolResultProjection,
+      "<tool_call>", "</tool_call>");
 
+  EXPECT_TRUE(capabilities.supports_tool_calling);
   EXPECT_FALSE(capabilities.native_qwen_xml_tool_calls);
-  EXPECT_FALSE(capabilities.positional_tool_results);
+  EXPECT_TRUE(capabilities.positional_tool_results);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -119,17 +125,65 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST(ModelCapabilitiesTest, ResultProjectionMismatchDisablesOnlyPositionalToolResults) {
   const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
-      "qwen3_5_text", kQwenToolCallProjection, "not-qwen");
+      "qwen3_5_text", kQwenToolCallProjection, "not-qwen",
+      "<tool_call>", "</tool_call>");
 
+  EXPECT_TRUE(capabilities.supports_tool_calling);
   EXPECT_TRUE(capabilities.native_qwen_xml_tool_calls);
+  EXPECT_FALSE(capabilities.positional_tool_results);
+}
+
+TEST(ModelCapabilitiesTest, GenericTaggedJsonProtocolIsOnboarded) {
+  constexpr std::string_view kToolCallProjection =
+      "<|tool_start|>{\"name\":\"probe_function\",\"arguments\":"
+      "{\"probe_parameter\":\"probe_value\"}}<|tool_end|>";
+  constexpr std::string_view kToolResultProjection =
+      "<|tool_start|>{\"name\":\"probe_first\"}<|tool_end|>"
+      "<|tool_start|>{\"name\":\"probe_second\"}<|tool_end|>"
+      "probe-result-first probe-result-second";
+
+  const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
+      "custom", kToolCallProjection, kToolResultProjection,
+      "<|tool_start|>", "<|tool_end|>");
+
+  EXPECT_TRUE(capabilities.supports_tool_calling);
+  EXPECT_FALSE(capabilities.native_qwen_xml_tool_calls);
+  EXPECT_TRUE(capabilities.positional_tool_results);
+}
+
+TEST(ModelCapabilitiesTest, MissingOrAmbiguousBoundariesFailClosed) {
+  const auto missing_end = fl::model_capabilities_internal::ResolveRenderedProbes(
+      "custom", kQwenToolCallProjection, kQwenToolResultProjection,
+      "<tool_call>", "<missing>");
+  const auto identical_boundaries = fl::model_capabilities_internal::ResolveRenderedProbes(
+      "custom", kQwenToolCallProjection, kQwenToolResultProjection,
+      "<tool_call>", "<tool_call>");
+
+  EXPECT_FALSE(missing_end.supports_tool_calling);
+  EXPECT_FALSE(missing_end.positional_tool_results);
+  EXPECT_FALSE(identical_boundaries.supports_tool_calling);
+  EXPECT_FALSE(identical_boundaries.positional_tool_results);
+}
+
+TEST(ModelCapabilitiesTest, IdCorrelatedResultsDoNotEnablePositionalProjection) {
+  constexpr std::string_view kIdCorrelatedResults =
+      "probe_first probe_second probe-call-a probe-result-second "
+      "probe-call-b probe-result-first";
+  const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
+      "custom", kQwenToolCallProjection, kIdCorrelatedResults,
+      "<tool_call>", "</tool_call>");
+
+  EXPECT_TRUE(capabilities.supports_tool_calling);
   EXPECT_FALSE(capabilities.positional_tool_results);
 }
 
 TEST(ModelCapabilitiesTest, QualifiedQwenReasoningProbeEnablesHistoryPreservation) {
   const auto capabilities = fl::model_capabilities_internal::ResolveRenderedProbes(
       "qwen3_5_text", kQwenToolCallProjection, kQwenToolResultProjection,
-    kQwenReasoningProjection, kQwenNoPreserveReasoningProjection, "<think>", "</think>");
+      "<tool_call>", "</tool_call>", kQwenReasoningProjection,
+      kQwenNoPreserveReasoningProjection, "<think>", "</think>");
 
+  EXPECT_TRUE(capabilities.supports_tool_calling);
   EXPECT_TRUE(capabilities.supports_reasoning_history);
   EXPECT_TRUE(capabilities.supports_preserve_thinking);
   EXPECT_TRUE(capabilities.supports_reasoning_controls);
@@ -138,13 +192,16 @@ TEST(ModelCapabilitiesTest, QualifiedQwenReasoningProbeEnablesHistoryPreservatio
 TEST(ModelCapabilitiesTest, ReasoningPreservationProbeFailsClosed) {
   const auto missing_default_reasoning = fl::model_capabilities_internal::ResolveRenderedProbes(
       "qwen3_5_text", kQwenToolCallProjection, kQwenToolResultProjection,
-    kQwenNoPreserveReasoningProjection, kQwenNoPreserveReasoningProjection, "<think>", "</think>");
+      "<tool_call>", "</tool_call>", kQwenNoPreserveReasoningProjection,
+      kQwenNoPreserveReasoningProjection, "<think>", "</think>");
   const auto ignores_opt_out = fl::model_capabilities_internal::ResolveRenderedProbes(
       "qwen3_5_text", kQwenToolCallProjection, kQwenToolResultProjection,
-    kQwenReasoningProjection, kQwenReasoningProjection, "<think>", "</think>");
+      "<tool_call>", "</tool_call>", kQwenReasoningProjection,
+      kQwenReasoningProjection, "<think>", "</think>");
   const auto non_qwen_reasoning_template = fl::model_capabilities_internal::ResolveRenderedProbes(
       "qwen3", kQwenToolCallProjection, kQwenToolResultProjection,
-    kQwenReasoningProjection, kQwenNoPreserveReasoningProjection, "<think>", "</think>");
+      "<tool_call>", "</tool_call>", kQwenReasoningProjection,
+      kQwenNoPreserveReasoningProjection, "<think>", "</think>");
 
   EXPECT_FALSE(missing_default_reasoning.supports_reasoning_history);
   EXPECT_FALSE(missing_default_reasoning.supports_preserve_thinking);
@@ -154,8 +211,9 @@ TEST(ModelCapabilitiesTest, ReasoningPreservationProbeFailsClosed) {
   EXPECT_TRUE(ignores_opt_out.supports_reasoning_controls);
   EXPECT_TRUE(non_qwen_reasoning_template.supports_reasoning_history);
   EXPECT_TRUE(non_qwen_reasoning_template.supports_preserve_thinking);
+  EXPECT_TRUE(non_qwen_reasoning_template.supports_tool_calling);
   EXPECT_FALSE(non_qwen_reasoning_template.native_qwen_xml_tool_calls);
-  EXPECT_FALSE(non_qwen_reasoning_template.positional_tool_results);
+  EXPECT_TRUE(non_qwen_reasoning_template.positional_tool_results);
 }
 
 TEST(ModelCapabilitiesTest, QualifiedQwenPackageResolvesBothProductionCapabilities) {
@@ -184,6 +242,7 @@ TEST(ModelCapabilitiesTest, QualifiedQwenPackageResolvesBothProductionCapabiliti
   ASSERT_EQ(result.status, fl::ModelLoadManager::LoadStatus::kSuccess);
   ASSERT_NE(result.model, nullptr);
   EXPECT_EQ(result.model->ModelType(), "qwen3_5_text");
+  EXPECT_TRUE(result.model->SupportsToolCalling());
   EXPECT_TRUE(result.model->HasNativeQwenXmlToolCalls());
   EXPECT_TRUE(result.model->HasPositionalToolResults());
   EXPECT_TRUE(result.model->SupportsReasoningHistory());
