@@ -102,6 +102,62 @@ fn shared_client_process() {
 }
 
 #[tokio::test]
+#[ignore = "manual CUDA provider shutdown reproduction; requires a matching runtime"]
+async fn cuda_host_shutdown_without_inference() {
+    let config: SharedServiceConfig =
+        serde_json::from_str(&std::env::var("FOUNDRY_SHARED_TEST_CONFIG").unwrap()).unwrap();
+    let service = SharedService::new(config.clone()).unwrap();
+    let cleanup = HostCleanup {
+        directory: config.directory.clone(),
+    };
+    let model_path = std::env::var_os("FOUNDRY_SHARED_TEST_MODEL");
+    let model_id = format!("shared-cuda-probe-{}:1", std::process::id());
+    let _manager = if let Some(path) = &model_path {
+        let manager = FoundryLocalManager::create(
+            FoundryLocalConfig::new("cuda-shutdown-probe")
+                .library_path(config.library.to_string_lossy())
+                .app_data_dir(config.app_data_dir.to_string_lossy())
+                .model_cache_dir(config.model_cache_dir.to_string_lossy())
+                .service_endpoint("http://127.0.0.1:1"),
+        )
+        .unwrap();
+        let catalog = manager.local_catalog().unwrap();
+        let mut metadata = catalog.create_model_info().unwrap();
+        metadata.set_string_property("task", "coding").unwrap();
+        catalog
+            .register_model(&PathBuf::from(path).to_string_lossy(), &model_id, metadata)
+            .await
+            .unwrap();
+        Some(manager)
+    } else {
+        None
+    };
+    let host = service.ensure_started().await.unwrap();
+    assert!(host
+        .loaded_models(CatalogType::Local)
+        .await
+        .unwrap()
+        .is_empty());
+    let record: serde_json::Value =
+        serde_json::from_slice(&fs::read(config.directory.join("ready.json")).unwrap()).unwrap();
+    let pid = record["pid"].as_u64().unwrap().try_into().unwrap();
+    eprintln!("CUDA shutdown probe host PID: {pid}");
+    if let Some(path) = std::env::var_os("FOUNDRY_SHARED_TEST_CONTINUE_FILE") {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !Path::new(&path).exists() {
+            assert!(Instant::now() < deadline, "debugger handshake timed out");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+    if model_path.is_some() {
+        host.load(CatalogType::Local, &model_id).await.unwrap();
+        host.unload(CatalogType::Local, &model_id).await.unwrap();
+    }
+    drop(cleanup);
+    assert_process_exits(pid);
+}
+
+#[tokio::test]
 async fn shared_host_reuses_weights_across_processes() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cpp/build/shared-serving/tests");
     fs::create_dir_all(&root).unwrap();

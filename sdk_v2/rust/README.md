@@ -169,6 +169,12 @@ bundle for relocation testing. Without a live model override, the gate uses bund
 tiny weights. `FOUNDRY_SHARED_TEST_MODEL` opts into the Qwen CUDA coding fixture:
 valid tool call, simulated tool failure, coding continuation, shared loaded context,
 explicit unload, and actual process exit. Diagnostics stay under the C++ build directory.
+For a smaller CUDA shutdown reproduction, run the ignored
+`cuda_host_shutdown_without_inference` probe with `FOUNDRY_SHARED_TEST_CONFIG`
+containing serialized `SharedServiceConfig`. It prepares the provider without weights;
+adding `FOUNDRY_SHARED_TEST_MODEL` also loads and unloads that model without inference.
+For debugger attachment, `FOUNDRY_SHARED_TEST_CONTINUE_FILE` pauses after printing the
+host PID and before model loading, until that file exists (up to 120 seconds).
 
 **Qualification blocker:** the tested Windows CUDA provider can hang during process-exit
 cleanup after Foundry shutdown completes. The live gate deliberately fails when the host
