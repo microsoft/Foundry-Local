@@ -28,7 +28,7 @@ stages:
     - task: PipAuthenticate@1
       displayName: 'Authenticate Python packages'
       inputs:
-        artifactFeed: 'Lotus'
+        artifactFeeds: 'Lotus'
 
     - task: UsePythonVersion@0
       displayName: 'Use Python 3.12'
