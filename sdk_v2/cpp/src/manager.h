@@ -89,8 +89,8 @@ class Manager {
   /// Stop the embedded web service.
   void StopWebService();
 
-  /// Begin graceful shutdown. Sets the shutdown flag and signals subsystems to drain.
-  /// Idempotent and non-blocking — safe to call from any thread including web service handlers.
+  /// Perform graceful shutdown on an owner thread, stopping the service and draining subsystems.
+  /// Idempotent. HTTP handlers only request shutdown; they must not wait for their own worker to exit.
   /// Destroy() calls this internally, so direct SDK users don't need to call it explicitly.
   void Shutdown();
 
@@ -147,6 +147,7 @@ class Manager {
   std::unique_ptr<ModelLoadManager> model_load_manager_;
   std::unique_ptr<SessionManager> session_manager_;
   std::atomic<bool> shutdown_requested_{false};
+  std::atomic<bool> shutdown_started_{false};
   std::atomic<bool> web_service_running_{false};
   std::vector<std::string> bound_urls_;
 
@@ -155,6 +156,7 @@ class Manager {
 #endif
 
  private:
+  void RequestShutdown();
   Model CreateModel(ModelInfo info, std::string local_path);
   Model CreateLocalModel(ModelInfo info, std::string local_path);
 

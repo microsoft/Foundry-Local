@@ -271,6 +271,12 @@ impl FoundryLocalManager {
         self.native.shutdown()
     }
 
+    /// Whether native shutdown was requested, including through the web service.
+    /// A serving host should observe this and perform teardown on its own thread.
+    pub fn is_shutdown_requested(&self) -> bool {
+        self.native.is_shutdown_requested()
+    }
+
     /// URLs that the local web service is listening on.
     ///
     /// Empty until [`Self::start_web_service`] has been called.
