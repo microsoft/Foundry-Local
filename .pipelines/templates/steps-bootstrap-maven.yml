@@ -25,6 +25,8 @@ steps:
     $mavenCommand = if ($IsWindows) { 'bin/mvn.cmd' } else { 'bin/mvn' }
     $maven = Join-Path $mavenHome $mavenCommand
 
+    ls $tools
+
     if (-not (Test-Path -LiteralPath $maven -PathType Leaf)) {
       throw "Unable to find Maven zip"
     }
