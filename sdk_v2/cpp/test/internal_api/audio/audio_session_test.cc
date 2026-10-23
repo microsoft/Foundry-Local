@@ -9,7 +9,7 @@
 #include "ep_detection/ep_detector.h"
 #include "exception.h"
 #include "inferencing/generative/audio/pcm_utils.h"
-#include "inferencing/generative/audio/onnx_audio_generator.h"
+#include "inferencing/generative/genai_model_instance.h"
 #include "inferencing/model_load_manager.h"
 #include "items/audio_item.h"
 #include "items/bytes_item.h"

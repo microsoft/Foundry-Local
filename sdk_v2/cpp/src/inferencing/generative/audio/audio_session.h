@@ -20,7 +20,6 @@ struct OgaTokenizerStream;
 namespace fl {
 
 class GenAIModelInstance;
-class AudioGenerator;
 struct AudioTranscriptionRequest;
 struct AudioItem;
 struct ItemQueue;
@@ -63,12 +62,6 @@ class AudioSession : public Session {
                                      Response& response);
 
   bool IsNemotronSpeechModel() const;
-
-  void ProcessAudioGenerator(AudioGenerator& generator, const Request& request, Response& response);
-
-  /// Parakeet needs globally normalized features for the complete utterance, not independent PCM chunks.
-  void ProcessBufferedParakeetAudio(const AudioItem& format_item, ItemQueue& queue,
-                                    const Request& request, Response& response);
 
   void ProcessNemotronFileTranscription(const AudioTranscriptionRequest& req,
                                         const Request& original_request,

@@ -265,11 +265,7 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
       .source = "file",
       .language = AudioInternal::SanitizeLanguageForTelemetry(language),
   };
-  ProcessAudioGenerator(*generator, request, response);
-}
-
-void AudioSession::ProcessAudioGenerator(AudioGenerator& generator, const Request& request, Response& response) {
-  int prompt_tokens = generator.PromptTokenCount();
+  int prompt_tokens = generator->PromptTokenCount();
 
   // Token-by-token generation with optional streaming.
   // Check request cancellation each iteration — a streaming callback returning
@@ -280,9 +276,9 @@ void AudioSession::ProcessAudioGenerator(AudioGenerator& generator, const Reques
   std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
   segments.reserve(kInitialTokenCapacity);
 
-  while (!generator.IsDone() && !request.IsCancellationRequested()) {
-    generator.GenerateNextToken();
-    std::string token = generator.Decode();
+  while (!generator->IsDone() && !request.IsCancellationRequested()) {
+    generator->GenerateNextToken();
+    std::string token = generator->Decode();
 
     if (!token.empty()) {
       segments.push_back(MakeNoneSegment(token));
@@ -295,11 +291,11 @@ void AudioSession::ProcessAudioGenerator(AudioGenerator& generator, const Reques
     }
 
     if (request.IsCancellationRequested()) {
-      generator.Cancel();
+      generator->Cancel();
     }
   }
 
-  int total_tokens = generator.TokenCount();
+  int total_tokens = generator->TokenCount();
   int completion_tokens = total_tokens - prompt_tokens;
 
   std::string text = JoinTokens(token_texts);
@@ -347,16 +343,20 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
                                  format_item.channels));
   }
 
-  if (Model().ModelType() == "parakeet_tdt") {
-    ProcessBufferedParakeetAudio(format_item, queue, request, response);
-    return;
-  }
+  const bool is_parakeet = Model().ModelType() == "parakeet_tdt";
+  logger_.Log(LogLevel::Debug, is_parakeet ? "Buffering Parakeet audio until the utterance is complete"
+                                           : "Starting streaming audio transcription");
 
-  logger_.Log(LogLevel::Debug, "Starting streaming audio transcription");
-
-  // 2. Create ORT GenAI streaming pipeline
+  // 2. Create the shared decode pipeline. Parakeet needs one complete, globally normalized utterance.
   auto& oga_model = Model().GetOgaModel();
-  auto processor = OgaStreamingProcessor::Create(oga_model);
+  std::vector<uint8_t> buffered_pcm;
+  std::vector<uint8_t> wav;
+  std::unique_ptr<OgaAudios> audios;
+  std::unique_ptr<OgaNamedTensors> flush_tensors;
+  std::unique_ptr<OgaStreamingProcessor> processor;
+  if (!is_parakeet) {
+    processor = OgaStreamingProcessor::Create(oga_model);
+  }
   auto gen_params = OgaGeneratorParams::Create(oga_model);
 
   // Apply temperature from session/request options. Merge so per-request keys overlay
@@ -387,13 +387,31 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
   int completion_tokens = 0;
   int64_t audio_samples = 0;
 
+  const auto process_audio = [&](const void* data, size_t size) {
+    if (!data && size != 0) {
+      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "PCM audio data is null");
+    }
+    if (is_parakeet) {
+      if (size == 0) {
+        return;
+      }
+      if (size > AudioInternal::kMaxBufferedPcmBytes - buffered_pcm.size()) {
+        FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+                         "Buffered PCM audio exceeds the 64 MiB utterance limit.");
+      }
+      const auto* bytes = static_cast<const uint8_t*>(data);
+      buffered_pcm.insert(buffered_pcm.end(), bytes, bytes + size);
+    } else {
+      auto samples = ConvertS16LEToFloat(static_cast<const uint8_t*>(data), size);
+      audio_samples += static_cast<int64_t>(samples.size());
+      ProcessChunk(*processor, *generator, *tokenizer_stream, samples,
+                   token_texts, segments, streaming_callback, request, completion_tokens);
+    }
+  };
+
   // 3. If the AudioItem itself has initial data, process it first
-  if (format_item.data && format_item.data_size > 0) {
-    auto float_samples = ConvertS16LEToFloat(
-        static_cast<const uint8_t*>(format_item.data), format_item.data_size);
-    audio_samples += static_cast<int64_t>(float_samples.size());
-    ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
+  if (format_item.data_size > 0) {
+    process_audio(format_item.data, format_item.data_size);
   }
 
   // 4. Read from queue until finished or cancelled
@@ -414,17 +432,24 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
     }
 
     auto& bytes = static_cast<BytesItem&>(*item);
-    auto float_samples = ConvertS16LEToFloat(
-        static_cast<const uint8_t*>(bytes.data), bytes.data_size);
-    audio_samples += static_cast<int64_t>(float_samples.size());
+    process_audio(bytes.data, bytes.data_size);
+  }
 
-    ProcessChunk(*processor, *generator, *tokenizer_stream,
-                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
+  if (is_parakeet) {
+    audio_samples = static_cast<int64_t>(buffered_pcm.size() / sizeof(int16_t));
   }
 
   // 5. Flush remaining buffered audio
   if (!request.IsCancellationRequested()) {
-    auto flush_tensors = processor->Flush();
+    if (processor) {
+      flush_tensors = processor->Flush();
+    } else if (!buffered_pcm.empty()) {
+      wav = AudioInternal::EncodePcm16Wav(buffered_pcm);
+      const void* data = wav.data();
+      const size_t size = wav.size();
+      audios = OgaAudios::Load(&data, &size, 1);
+      flush_tensors = Model().GetPreprocessor().ProcessAudios({""}, audios.get());
+    }
 
     if (flush_tensors) {
       generator->SetInputs(*flush_tensors);
@@ -458,67 +483,6 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
 
   logger_.Log(LogLevel::Debug, fmt::format("Streaming audio transcription complete, text length: {}",
                                            response.items.empty() ? 0 : full_text_size));
-}
-
-void AudioSession::ProcessBufferedParakeetAudio(const AudioItem& format_item, ItemQueue& queue,
-                                                const Request& request, Response& response) {
-  logger_.Log(LogLevel::Debug, "Buffering Parakeet audio until the utterance is complete");
-  std::vector<uint8_t> pcm;
-  const auto append = [&](const void* data, size_t size) {
-    if (size == 0) {
-      return;
-    }
-    if (!data) {
-      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "Buffered PCM audio data is null");
-    }
-    if (size > AudioInternal::kMaxBufferedPcmBytes - pcm.size()) {
-      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-                       "Buffered PCM audio exceeds the 64 MiB utterance limit.");
-    }
-    const auto* bytes = static_cast<const uint8_t*>(data);
-    pcm.insert(pcm.end(), bytes, bytes + size);
-  };
-
-  if (!request.IsCancellationRequested()) {
-    append(format_item.data, format_item.data_size);
-  }
-  while (!request.IsCancellationRequested()) {
-    auto item = queue.WaitAndPop(std::chrono::milliseconds(100));
-    if (!item) {
-      if (queue.IsFinished()) {
-        break;
-      }
-      continue;
-    }
-    if (item->type != FOUNDRY_LOCAL_ITEM_BYTES) {
-      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-                       fmt::format("Streaming audio queue expects BYTES items, got item type {}",
-                                   static_cast<int>(item->type)));
-    }
-    const auto& bytes = static_cast<const BytesItem&>(*item);
-    append(bytes.data, bytes.data_size);
-  }
-
-  const auto effective_kvp = MergedOptions(request.options);
-  const auto language = effective_kvp.find("language");
-  const std::string language_hint = language == effective_kvp.end() ? "" : language->second;
-  audio_telemetry_details_ = AudioTelemetryDetails{
-      .source = "streaming_pcm",
-      .language = AudioInternal::SanitizeLanguageForTelemetry(language_hint),
-      .duration_ms = AudioInternal::AudioDurationMsFromSamples(static_cast<int64_t>(pcm.size() / sizeof(int16_t))),
-      .sample_rate = kStreamingSampleRate,
-      .channels = kStreamingChannels,
-  };
-
-  if (!request.IsCancellationRequested() && !pcm.empty()) {
-    auto wav = AudioInternal::EncodePcm16Wav(pcm);
-    const auto options = SearchOptions::FromParameters(effective_kvp);
-    auto generator = OnnxAudioGenerator::CreateFromBuffer(wav, options.temperature, Model(), language_hint);
-    ProcessAudioGenerator(*generator, request, response);
-  } else {
-    response.items.push_back(BuildSpeechResult("", {}));
-    response.finish_reason = request.IsCancellationRequested() ? FOUNDRY_LOCAL_FINISH_NONE : FOUNDRY_LOCAL_FINISH_STOP;
-  }
 }
 
 void AudioSession::ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& generator,
