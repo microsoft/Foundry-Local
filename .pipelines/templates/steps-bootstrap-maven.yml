@@ -20,7 +20,7 @@ steps:
 
     $version = '3.9.9'
     $tools = Join-Path '$(Agent.TempDirectory)' 'foundry-java-tools'
-    $archive = Join-Path $tools "apache-maven-$version.zip"
+    $archive = Join-Path $tools "apache-maven-$version-bin.zip"
     $mavenHome = Join-Path $tools "apache-maven-$version"
     $mavenCommand = if ($IsWindows) { 'bin/mvn.cmd' } else { 'bin/mvn' }
     $maven = Join-Path $mavenHome $mavenCommand
@@ -28,10 +28,6 @@ steps:
     if (-not (Test-Path -LiteralPath $maven -PathType Leaf)) {
       throw "Unable to find Maven zip"
     }
-
-    $uri = "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$version/" +
-      "apache-maven-$version-bin.zip"
-    Invoke-WebRequest $uri -OutFile $archive
 
     $expected = '8beac8d11ef208f1e2a8df0682b9448a9a363d2ad13ca74af43705549e72e74' +
       'c9378823bf689287801cbbfc2f6ea9596201d19ccacfdfb682ee8a2ff4c4418ba'
