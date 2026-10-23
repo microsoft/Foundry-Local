@@ -144,12 +144,33 @@ std::unique_ptr<OnnxAudioGenerator> OnnxAudioGenerator::Create(const std::string
   std::vector<const char*> paths = {audio_file_path.c_str()};
   auto audios = OgaAudios::Load(paths);
 
-  // 2. Build the Whisper prompt with optional language tag.
-  //    Use the multi-prompt overload (vector) with size 1 — the single-prompt overload
-  //    sets Payload::prompt but WhisperProcessor::Process reads Payload::prompts,
-  //    which would be empty and cause a divide-by-zero in EncodeBatch.
-  //    https://github.com/microsoft/onnxruntime-genai/issues/2067
-  std::string prompt = BuildWhisperPrompt(language);
+  return CreateFromAudios(std::move(audios), temperature, model, language);
+}
+
+std::unique_ptr<OnnxAudioGenerator> OnnxAudioGenerator::CreateFromBuffer(std::span<const uint8_t> audio_data,
+                                                                         std::optional<float> temperature,
+                                                                         GenAIModelInstance& model,
+                                                                         const std::string& language) {
+  if (audio_data.empty()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "audio_data must not be empty");
+  }
+  if (!model.GetPreprocessor().HasMultiModalProcessor()) {
+    FL_THROW(FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "model does not support audio processing");
+  }
+
+  const void* data = audio_data.data();
+  const size_t size = audio_data.size();
+  auto audios = OgaAudios::Load(&data, &size, 1);
+  return CreateFromAudios(std::move(audios), temperature, model, language);
+}
+
+std::unique_ptr<OnnxAudioGenerator> OnnxAudioGenerator::CreateFromAudios(std::unique_ptr<OgaAudios> audios,
+                                                                         std::optional<float> temperature,
+                                                                         GenAIModelInstance& model,
+                                                                         const std::string& language) {
+  // Whisper reads Payload::prompts, so retain the batch overload even for a single utterance.
+  // Parakeet consumes only audio features and must not receive a Whisper task prompt.
+  const std::string prompt = model.ModelType() == "parakeet_tdt" ? "" : BuildWhisperPrompt(language);
   std::vector<const char*> prompts = {prompt.c_str()};
 
   // 3. Process audio through the multimodal processor to get model inputs

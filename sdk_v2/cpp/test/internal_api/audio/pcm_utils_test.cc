@@ -5,9 +5,11 @@
 //
 
 #include "inferencing/generative/audio/pcm_utils.h"
+#include "exception.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -73,4 +75,32 @@ TEST(PcmUtilsTest, MultipleSamples) {
   ASSERT_EQ(result.size(), 2u);
   EXPECT_FLOAT_EQ(result[0], 0.0f);
   EXPECT_FLOAT_EQ(result[1], -1.0f / 32768.0f);
+}
+
+TEST(PcmUtilsTest, EncodePcm16WavPreservesSamplesAndHeader) {
+  const std::vector<uint8_t> pcm{0x00, 0x00, 0xff, 0x7f, 0x00, 0x80};
+  const auto wav = AudioInternal::EncodePcm16Wav(pcm);
+  const std::vector<uint8_t> header{
+      'R', 'I', 'F', 'F', 42, 0, 0, 0, 'W', 'A', 'V', 'E',
+      'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+      0x80, 0x3e, 0, 0, 0x00, 0x7d, 0, 0, 2, 0, 16, 0,
+      'd', 'a', 't', 'a', 6, 0, 0, 0};
+  ASSERT_EQ(wav.size(), header.size() + pcm.size());
+  EXPECT_TRUE(std::equal(header.begin(), header.end(), wav.begin()));
+  EXPECT_TRUE(std::equal(pcm.begin(), pcm.end(), wav.begin() + header.size()));
+}
+
+TEST(PcmUtilsTest, EncodePcm16WavRejectsEmptyAndIncompleteSamples) {
+  EXPECT_THROW(AudioInternal::EncodePcm16Wav({}), fl::Exception);
+  const std::vector<uint8_t> odd_pcm{0x01, 0x02, 0x03};
+  EXPECT_THROW(AudioInternal::EncodePcm16Wav(odd_pcm), fl::Exception);
+}
+
+TEST(PcmUtilsTest, EncodePcm16WavEnforcesUtteranceLimit) {
+  std::vector<uint8_t> pcm(AudioInternal::kMaxBufferedPcmBytes, 0);
+  auto wav = AudioInternal::EncodePcm16Wav(pcm);
+  EXPECT_EQ(wav.size(), 44 + AudioInternal::kMaxBufferedPcmBytes);
+  EXPECT_EQ(wav[43], 4);
+  pcm.resize(pcm.size() + 2);
+  EXPECT_THROW(AudioInternal::EncodePcm16Wav(pcm), fl::Exception);
 }

@@ -6,8 +6,10 @@
 #include "inferencing/generative/genai_model_instance.h"
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 
 // Forward declarations — avoid pulling ort_genai.h into the header
@@ -26,7 +28,7 @@ bool IsWhisperLanguageSupported(const std::string& language);
 }  // namespace AudioInternal
 
 /// ORT GenAI implementation of the AudioGenerator interface.
-/// Creates an OgaGenerator from a loaded Whisper model, processes audio input
+/// Creates an OgaGenerator from a loaded Whisper or Parakeet model, processes audio input
 /// through the multimodal processor, then drives token-by-token transcription
 /// through the pull-based IsDone/GenerateNextToken/Decode loop.
 ///
@@ -56,7 +58,19 @@ class OnnxAudioGenerator : public AudioGenerator {
                                                     GenAIModelInstance& model,
                                                     const std::string& language = "");
 
+  /// Create from an encoded audio buffer (for example, a complete WAV utterance).
+  /// The caller must keep the buffer alive until the generator is destroyed.
+  static std::unique_ptr<OnnxAudioGenerator> CreateFromBuffer(std::span<const uint8_t> audio_data,
+                                                              std::optional<float> temperature,
+                                                              GenAIModelInstance& model,
+                                                              const std::string& language = "");
+
  private:
+  static std::unique_ptr<OnnxAudioGenerator> CreateFromAudios(std::unique_ptr<OgaAudios> audios,
+                                                              std::optional<float> temperature,
+                                                              GenAIModelInstance& model,
+                                                              const std::string& language);
+
   OnnxAudioGenerator(std::unique_ptr<OgaAudios> audios,
                      std::unique_ptr<OgaNamedTensors> inputs,
                      std::unique_ptr<OgaGeneratorParams> gen_params,

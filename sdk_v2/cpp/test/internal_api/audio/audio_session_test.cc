@@ -9,6 +9,7 @@
 #include "ep_detection/ep_detector.h"
 #include "exception.h"
 #include "inferencing/generative/audio/pcm_utils.h"
+#include "inferencing/generative/audio/onnx_audio_generator.h"
 #include "inferencing/model_load_manager.h"
 #include "items/audio_item.h"
 #include "items/bytes_item.h"
@@ -24,14 +25,18 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstring>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <limits>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -406,6 +411,59 @@ class AudioSessionNemotronInferenceTest : public ::testing::Test {
       ModelInfo{}, "", svc_.download_manager, svc_.model_load_manager);
   TelemetryLogger null_telemetry_{"test", fl::test::NullLog()};
   fl::test::NullSessionManager null_session_manager_;
+};
+
+class AudioSessionParakeetInferenceTest : public AudioSessionInferenceTest {
+ protected:
+  static void SetUpTestSuite() {
+    logger_ = std::make_unique<StderrLogger>();
+    ep_detector_ = std::make_unique<test::CpuOnlyEpDetector>();
+    load_manager_ = std::make_unique<ModelLoadManager>(*ep_detector_, *logger_);
+
+    fs::path cache_dir;
+    try {
+      cache_dir = fl::test::GetTestModelCacheDir();
+    } catch (const std::runtime_error& e) {
+      GTEST_SKIP() << e.what();
+    }
+
+    for (const auto& entry : fs::directory_iterator(cache_dir)) {
+      const auto alias = entry.path().filename().string();
+      if (!entry.is_directory() || alias.find("parakeet") == std::string::npos ||
+          alias.find("cpu") == std::string::npos) {
+        continue;
+      }
+      auto model_path = fl::test::GetTestModelPath(alias);
+      auto config = GenAIConfig::LoadFromFile((model_path / "genai_config.json").string());
+      if (!config.model || config.model->type != "parakeet_tdt") {
+        continue;
+      }
+      auto result = load_manager_->LoadModel(model_path.string(), alias);
+      ASSERT_EQ(result.status, ModelLoadManager::LoadStatus::kSuccess) << model_path;
+      model_ = result.model;
+      alias_ = alias;
+      return;
+    }
+    GTEST_SKIP() << "No CPU Parakeet TDT model in the test cache";
+  }
+
+  static void TearDownTestSuite() {
+    if (load_manager_ && model_) {
+      load_manager_->UnloadModel(alias_);
+    }
+    model_ = nullptr;
+    load_manager_.reset();
+    ep_detector_.reset();
+    alias_.clear();
+  }
+
+  void SetUp() override {
+    if (!model_) {
+      GTEST_SKIP() << "Parakeet TDT model not loaded";
+    }
+  }
+
+  static inline std::string alias_;
 };
 
 // ===========================================================================
@@ -961,6 +1019,171 @@ TEST_F(AudioSessionInferenceTest, TranscribeViaOpenAIJson) {
 
   EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
   EXPECT_GT(response.usage.total_tokens, 0) << "Expected non-zero total_tokens";
+}
+
+TEST_F(AudioSessionParakeetInferenceTest, BufferedPcmMatchesFileAndJsonAfterQueueFinishes) {
+  EXPECT_TRUE(GetModel().GetPreprocessor().HasMultiModalProcessor());
+  std::ifstream pcm_file(fl::test::GetTestDataPath("Recording.pcm"), std::ios::binary);
+  ASSERT_TRUE(pcm_file.is_open());
+  const std::vector<uint8_t> pcm((std::istreambuf_iterator<char>(pcm_file)), std::istreambuf_iterator<char>());
+  ASSERT_GT(pcm.size(), 101u);
+  auto wav = AudioInternal::EncodePcm16Wav(pcm);
+  auto temp = fl::test::TempPath::CreateTempFile("parakeet_utterance_");
+  WriteRawFile(temp.path(), wav);
+
+  AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  Request file_request;
+  file_request.AddOwnedItem(std::make_unique<AudioItem>(temp.path().string()));
+  Response file_response;
+  ASSERT_NO_THROW(session.ProcessRequest(file_request, file_response));
+  ASSERT_EQ(file_response.items.size(), 1u);
+  ASSERT_EQ(file_response.items[0]->type, FOUNDRY_LOCAL_ITEM_SPEECH_RESULT);
+  const auto expected = static_cast<const SpeechResultItem&>(*file_response.items[0]).text;
+  ExpectTranscriptionContent(expected);
+  EXPECT_EQ(file_response.usage.prompt_tokens, 0);
+  EXPECT_GT(file_response.usage.completion_tokens, 0);
+
+  Request json_request;
+  json_request.AddOwnedItem(std::make_unique<TextItem>(
+      nlohmann::json{{"model", alias_}, {"filename", temp.path().string()}}.dump(),
+      FOUNDRY_LOCAL_TEXT_ITEM_TYPE_OPENAI_JSON));
+  Response json_response;
+  ASSERT_NO_THROW(session.ProcessRequest(json_request, json_response));
+  ASSERT_EQ(json_response.items.size(), 1u);
+  ASSERT_EQ(json_response.items[0]->type, FOUNDRY_LOCAL_ITEM_TEXT);
+  const auto json = nlohmann::json::parse(static_cast<const TextItem&>(*json_response.items[0]).text);
+  EXPECT_EQ(json.at("text").get<std::string>(), expected);
+  EXPECT_EQ(json_response.usage.total_tokens, file_response.usage.total_tokens);
+
+  AudioUsageTelemetry telemetry;
+  AudioSession pcm_session(GetCatalogModel(), GetModel(), *logger_, telemetry);
+  std::atomic<size_t> callback_count{0};
+  std::string streamed_text;
+  pcm_session.SetStreamingCallback([&](flStreamingCallbackData event, void*) {
+    auto* output = reinterpret_cast<ItemQueue*>(event.item_queue);
+    while (auto item = output->TryPop()) {
+      if (item->type == FOUNDRY_LOCAL_ITEM_SPEECH_SEGMENT) {
+        streamed_text += static_cast<const SpeechSegmentItem&>(*item).text;
+        ++callback_count;
+      }
+    }
+    return 0;
+  });
+
+  AudioItem audio(pcm.data(), 101, "pcm");
+  ItemQueue queue;
+  for (size_t offset = 101; offset < pcm.size(); offset += 3201) {
+    queue.Push(std::make_unique<BytesItem>(FOUNDRY_LOCAL_ITEM_BYTES, pcm.data() + offset,
+                                           std::min<size_t>(3201, pcm.size() - offset)));
+  }
+  Request pcm_request;
+  pcm_request.AddBorrowedItem(&audio);
+  pcm_request.AddBorrowedItem(&queue);
+  Response pcm_response;
+  auto future = std::async(std::launch::async, [&] { pcm_session.ProcessRequest(pcm_request, pcm_response); });
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (queue.Size() != 0 && future.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(queue.Size(), 0u);
+  EXPECT_EQ(future.wait_for(std::chrono::milliseconds(100)), std::future_status::timeout);
+  EXPECT_EQ(callback_count.load(), 0u);
+  queue.MarkFinished();
+  ASSERT_NO_THROW(future.get());
+  ASSERT_EQ(pcm_response.items.size(), 1u);
+  ASSERT_EQ(pcm_response.items[0]->type, FOUNDRY_LOCAL_ITEM_SPEECH_RESULT);
+  EXPECT_EQ(static_cast<const SpeechResultItem&>(*pcm_response.items[0]).text, expected);
+  EXPECT_EQ(streamed_text, expected);
+  EXPECT_GT(callback_count.load(), 0u);
+  EXPECT_EQ(pcm_response.usage.total_tokens, file_response.usage.total_tokens);
+  EXPECT_EQ(pcm_response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
+  telemetry.ExpectUsage(pcm_response, "streaming_pcm", static_cast<int64_t>(pcm.size() / 32));
+
+  queue.Push(std::make_unique<BytesItem>(FOUNDRY_LOCAL_ITEM_BYTES, pcm.data() + 101, pcm.size() - 101));
+  Response repeated_response;
+  ASSERT_NO_THROW(pcm_session.ProcessRequest(pcm_request, repeated_response));
+  ASSERT_EQ(repeated_response.items.size(), 1u);
+  ASSERT_EQ(repeated_response.items[0]->type, FOUNDRY_LOCAL_ITEM_SPEECH_RESULT);
+  EXPECT_EQ(static_cast<const SpeechResultItem&>(*repeated_response.items[0]).text, expected);
+  EXPECT_EQ(streamed_text, expected + expected);
+  EXPECT_EQ(repeated_response.usage.total_tokens, file_response.usage.total_tokens);
+}
+
+TEST_F(AudioSessionParakeetInferenceTest, EmptyQueueReturnsEmptyTranscript) {
+  AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  AudioItem audio(nullptr, 0, "pcm");
+  ItemQueue queue;
+  queue.MarkFinished();
+  Request request;
+  request.AddBorrowedItem(&audio);
+  request.AddBorrowedItem(&queue);
+  Response response;
+  ASSERT_NO_THROW(session.ProcessRequest(request, response));
+  ASSERT_EQ(response.items.size(), 1u);
+  ASSERT_EQ(response.items[0]->type, FOUNDRY_LOCAL_ITEM_SPEECH_RESULT);
+  EXPECT_TRUE(static_cast<const SpeechResultItem&>(*response.items[0]).text.empty());
+  EXPECT_EQ(response.usage.total_tokens, 0);
+  EXPECT_EQ(response.finish_reason, FOUNDRY_LOCAL_FINISH_STOP);
+}
+
+TEST_F(AudioSessionParakeetInferenceTest, InvalidBufferedInputIsRejected) {
+  AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  const uint8_t byte = 1;
+  AudioItem audio(&byte, 1, "pcm");
+  ItemQueue queue;
+  queue.MarkFinished();
+  Request request;
+  request.AddBorrowedItem(&audio);
+  request.AddBorrowedItem(&queue);
+  Response response;
+  const auto expect_invalid = [&](const char* message) {
+    try {
+      session.ProcessRequest(request, response);
+      FAIL() << "Expected invalid buffered PCM";
+    } catch (const fl::Exception& e) {
+      EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_INVALID_USAGE);
+      EXPECT_NE(std::string(e.what()).find(message), std::string::npos) << e.what();
+    }
+  };
+  expect_invalid("complete 16-bit samples");
+  audio.data = nullptr;
+  expect_invalid("data is null");
+  audio.data = &byte;
+  audio.data_size = AudioInternal::kMaxBufferedPcmBytes + 2;
+  expect_invalid("64 MiB utterance limit");
+  audio.data_size = 0;
+  queue.Push(std::make_unique<TextItem>("not audio"));
+  expect_invalid("BYTES items");
+}
+
+TEST_F(AudioSessionParakeetInferenceTest, CancellationDiscardsIncompleteUtterance) {
+  AudioSession session(GetCatalogModel(), GetModel(), *logger_, null_telemetry_);
+  const std::vector<uint8_t> pcm(3200, 0);
+  AudioItem audio(nullptr, 0, "pcm");
+  ItemQueue queue;
+  queue.Push(std::make_unique<BytesItem>(FOUNDRY_LOCAL_ITEM_BYTES, pcm.data(), pcm.size()));
+  Request request;
+  request.AddBorrowedItem(&audio);
+  request.AddBorrowedItem(&queue);
+  Response response;
+  auto future = std::async(std::launch::async, [&] { session.ProcessRequest(request, response); });
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (queue.Size() != 0 && future.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(queue.Size(), 0u);
+  EXPECT_EQ(future.wait_for(std::chrono::milliseconds(0)), std::future_status::timeout);
+  request.Cancel();
+  queue.MarkFinished();
+  try {
+    future.get();
+    FAIL() << "Expected cancellation";
+  } catch (const fl::Exception& e) {
+    EXPECT_EQ(e.code(), FOUNDRY_LOCAL_ERROR_OPERATION_CANCELLED);
+  }
+  EXPECT_EQ(response.usage.total_tokens, 0);
 }
 
 TEST_F(AudioSessionNemotronInferenceTest, OpenAIJsonNemotronFileTranscriptionMultiChunkNotTruncated) {

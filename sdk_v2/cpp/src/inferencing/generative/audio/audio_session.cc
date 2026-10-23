@@ -265,7 +265,11 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
       .source = "file",
       .language = AudioInternal::SanitizeLanguageForTelemetry(language),
   };
-  int prompt_tokens = generator->PromptTokenCount();
+  ProcessAudioGenerator(*generator, request, response);
+}
+
+void AudioSession::ProcessAudioGenerator(AudioGenerator& generator, const Request& request, Response& response) {
+  int prompt_tokens = generator.PromptTokenCount();
 
   // Token-by-token generation with optional streaming.
   // Check request cancellation each iteration — a streaming callback returning
@@ -276,9 +280,9 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
   std::vector<std::unique_ptr<SpeechSegmentItem>> segments;
   segments.reserve(kInitialTokenCapacity);
 
-  while (!generator->IsDone() && !request.IsCancellationRequested()) {
-    generator->GenerateNextToken();
-    std::string token = generator->Decode();
+  while (!generator.IsDone() && !request.IsCancellationRequested()) {
+    generator.GenerateNextToken();
+    std::string token = generator.Decode();
 
     if (!token.empty()) {
       segments.push_back(MakeNoneSegment(token));
@@ -291,11 +295,11 @@ void AudioSession::ProcessRequestImpl(const Request& request, Response& response
     }
 
     if (request.IsCancellationRequested()) {
-      generator->Cancel();
+      generator.Cancel();
     }
   }
 
-  int total_tokens = generator->TokenCount();
+  int total_tokens = generator.TokenCount();
   int completion_tokens = total_tokens - prompt_tokens;
 
   std::string text = JoinTokens(token_texts);
@@ -341,6 +345,11 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
     FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
                      fmt::format("Streaming audio requires mono (1 channel), got {}",
                                  format_item.channels));
+  }
+
+  if (Model().ModelType() == "parakeet_tdt") {
+    ProcessBufferedParakeetAudio(format_item, queue, request, response);
+    return;
   }
 
   logger_.Log(LogLevel::Debug, "Starting streaming audio transcription");
@@ -449,6 +458,67 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
 
   logger_.Log(LogLevel::Debug, fmt::format("Streaming audio transcription complete, text length: {}",
                                            response.items.empty() ? 0 : full_text_size));
+}
+
+void AudioSession::ProcessBufferedParakeetAudio(const AudioItem& format_item, ItemQueue& queue,
+                                                const Request& request, Response& response) {
+  logger_.Log(LogLevel::Debug, "Buffering Parakeet audio until the utterance is complete");
+  std::vector<uint8_t> pcm;
+  const auto append = [&](const void* data, size_t size) {
+    if (size == 0) {
+      return;
+    }
+    if (!data) {
+      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "Buffered PCM audio data is null");
+    }
+    if (size > AudioInternal::kMaxBufferedPcmBytes - pcm.size()) {
+      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+                       "Buffered PCM audio exceeds the 64 MiB utterance limit.");
+    }
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    pcm.insert(pcm.end(), bytes, bytes + size);
+  };
+
+  if (!request.IsCancellationRequested()) {
+    append(format_item.data, format_item.data_size);
+  }
+  while (!request.IsCancellationRequested()) {
+    auto item = queue.WaitAndPop(std::chrono::milliseconds(100));
+    if (!item) {
+      if (queue.IsFinished()) {
+        break;
+      }
+      continue;
+    }
+    if (item->type != FOUNDRY_LOCAL_ITEM_BYTES) {
+      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
+                       fmt::format("Streaming audio queue expects BYTES items, got item type {}",
+                                   static_cast<int>(item->type)));
+    }
+    const auto& bytes = static_cast<const BytesItem&>(*item);
+    append(bytes.data, bytes.data_size);
+  }
+
+  const auto effective_kvp = MergedOptions(request.options);
+  const auto language = effective_kvp.find("language");
+  const std::string language_hint = language == effective_kvp.end() ? "" : language->second;
+  audio_telemetry_details_ = AudioTelemetryDetails{
+      .source = "streaming_pcm",
+      .language = AudioInternal::SanitizeLanguageForTelemetry(language_hint),
+      .duration_ms = AudioInternal::AudioDurationMsFromSamples(static_cast<int64_t>(pcm.size() / sizeof(int16_t))),
+      .sample_rate = kStreamingSampleRate,
+      .channels = kStreamingChannels,
+  };
+
+  if (!request.IsCancellationRequested() && !pcm.empty()) {
+    auto wav = AudioInternal::EncodePcm16Wav(pcm);
+    const auto options = SearchOptions::FromParameters(effective_kvp);
+    auto generator = OnnxAudioGenerator::CreateFromBuffer(wav, options.temperature, Model(), language_hint);
+    ProcessAudioGenerator(*generator, request, response);
+  } else {
+    response.items.push_back(BuildSpeechResult("", {}));
+    response.finish_reason = request.IsCancellationRequested() ? FOUNDRY_LOCAL_FINISH_NONE : FOUNDRY_LOCAL_FINISH_STOP;
+  }
 }
 
 void AudioSession::ProcessChunk(OgaStreamingProcessor& processor, OgaGenerator& generator,
