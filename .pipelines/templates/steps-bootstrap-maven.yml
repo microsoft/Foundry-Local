@@ -10,7 +10,7 @@ steps:
   inputs:
     command: download
     feedsToUse: internal
-    vstsFeed: 'aiinfra/Lotus'
+    vstsFeed: 'Lotus'
     vstsFeedPackage: 'maven-zip'
     vstsPackageVersion: '3.9.9'
     downloadDirectory: '$(Agent.TempDirectory)/foundry-java-tools'
