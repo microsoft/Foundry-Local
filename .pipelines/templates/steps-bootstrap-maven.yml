@@ -38,10 +38,12 @@ steps:
         throw "Error extracting maven.zip. Exit code: $LASTEXITCODE"
       }
       Write-Host "Maven extracted successfully."
+      $mavenHome = "$(Agent.TempDirectory)\apache-maven-3.9.11"
 
       # Prepend the Maven bin directory to the PATH for subsequent steps in the job
       Write-Host "Adding Maven to the pipeline PATH."
-      Write-Host "##vso[task.prependpath]$(Agent.TempDirectory)\apache-maven-3.9.11\bin"
+      Write-Host "##vso[task.setvariable variable=foundryMavenHome]$mavenHome"
+      Write-Host "##vso[task.prependpath]$(Join-Path $mavenHome 'bin')"
 
 - script: |
     echo "Verifying Maven installation..."
