@@ -4,7 +4,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -15,11 +14,6 @@ namespace fl {
 std::vector<float> ConvertS16LEToFloat(const uint8_t* pcm_bytes, size_t byte_count);
 
 namespace AudioInternal {
-
-inline constexpr size_t kMaxBufferedPcmBytes = 64ull * 1024ull * 1024ull;
-
-/// Wrap a complete mono 16 kHz PCM16 utterance in a WAV container for the multimodal audio decoder.
-std::vector<uint8_t> EncodePcm16Wav(std::span<const uint8_t> pcm);
 
 /// Load a mono or multichannel 16 kHz PCM16/float32 WAV file and mix it to mono float32 samples.
 std::vector<float> LoadPcmWavAsFloatSamples(const std::string& audio_file_path);

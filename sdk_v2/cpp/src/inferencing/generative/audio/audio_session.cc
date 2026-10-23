@@ -343,20 +343,18 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
                                  format_item.channels));
   }
 
-  const bool is_parakeet = Model().ModelType() == "parakeet_tdt";
-  logger_.Log(LogLevel::Debug, is_parakeet ? "Buffering Parakeet audio until the utterance is complete"
-                                           : "Starting streaming audio transcription");
-
-  // 2. Create the shared decode pipeline. Parakeet needs one complete, globally normalized utterance.
-  auto& oga_model = Model().GetOgaModel();
-  std::vector<uint8_t> buffered_pcm;
-  std::vector<uint8_t> wav;
-  std::unique_ptr<OgaAudios> audios;
-  std::unique_ptr<OgaNamedTensors> flush_tensors;
-  std::unique_ptr<OgaStreamingProcessor> processor;
-  if (!is_parakeet) {
-    processor = OgaStreamingProcessor::Create(oga_model);
+  const auto& model_type = Model().ModelType();
+  if (model_type == "whisper" || model_type == "parakeet_tdt") {
+    FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_NOT_IMPLEMENTED,
+                     fmt::format("Model '{}' does not support live PCM streaming. Submit a complete audio file.",
+                                 model_type));
   }
+
+  logger_.Log(LogLevel::Debug, "Starting streaming audio transcription");
+
+  // 2. Create ORT GenAI streaming pipeline
+  auto& oga_model = Model().GetOgaModel();
+  auto processor = OgaStreamingProcessor::Create(oga_model);
   auto gen_params = OgaGeneratorParams::Create(oga_model);
 
   // Apply temperature from session/request options. Merge so per-request keys overlay
@@ -387,31 +385,13 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
   int completion_tokens = 0;
   int64_t audio_samples = 0;
 
-  const auto process_audio = [&](const void* data, size_t size) {
-    if (!data && size != 0) {
-      FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE, "PCM audio data is null");
-    }
-    if (is_parakeet) {
-      if (size == 0) {
-        return;
-      }
-      if (size > AudioInternal::kMaxBufferedPcmBytes - buffered_pcm.size()) {
-        FL_LOG_AND_THROW(logger_, FOUNDRY_LOCAL_ERROR_INVALID_USAGE,
-                         "Buffered PCM audio exceeds the 64 MiB utterance limit.");
-      }
-      const auto* bytes = static_cast<const uint8_t*>(data);
-      buffered_pcm.insert(buffered_pcm.end(), bytes, bytes + size);
-    } else {
-      auto samples = ConvertS16LEToFloat(static_cast<const uint8_t*>(data), size);
-      audio_samples += static_cast<int64_t>(samples.size());
-      ProcessChunk(*processor, *generator, *tokenizer_stream, samples,
-                   token_texts, segments, streaming_callback, request, completion_tokens);
-    }
-  };
-
   // 3. If the AudioItem itself has initial data, process it first
-  if (format_item.data_size > 0) {
-    process_audio(format_item.data, format_item.data_size);
+  if (format_item.data && format_item.data_size > 0) {
+    auto float_samples = ConvertS16LEToFloat(
+        static_cast<const uint8_t*>(format_item.data), format_item.data_size);
+    audio_samples += static_cast<int64_t>(float_samples.size());
+    ProcessChunk(*processor, *generator, *tokenizer_stream,
+                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
   }
 
   // 4. Read from queue until finished or cancelled
@@ -432,24 +412,17 @@ void AudioSession::ProcessStreamingAudio(const AudioItem& format_item, ItemQueue
     }
 
     auto& bytes = static_cast<BytesItem&>(*item);
-    process_audio(bytes.data, bytes.data_size);
-  }
+    auto float_samples = ConvertS16LEToFloat(
+        static_cast<const uint8_t*>(bytes.data), bytes.data_size);
+    audio_samples += static_cast<int64_t>(float_samples.size());
 
-  if (is_parakeet) {
-    audio_samples = static_cast<int64_t>(buffered_pcm.size() / sizeof(int16_t));
+    ProcessChunk(*processor, *generator, *tokenizer_stream,
+                 float_samples, token_texts, segments, streaming_callback, request, completion_tokens);
   }
 
   // 5. Flush remaining buffered audio
   if (!request.IsCancellationRequested()) {
-    if (processor) {
-      flush_tensors = processor->Flush();
-    } else if (!buffered_pcm.empty()) {
-      wav = AudioInternal::EncodePcm16Wav(buffered_pcm);
-      const void* data = wav.data();
-      const size_t size = wav.size();
-      audios = OgaAudios::Load(&data, &size, 1);
-      flush_tensors = Model().GetPreprocessor().ProcessAudios({""}, audios.get());
-    }
+    auto flush_tensors = processor->Flush();
 
     if (flush_tensors) {
       generator->SetInputs(*flush_tensors);
