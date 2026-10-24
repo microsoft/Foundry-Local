@@ -1329,12 +1329,6 @@ inline AudioSession::AudioSession(IModel& model) : Session(model) {
   }
 }
 
-inline AudioModes AudioSession::SupportedAudioModes() const {
-  flAudioModes modes;
-  Check(detail::inference_api()->Session_GetSupportedAudioModes(handle_.get(), &modes));
-  return static_cast<AudioModes>(modes);
-}
-
 // ===========================================================================
 // EmbeddingsSession
 // ===========================================================================

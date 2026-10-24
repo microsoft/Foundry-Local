@@ -38,7 +38,7 @@ public static partial class NativeMethods
     // library, so the two can never disagree. A runtime that does not provide this API table returns
     // null from FoundryLocalGetApi, and the binding fails at initialization rather than silently
     // downgrading to a table that does not understand the structs it will be given.
-    public const uint ApiVersion = 3;
+    public const uint ApiVersion = 2;
     public const string LibraryName = "foundry_local";
 
     // The first P/Invoke through this class can come from any of several entry
@@ -726,9 +726,6 @@ public delegate IntPtr FlInference_RequestPreflightExecuteDelegate(
 [UnmanagedFunctionPointer(CallingConvention.Winapi)]
 public delegate void FlInference_RequestPreflightReleaseDelegate(IntPtr preflight);
 
-[UnmanagedFunctionPointer(CallingConvention.Winapi)]
-public delegate IntPtr FlInference_SessionGetSupportedAudioModesDelegate(IntPtr session, out AudioModes modes);
-
 // --- Configuration API (flConfigurationApi) delegates ---
 
 [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -1015,9 +1012,6 @@ public struct FlInferenceApi
     public FlInference_SessionCreateRequestPreflightDelegate SessionCreateRequestPreflight;
     public FlInference_RequestPreflightExecuteDelegate RequestPreflightExecute;
     public FlInference_RequestPreflightReleaseDelegate RequestPreflightRelease;
-
-    // Audio input capabilities (appended in V3)
-    public FlInference_SessionGetSupportedAudioModesDelegate SessionGetSupportedAudioModes;
 }
 
 /// <summary>Configuration API table.</summary>
